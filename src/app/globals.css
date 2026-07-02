@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #6366f1;
+  --color-accent-glow: rgba(99, 102, 241, 0.3);
+  --color-mood-5: #22c55e;
+  --color-mood-4: #86efac;
+  --color-mood-3: #facc15;
+  --color-mood-2: #fb923c;
+  --color-mood-1: #ef4444;
+}
+
+body {
+  background: linear-gradient(to bottom right, #030712, #111827, #030712);
+  color: white;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Glass base */
+.glass {
+  background: rgba(18, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+}
+
+.glass-card {
+  background: rgba(18, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  transition: all 0.3s;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+.btn-glass {
+  background: rgba(18, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-glass:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.btn-glass:active {
+  transform: scale(0.95);
+}
+
+.btn-primary {
+  padding: 0.75rem 1.5rem;
+  border-radius: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.3), 0 0 60px rgba(99, 102, 241, 0.2);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mood buttons */
+.btn-mood {
+  padding: 1rem;
+  border-radius: 1rem;
+  font-size: 2.25rem;
+  transition: all 0.2s;
+  background: rgba(18, 18, 24, 0.6);
+  border: 2px solid transparent;
+  backdrop-filter: blur(20px);
+  cursor: pointer;
+}
+
+.btn-mood:hover {
+  transform: scale(1.1);
+}
+
+.btn-mood:active {
+  transform: scale(0.95);
+}
+
+.btn-mood.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  transform: scale(1.1);
+}
+
+/* Activity buttons */
+.activity-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  text-align: center;
+  transition: all 0.2s;
+  background: rgba(18, 18, 24, 0.6);
+  border: 2px solid transparent;
+  backdrop-filter: blur(20px);
+  cursor: pointer;
+}
+
+.activity-btn.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* Habits */
+.habit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: rgba(18, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.habit-toggle {
+  width: 3.5rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.habit-toggle.on {
+  background: #6366f1;
+}
+
+.habit-toggle::after {
+  content: '';
+  position: absolute;
+  top: 0.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: white;
+  transition: all 0.2s;
+  left: 0.25rem;
+}
+
+.habit-toggle.on::after {
+  left: calc(100% - 1.5rem);
+}
+
+/* Step indicator */
+.step-indicator {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.step-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.step-dot.active {
+  background: #6366f1;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+  width: 2rem;
+  border-radius: 1rem;
+}
+
+.step-dot.done {
+  background: #22c55e;
+}
+
+/* Scrollbar */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
