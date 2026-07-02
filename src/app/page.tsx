@@ -8,6 +8,7 @@ import { GratitudeStep } from "@/components/GratitudeStep";
 import { SubmitStep } from "@/components/SubmitStep";
 import { SetupScreen } from "@/components/SetupScreen";
 import { StepIndicator } from "@/components/StepIndicator";
+import { StatsDashboard } from "@/components/StatsDashboard";
 import type { CheckInData } from "@/lib/types";
 
 const MOOD_EMOJIS: Record<number, string> = {
@@ -31,8 +32,11 @@ const DEFAULT_HABITS: Record<string, { emoji: string; label: string; abstinence:
 
 const STEPS = ["Nálada", "Aktivity", "Návyky", "Vděčnost", "Hotovo"];
 
+type View = "checkin" | "stats";
+
 export default function Home() {
   const [configured, setConfigured] = useState(false);
+  const [view, setView] = useState<View>("checkin");
   const [step, setStep] = useState(0);
   const [data, setData] = useState<CheckInData>({
     mood: 0,
@@ -43,6 +47,7 @@ export default function Home() {
     ),
     gratitude: ["", "", ""],
     note: "",
+    photoDataUrl: null,
   });
 
   useEffect(() => {
@@ -86,8 +91,31 @@ export default function Home() {
     return <SetupScreen onConfigured={handleConfigured} />;
   }
 
+  if (view === "stats") {
+    return (
+      <div>
+        <StatsDashboard />
+        {/* Bottom tab bar */}
+        <div className="fixed bottom-0 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl safe-area-bottom">
+          <button
+            onClick={() => { setView("checkin"); setStep(0); }}
+            className="flex-1 py-3 text-center text-sm text-white/30 hover:text-white/50 transition-colors"
+          >
+            ✏️ Check-in
+          </button>
+          <button
+            onClick={() => setView("stats")}
+            className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400"
+          >
+            📊 Statistiky
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 pb-20">
       <header className="text-center mb-8">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           Diarium
@@ -126,8 +154,10 @@ export default function Home() {
           <GratitudeStep
             gratitude={data.gratitude}
             note={data.note}
+            photo={data.photoDataUrl}
             onChangeGratitude={setGratitude}
             onChangeNote={(n) => setData((d) => ({ ...d, note: n }))}
+            onPhotoChange={(url) => setData((d) => ({ ...d, photoDataUrl: url }))}
             onNext={() => setStep(4)}
             onBack={() => setStep(2)}
           />
@@ -147,10 +177,27 @@ export default function Home() {
                 ),
                 gratitude: ["", "", ""],
                 note: "",
+                photoDataUrl: null,
               });
             }}
           />
         )}
+      </div>
+
+      {/* Bottom tab bar */}
+      <div className="fixed bottom-0 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl">
+        <button
+          onClick={() => { setView("checkin"); setStep(0); }}
+          className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400"
+        >
+          ✏️ Check-in
+        </button>
+        <button
+          onClick={() => setView("stats")}
+          className="flex-1 py-3 text-center text-sm text-white/30 hover:text-white/50 transition-colors"
+        >
+          📊 Statistiky
+        </button>
       </div>
     </div>
   );

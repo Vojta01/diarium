@@ -1,17 +1,23 @@
 "use client";
 
+import { PhotoPicker } from "@/components/PhotoPicker";
+
 export function GratitudeStep({
   gratitude,
   note,
+  photo,
   onChangeGratitude,
   onChangeNote,
+  onPhotoChange,
   onNext,
   onBack,
 }: {
   gratitude: string[];
   note: string;
+  photo: string | null;
   onChangeGratitude: (index: number, value: string) => void;
   onChangeNote: (value: string) => void;
+  onPhotoChange: (dataUrl: string | null) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -34,6 +40,11 @@ export function GratitudeStep({
             />
           </div>
         ))}
+      </div>
+
+      <div className="mt-6">
+        <label className="text-white/30 text-sm block mb-2">Fotka (volitelné)</label>
+        <PhotoPicker onPhotoSelected={onPhotoChange} currentPhoto={photo} />
       </div>
 
       <div className="mt-6">

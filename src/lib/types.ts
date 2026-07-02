@@ -5,4 +5,5 @@ export interface CheckInData {
   habits: Record<string, boolean>;
   gratitude: string[];
   note: string;
+  photoDataUrl: string | null;
 }
