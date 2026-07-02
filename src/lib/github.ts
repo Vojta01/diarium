@@ -53,14 +53,14 @@ function getNonWeatherActivities(activities: string[]): string[] {
 }
 
 const STRESS_MAP: Record<number, number> = {
-  5: 2, // great mood = low stress
+  5: 2,
   4: 2,
   3: 3,
   2: 4,
   1: 5,
 };
 
-function buildFrontmatter(data: CheckInData): string {
+function buildFrontmatter(data: CheckInData, photoPath?: string): string {
   const today = new Date().toISOString().split("T")[0];
   const weather = getWeather(data.activities);
   const activities = getNonWeatherActivities(data.activities);
@@ -100,6 +100,10 @@ function buildFrontmatter(data: CheckInData): string {
     }
   }
 
+  if (photoPath) {
+    lines.push(`photo: "${photoPath}"`);
+  }
+
   if (note) {
     lines.push(`note: "${note}"`);
   }
@@ -110,6 +114,14 @@ function buildFrontmatter(data: CheckInData): string {
   return lines.join("\n");
 }
 
+function makeHeaders(token: string) {
+  return {
+    Authorization: "Bearer " + token,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+  };
+}
+
 export async function saveCheckIn(
   token: string,
   repo: string,
@@ -117,19 +129,51 @@ export async function saveCheckIn(
 ): Promise<void> {
   const today = new Date().toISOString().split("T")[0];
   const path = `daily/${today}.md`;
-  const content = buildFrontmatter(data);
+
+  // Upload photo first if present
+  let photoPath: string | undefined;
+  if (data.photoDataUrl) {
+    const photoFilename = `${today}.jpg`;
+    const photoRepoPath = `assets/photos/${photoFilename}`;
+
+    const base64Content = data.photoDataUrl.replace(/^data:image\/\w+;base64,/, "");
+
+    const headers = makeHeaders(token);
+
+    const existingPhoto = await fetch(
+      `https://api.github.com/repos/${repo}/contents/${photoRepoPath}`,
+      { headers }
+    );
+    let sha: string | undefined;
+    if (existingPhoto.ok) {
+      const body = await existingPhoto.json();
+      sha = body.sha;
+    }
+
+    const photoBody: any = {
+      message: "Photo check-in " + today,
+      content: base64Content,
+    };
+    if (sha) photoBody.sha = sha;
+
+    const photoRes = await fetch(
+      `https://api.github.com/repos/${repo}/contents/${photoRepoPath}`,
+      { method: "PUT", headers, body: JSON.stringify(photoBody) }
+    );
+
+    if (photoRes.ok) {
+      photoPath = photoRepoPath;
+    }
+  }
+
+  const content = buildFrontmatter(data, photoPath);
   const base64 = btoa(unescape(encodeURIComponent(content)));
 
   const api = (p: string) =>
     `https://api.github.com/repos/${repo}/contents/${p}`;
 
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "Content-Type": "application/json",
-  };
+  const headers = makeHeaders(token);
 
-  // Check if file exists
   const existing = await fetch(api(path), { headers });
   let sha: string | undefined;
 
@@ -138,9 +182,8 @@ export async function saveCheckIn(
     sha = body.sha;
   }
 
-  // Create or update file
   const body: any = {
-    message: `🌙 Check-in ${today}: nálada ${data.mood}/5`,
+    message: "Check-in " + today + ": nalada " + data.mood + "/5",
     content: base64,
   };
 
@@ -154,6 +197,6 @@ export async function saveCheckIn(
 
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.message || `HTTP ${res.status}`);
+    throw new Error(err.message || "HTTP " + res.status);
   }
 }
