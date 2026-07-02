@@ -8,6 +8,7 @@ export interface DailyEntry {
   note: string;
   phone_screen_time?: number;
   phone_unlocks?: number;
+  phone_top_apps?: string;
 }
 
 function parseFrontmatter(content: string): Partial<DailyEntry> {

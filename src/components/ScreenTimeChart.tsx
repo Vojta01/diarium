@@ -105,6 +105,48 @@ export function ScreenTimeChart({ entries }: ScreenTimeChartProps) {
         })}
       </div>
 
+      {/* Per-app breakdown (today) */}
+      {last30Days.length > 0 && last30Days[last30Days.length - 1]?.phone_top_apps && (
+        <div className="mt-6 pt-4 border-t border-white/5">
+          <h3 className="text-sm font-medium text-white/50 mb-3">Dnešní appky</h3>
+          <div className="space-y-2">
+            {last30Days[last30Days.length - 1].phone_top_apps!
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .map((entry) => {
+                const [app, minStr] = entry.split(":");
+                const minutes = parseInt(minStr) || 0;
+                const maxMins = Math.max(
+                  ...last30Days[last30Days.length - 1].phone_top_apps!
+                    .split(",")
+                    .map((s) => parseInt(s.split(":")[1]) || 0)
+                );
+                const width = maxMins > 0 ? (minutes / maxMins) * 100 : 0;
+                return (
+                  <div key={app} className="flex items-center gap-2">
+                    <span className="text-xs text-white/60 w-20 truncate text-right">
+                      {app}
+                    </span>
+                    <div className="flex-1 h-4 bg-white/3 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: width + "%",
+                          background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs text-white/30 w-8 text-right">
+                      {minutes}m
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Color scale */}
       <div className="flex justify-between mt-3 text-[9px] text-white/25">
         <div className="flex items-center gap-4">
