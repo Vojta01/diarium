@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { YearInPixels } from "@/components/YearInPixels";
 import { CalendarView } from "@/components/CalendarView";
+import { ScreenTimeChart } from "@/components/ScreenTimeChart";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 
 export function StatsDashboard() {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"year" | "calendar">("year");
+  const [tab, setTab] = useState<"year" | "calendar" | "screentime">("year");
 
   useEffect(() => {
     const token = localStorage.getItem("diarium_github_token");
@@ -53,7 +54,7 @@ export function StatsDashboard() {
               : "text-white/30 hover:text-white/50"
           }`}
         >
-          📅 Year in Pixels
+          📅 Pixels
         </button>
         <button
           onClick={() => setTab("calendar")}
@@ -65,11 +66,22 @@ export function StatsDashboard() {
         >
           🗓️ Kalendář
         </button>
+        <button
+          onClick={() => setTab("screentime")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "screentime"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          📱 Screen
+        </button>
       </div>
 
       <div className="max-w-2xl mx-auto">
         {tab === "year" && <YearInPixels />}
         {tab === "calendar" && <CalendarView entries={entries} />}
+        {tab === "screentime" && <ScreenTimeChart entries={entries} />}
       </div>
     </div>
   );

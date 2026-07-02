@@ -200,3 +200,202 @@ export async function saveCheckIn(
     throw new Error(err.message || "HTTP " + res.status);
   }
 }
+
+function parseYamlFrontmatter(yaml: string): Partial<CheckInData> {
+  const result: any = {};
+  let currentKey: string | null = null;
+  let inList = false;
+
+  const lines = yaml.split("\n");
+  for (const line of lines) {
+    if (inList && line.startsWith("  - ")) {
+      const val = line.replace(/^\s*-\s*"/, "").replace(/"\s*$/, "");
+      if (currentKey && Array.isArray(result[currentKey])) {
+        result[currentKey].push(val);
+      }
+      continue;
+    }
+    inList = false;
+
+    const listMatch = line.match(/^(\w+):\s*$/);
+    if (listMatch && listMatch[1] === "gratitude") {
+      currentKey = listMatch[1];
+      result[currentKey] = [];
+      inList = true;
+      continue;
+    }
+
+    const habitMatch = line.match(/^  (\w+):\s*(.+)/);
+    if (habitMatch) {
+      if (!result.habits) result.habits = {};
+      result.habits[habitMatch[1]] = habitMatch[2].trim() === "true";
+      continue;
+    }
+
+    const kv = line.match(/^(\w+):\s*(.+)/);
+    if (!kv) continue;
+
+    currentKey = kv[1];
+    const val = kv[2].trim();
+
+    if (val === "true" || val === "false") {
+      result[currentKey] = val === "true";
+    } else if (!isNaN(Number(val)) && val !== "") {
+      result[currentKey] = Number(val);
+    } else if (val.startsWith("[") && val.endsWith("]")) {
+      result[currentKey] = val.slice(1, -1).split(",").map((s: string) => s.trim()).filter(Boolean);
+    } else {
+      result[currentKey] = val.replace(/^"(.*)"$/, "$1");
+    }
+  }
+
+  return result;
+}
+
+// Reverse mapping: YAML value → display label
+const REVERSE_ACTIVITY_MAP: Record<string, string> = {
+  "zdravé jídlo": "Zdravě",
+  "fast food": "Fast food",
+  "domácí výroba": "Domácí",
+  "restaurace": "Restaurace",
+  "donáška": "Donáška",
+  "trénink": "Trénink",
+  "chůze": "Chůze",
+  "kolo": "Kolo",
+  "plavání": "Plavání",
+  "paddleboard": "Paddleboard",
+  "snooker": "Snooker",
+  "čtení": "Čtení",
+  "hudba": "Hudba",
+  "filmy/tv": "Filmy/TV",
+  "hry": "Hry",
+  "relax": "Relax",
+  "přátelé": "Přátelé",
+  "rodina": "Rodina",
+  "rande": "Rande",
+  "párty": "Párty",
+  "office": "Office",
+  "meditace": "Meditace",
+  "terapie": "Terapie",
+  "nákupy": "Nákupy",
+  "úklid": "Úklid",
+  "spánek": "Spánek",
+  "slunečno": "Slunečno",
+  "zataženo": "Zataženo",
+  "deštivo": "Déšť",
+  "sněžno": "Sníh",
+  "horko": "Horko",
+  "bouřka": "Bouřka",
+  "větrno": "Vítr",
+};
+
+export async function loadDayEntry(
+  token: string,
+  repo: string,
+  dateStr: string
+): Promise<CheckInData | null> {
+  const path = "daily/" + dateStr + ".md";
+  const headers = makeHeaders(token);
+
+  const res = await fetch(
+    "https://api.github.com/repos/" + repo + "/contents/" + path,
+    { headers }
+  );
+
+  if (!res.ok) return null;
+
+  const file: { content?: string; download_url?: string } = await res.json();
+
+  let content: string;
+  if (file.content) {
+    content = atob(file.content);
+  } else if (file.download_url) {
+    const dlRes = await fetch(file.download_url);
+    content = await dlRes.text();
+  } else {
+    return null;
+  }
+
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) return null;
+
+  const parsed = parseYamlFrontmatter(fmMatch[1]) as any;
+
+  // Map YAML activities back to display labels
+  const allActivities: string[] = [];
+  if (parsed.activities) {
+    for (const a of parsed.activities) {
+      // Check reverse map first
+      let found = REVERSE_ACTIVITY_MAP[a];
+      if (found) {
+        allActivities.push(found);
+      } else {
+        allActivities.push(a);
+      }
+    }
+  }
+  if (parsed.weather) {
+    for (const w of parsed.weather) {
+      let found = REVERSE_ACTIVITY_MAP[w];
+      if (found) allActivities.push(found);
+    }
+  }
+
+  return {
+    mood: parsed.mood ?? 0,
+    moodEmoji: parsed.mood_emoji ?? "",
+    activities: allActivities,
+    habits: parsed.habits ?? {},
+    gratitude: parsed.gratitude ?? ["", "", ""],
+    note: parsed.note ?? "",
+    photoDataUrl: null, // photos not re-loaded to save bandwidth
+  };
+}
+
+export async function savePartialCheckIn(
+  token: string,
+  repo: string,
+  data: CheckInData,
+  isFinal: boolean = false
+): Promise<void> {
+  // Use the same save logic but with a different commit message
+  const today = new Date().toISOString().split("T")[0];
+  const path = "daily/" + today + ".md";
+
+  const content = buildFrontmatter(data);
+  const base64 = btoa(unescape(encodeURIComponent(content)));
+
+  const headers = makeHeaders(token);
+
+  const existing = await fetch(
+    "https://api.github.com/repos/" + repo + "/contents/" + path,
+    { headers }
+  );
+  let sha: string | undefined;
+  if (existing.ok) {
+    const body = await existing.json();
+    sha = body.sha;
+  }
+
+  const now = new Date();
+  const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+  const msg = isFinal
+    ? "Check-in " + today + ": nalada " + data.mood + "/5"
+    : "Pruzeny check-in " + today + " " + time;
+
+  const body: any = {
+    message: msg,
+    content: base64,
+  };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(
+    "https://api.github.com/repos/" + repo + "/contents/" + path,
+    { method: "PUT", headers, body: JSON.stringify(body) }
+  );
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "HTTP " + res.status);
+  }
+}

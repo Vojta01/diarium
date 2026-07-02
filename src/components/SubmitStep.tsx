@@ -6,16 +6,22 @@ import { saveCheckIn } from "@/lib/github";
 
 export function SubmitStep({
   data,
+  isExisting,
+  editDate,
   onBack,
   onDone,
 }: {
   data: CheckInData;
+  isExisting?: boolean;
+  editDate?: string | null;
   onBack: () => void;
   onDone: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const isEdit = isExisting || editDate;
 
   const handleSave = async () => {
     setSaving(true);
@@ -36,10 +42,12 @@ export function SubmitStep({
   if (done) {
     return (
       <div className="glass-card text-center py-12">
-        <div className="text-6xl mb-4">✨</div>
-        <h2 className="text-xl font-semibold mb-2">Uloženo!</h2>
+        <div className="text-6xl mb-4">{isEdit ? "✅" : "✨"}</div>
+        <h2 className="text-xl font-semibold mb-2">
+          {isEdit ? "Aktualizováno!" : "Uloženo!"}
+        </h2>
         <p className="text-white/40 text-sm">
-          Dnešní zápis je ve tvém vaultu.
+          {isEdit ? "Změny jsou ve tvém vaultu." : "Dnešní zápis je ve tvém vaultu."}
         </p>
       </div>
     );
@@ -47,12 +55,14 @@ export function SubmitStep({
 
   return (
     <div className="glass-card">
-      <h2 className="text-xl font-semibold text-center mb-6">Rekapitulace</h2>
+      <h2 className="text-xl font-semibold text-center mb-6">
+        {isEdit ? "Rekapitulace (editace)" : "Rekapitulace"}
+      </h2>
 
       <div className="space-y-4 text-sm">
         <div className="flex justify-between">
           <span className="text-white/40">Nálada</span>
-          <span className="text-2xl">{data.moodEmoji}</span>
+          <span className="text-2xl">{data.moodEmoji || "—"}</span>
         </div>
 
         <div className="flex justify-between">
@@ -93,6 +103,13 @@ export function SubmitStep({
             <p className="text-white/70">{data.note}</p>
           </div>
         )}
+
+        {data.photoDataUrl && (
+          <div>
+            <span className="text-white/40 block mb-1">Fotka</span>
+            <img src={data.photoDataUrl} alt="Fotka" className="rounded-lg max-h-32" />
+          </div>
+        )}
       </div>
 
       {error && (
@@ -110,7 +127,7 @@ export function SubmitStep({
           className="btn-primary flex-1"
           disabled={saving}
         >
-          {saving ? "Ukládám..." : "Uložit do vaultu"}
+          {saving ? "Ukládám..." : isEdit ? "Uložit změny" : "Uložit do vaultu"}
         </button>
       </div>
     </div>

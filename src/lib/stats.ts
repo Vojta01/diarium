@@ -6,6 +6,8 @@ export interface DailyEntry {
   habits: Record<string, boolean>;
   gratitude: string[];
   note: string;
+  phone_screen_time?: number;
+  phone_unlocks?: number;
 }
 
 function parseFrontmatter(content: string): Partial<DailyEntry> {

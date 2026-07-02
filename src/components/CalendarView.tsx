@@ -181,6 +181,17 @@ export function CalendarView({ entries }: CalendarViewProps) {
               &ldquo;{selectedEntry.note}&rdquo;
             </div>
           )}
+
+          <button
+            onClick={() => {
+              localStorage.setItem("diarium_edit_date", selectedEntry.date);
+              // Reload will trigger the main page to load this entry
+              window.location.href = "/?edit=" + selectedEntry.date;
+            }}
+            className="btn-glass text-sm w-full mt-3 py-2 text-center"
+          >
+            ✏️ Upravit tento záznam
+          </button>
         </div>
       )}
     </div>
