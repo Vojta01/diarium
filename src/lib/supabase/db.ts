@@ -1,0 +1,238 @@
+import { createSupabaseClient } from "./client";
+
+// ── Typy ──
+
+export interface Profile {
+  id: string;
+  github_user?: string;
+  default_repo?: string;
+  created_at: string;
+}
+
+export interface Entry {
+  id: string;
+  user_id: string;
+  date: string;
+  mood: number;
+  mood_emoji: string;
+  sleep_quality?: number;
+  stress?: number;
+  activities: string[];
+  habits: Record<string, boolean>;
+  gratitude: string[];
+  note: string;
+  weather: string[];
+  phone_screen_time?: number;
+  phone_unlocks?: number;
+  phone_top_apps?: { app: string; minutes: number }[];
+  photo_path?: string;
+  created_at: string;
+}
+
+export interface CheckInPayload {
+  mood: number;
+  mood_emoji: string;
+  sleep_quality: number;
+  stress: number;
+  activities: string[];
+  habits: Record<string, boolean>;
+  gratitude: string[];
+  note: string;
+  weather: string[];
+}
+
+// ── Helpers ──
+
+function getSupabase(): any {
+  return createSupabaseClient();
+}
+
+/** Získá aktuálně přihlášeného uživatele */
+export async function getCurrentUser() {
+  const sb = getSupabase();
+  const { data } = await sb.auth.getUser();
+  return data.user ?? null;
+}
+
+/** Vráti profil přihlášeného uživatele (vytvoří ho, pokud neexistuje) */
+export async function getProfile(): Promise<Profile | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const sb = getSupabase();
+  const { data } = await sb
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  // Profil neexistuje → vytvořit
+  if (!data) {
+    const { data: created } = await (sb
+      .from("profiles") as any)
+      .insert([{
+        id: user.id,
+        github_user: user.user_metadata?.user_name ?? null,
+      }])
+      .select()
+      .single();
+
+    return created ?? null;
+  }
+
+  return data;
+}
+
+// ── Entries ──
+
+/** Uloží nebo updatuje denní check-in */
+export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Nepřihlášen");
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const row = {
+    user_id: user.id,
+    date: today,
+    mood: payload.mood,
+    mood_emoji: payload.mood_emoji,
+    sleep_quality: payload.sleep_quality,
+    stress: payload.stress,
+    activities: payload.activities,
+    habits: payload.habits,
+    gratitude: payload.gratitude,
+    note: payload.note,
+    weather: payload.weather,
+  };
+
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("entries")
+    .upsert(row, {
+      onConflict: "user_id, date",
+      ignoreDuplicates: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Entry;
+}
+
+/** Načte entries pro dané období */
+export async function getEntries(
+  from?: string,
+  to?: string
+): Promise<Entry[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const sb = getSupabase();
+  let query = sb
+    .from("entries")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("date", { ascending: false });
+
+  if (from) query = query.gte("date", from);
+  if (to) query = query.lte("date", to);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("Chyba při načítání entries:", error);
+    return [];
+  }
+  return (data as Entry[]) ?? [];
+}
+
+/** Načte jeden denní zápis */
+export async function getEntry(date: string): Promise<Entry | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const sb = getSupabase();
+  const { data } = await sb
+    .from("entries")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("date", date)
+    .single();
+
+  return data ?? null;
+}
+
+// ── Aktivity & Návyky ──
+
+export interface ActivityDef {
+  key: string;
+  label: string;
+  icon: string;
+  category: string;
+  color: string;
+  source: "default" | "custom";
+}
+
+export interface HabitDef {
+  key: string;
+  label: string;
+  icon: string;
+  category: string;
+  color: string;
+  is_negative: boolean;
+  source: "default" | "custom";
+}
+
+/** Vrátí všechny aktivity (výchozí + vlastní) */
+export async function getActivities(): Promise<ActivityDef[]> {
+  const user = await getCurrentUser();
+  const sb = getSupabase();
+
+  const [defaultRes, customRes] = await Promise.all([
+    sb.from("activity_catalog").select("*").eq("is_default", true).order("sort_order"),
+    user
+      ? sb.from("user_activities").select("*").eq("user_id", user.id).eq("is_active", true)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const defaults: ActivityDef[] =
+    defaultRes.data?.map((a: any) => ({
+      ...a,
+      source: "default" as const,
+    })) ?? [];
+
+  const customs: ActivityDef[] =
+    customRes.data?.map((a: any) => ({
+      ...a,
+      source: "custom" as const,
+    })) ?? [];
+
+  return [...defaults, ...customs];
+}
+
+/** Vrátí všechny návyky (výchozí + vlastní) */
+export async function getHabits(): Promise<HabitDef[]> {
+  const user = await getCurrentUser();
+  const sb = getSupabase();
+
+  const [defaultRes, customRes] = await Promise.all([
+    sb.from("habit_catalog").select("*").eq("is_default", true).order("sort_order"),
+    user
+      ? sb.from("user_habits").select("*").eq("user_id", user.id).eq("is_active", true)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const defaults: HabitDef[] =
+    defaultRes.data?.map((h: any) => ({
+      ...h,
+      source: "default" as const,
+    })) ?? [];
+
+  const customs: HabitDef[] =
+    customRes.data?.map((h: any) => ({
+      ...h,
+      source: "custom" as const,
+    })) ?? [];
+
+  return [...defaults, ...customs];
+}

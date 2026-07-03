@@ -11,9 +11,10 @@ const MONTH_NAMES = [
 
 interface CalendarViewProps {
   entries: DailyEntry[];
+  onNavigateToDate?: (date: string) => void;
 }
 
-export function CalendarView({ entries }: CalendarViewProps) {
+export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -184,9 +185,11 @@ export function CalendarView({ entries }: CalendarViewProps) {
 
           <button
             onClick={() => {
-              localStorage.setItem("diarium_edit_date", selectedEntry.date);
-              // Reload will trigger the main page to load this entry
-              window.location.href = "/?edit=" + selectedEntry.date;
+              if (onNavigateToDate) {
+                onNavigateToDate(selectedEntry.date);
+              } else {
+                window.location.href = "/?edit=" + selectedEntry.date;
+              }
             }}
             className="btn-glass text-sm w-full mt-3 py-2 text-center"
           >

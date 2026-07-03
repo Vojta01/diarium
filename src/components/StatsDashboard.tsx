@@ -4,22 +4,16 @@ import { useState, useEffect } from "react";
 import { YearInPixels } from "@/components/YearInPixels";
 import { CalendarView } from "@/components/CalendarView";
 import { ScreenTimeChart } from "@/components/ScreenTimeChart";
+import { ActivityMoodChart } from "@/components/ActivityMoodChart";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 
-export function StatsDashboard() {
+export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"year" | "calendar" | "screentime">("year");
+  const [tab, setTab] = useState<"year" | "calendar" | "screentime" | "correlation">("year");
 
   useEffect(() => {
-    const token = localStorage.getItem("diarium_github_token");
-    const repo = localStorage.getItem("diarium_repo");
-    if (!token || !repo) {
-      setLoading(false);
-      return;
-    }
-
-    fetchDailyEntries(token, repo)
+    fetchDailyEntries()
       .then((data) => {
         setEntries(data);
         setLoading(false);
@@ -76,12 +70,23 @@ export function StatsDashboard() {
         >
           📱 Screen
         </button>
+        <button
+          onClick={() => setTab("correlation")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "correlation"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          🔗 Korelace
+        </button>
       </div>
 
       <div className="max-w-2xl mx-auto">
         {tab === "year" && <YearInPixels />}
-        {tab === "calendar" && <CalendarView entries={entries} />}
+        {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "screentime" && <ScreenTimeChart entries={entries} />}
+        {tab === "correlation" && <ActivityMoodChart entries={entries} />}
       </div>
     </div>
   );

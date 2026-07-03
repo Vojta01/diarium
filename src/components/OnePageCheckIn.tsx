@@ -1,0 +1,794 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { saveEntry, getEntry } from "@/lib/supabase/db";
+import { PhotoPicker } from "@/components/PhotoPicker";
+import type { CheckInData } from "@/lib/types";
+
+// ── Mood ──
+const MOODS = [
+  { value: 5, emoji: "😄", label: "skvěle", color: "#22c55e" },
+  { value: 4, emoji: "🙂", label: "dobře", color: "#3b82f6" },
+  { value: 3, emoji: "😐", label: "jde to", color: "#eab308" },
+  { value: 2, emoji: "😟", label: "špatně", color: "#f97316" },
+  { value: 1, emoji: "😡", label: "hrozně", color: "#ef4444" },
+];
+
+const MOOD_LABELS: Record<number, string> = {
+  5: "Skvěle 😄", 4: "Dobře 🙂", 3: "Jde to 😐", 2: "Špatně 😟", 1: "Hrozně 😡"
+};
+
+// ── Sleep quality ──
+const SLEEP_QUALITY = [
+  { value: 3, emoji: "😴", label: "Skvělý" },
+  { value: 2, emoji: "🥱", label: "Normální" },
+  { value: 1, emoji: "😪", label: "Špatný" },
+];
+
+const SLEEP_LABELS: Record<number, string> = { 3: "Skvělý 😴", 2: "Normální 🥱", 1: "Špatný 😪" };
+
+// ── Stress levels ──
+const STRESS_LEVELS = [
+  { value: 1, emoji: "😌", label: "Nízký" },
+  { value: 2, emoji: "🙂", label: "Mírný" },
+  { value: 3, emoji: "😐", label: "Střední" },
+  { value: 4, emoji: "😰", label: "Vysoký" },
+  { value: 5, emoji: "😤", label: "Extrémní" },
+];
+
+const STRESS_LABELS: Record<number, string> = {
+  1: "Nízký 😌", 2: "Mírný 🙂", 3: "Střední 😐", 4: "Vysoký 😰", 5: "Extrémní 😤"
+};
+
+// ── Mood-based quotes ──
+const MOOD_QUOTES: Record<number, string[]> = {
+  5: [
+    "Dny jako tenhle jsou důvod, proč to celé má smysl. ✨",
+    "Když je duše v pohodě, celý svět se usmívá s tebou. 🌟",
+    "Tohle si zapiš za uši — dneska jsi vyhrál/a. 🏆",
+  ],
+  4: [
+    "Dobrý den je jako šálek dobré kávy — zahřeje a povzbudí. ☕",
+    "Ne každý den je perfektní, ale dnešek byl zatraceně blízko. 🙂",
+    "Vděčnost mění obyčejné dny ve výjimečné. 💫",
+  ],
+  3: [
+    "I neutrální dny mají svou hodnotu — jsou to dny klidu. 🌤️",
+    "Není to ani kopec, ani údolí. Prostě rovina. A to je v pořádku. 🛤️",
+    "Zítra je nový den, nová příležitost. Dnes stačilo být. 🌅",
+  ],
+  2: [
+    "I špatné dny končí. A zítřek začíná znovu. 🌙",
+    "Nejsi sám/sama. Každý má někdy den, kdy to nejde. 🫂",
+    "Tohle je jen kapitola, ne celá kniha. 📖",
+  ],
+  1: [
+    "Někdy je vítězství jen to, že jsi ten den přežil/a. A to stačí. 💪",
+    "Dno je pevný základ, ze kterého se dá odrazit. 🚀",
+    "I po nejhorší bouřce vyjde slunce. Vydrž. 🌈",
+  ],
+};
+
+// ── Activities by category ──
+const ACTIVITY_CATEGORIES: { title: string; items: { emoji: string; label: string }[] }[] = [
+  {
+    title: "Společenské",
+    items: [
+      { emoji: "👨‍👩‍👧", label: "rodina" }, { emoji: "👥", label: "přátelé" },
+      { emoji: "💑", label: "rande" }, { emoji: "🎉", label: "párty" }, { emoji: "🏢", label: "office" },
+    ],
+  },
+  {
+    title: "Záliby",
+    items: [
+      { emoji: "🎬", label: "filmy a tv" }, { emoji: "📖", label: "čtení" },
+      { emoji: "🎮", label: "hraní her" }, { emoji: "🏃", label: "sport" },
+      { emoji: "😌", label: "relax" }, { emoji: "🎵", label: "hudba" },
+    ],
+  },
+  {
+    title: "Jídlo",
+    items: [
+      { emoji: "🥗", label: "jíst zdravě" }, { emoji: "🍔", label: "rychlé občerstvení" },
+      { emoji: "🍳", label: "domácí výroba" }, { emoji: "🍽️", label: "restaurace" },
+      { emoji: "📦", label: "donáška" }, { emoji: "🥬", label: "den bez masa" },
+      { emoji: "🚫🍰", label: "žádné sladkosti" }, { emoji: "🚫🥤", label: "žádné limonády" },
+    ],
+  },
+  {
+    title: "Zdraví",
+    items: [
+      { emoji: "🏋️", label: "trénink" }, { emoji: "💧", label: "pít vodu" },
+      { emoji: "🚶", label: "chůze" }, { emoji: "🚴", label: "kolo" },
+      { emoji: "🏊", label: "plavání" }, { emoji: "🏄", label: "paddleboard" }, { emoji: "🎱", label: "snooker" },
+    ],
+  },
+  {
+    title: "Mé lepší já",
+    items: [
+      { emoji: "🧘", label: "meditovat" }, { emoji: "💝", label: "laskavost" },
+      { emoji: "👂", label: "naslouchání" }, { emoji: "💰", label: "dárcovství" }, { emoji: "🎁", label: "dej dárek" },
+    ],
+  },
+  {
+    title: "Domácí práce",
+    items: [
+      { emoji: "🛒", label: "nakupování" }, { emoji: "🧹", label: "uklízení" },
+      { emoji: "🍲", label: "vaření" }, { emoji: "🧺", label: "praní" }, { emoji: "👕", label: "žehlení" },
+    ],
+  },
+  {
+    title: "Počasí",
+    items: [
+      { emoji: "☀️", label: "slunečno" }, { emoji: "☁️", label: "zataženo" },
+      { emoji: "🌧️", label: "déšť" }, { emoji: "❄️", label: "sníh" },
+      { emoji: "🥶", label: "mráz" }, { emoji: "🌡️", label: "horko" },
+      { emoji: "🌩️", label: "bouřka" }, { emoji: "💨", label: "vítr" },
+    ],
+  },
+];
+
+// ── Reduced habits ──
+const DEFAULT_HABITS: Record<string, boolean> = {
+  alkohol: false, porno: false, masturbace: false,
+};
+
+const HABIT_DEFS: { key: string; emoji: string; label: string; abstinence: boolean }[] = [
+  { key: "alkohol", emoji: "🍺", label: "Alkohol", abstinence: true },
+  { key: "porno", emoji: "🔞", label: "Porno", abstinence: true },
+  { key: "masturbace", emoji: "💦", label: "Masturbace", abstinence: true },
+];
+
+const EMPTY_DATA: CheckInData = {
+  mood: 0, moodEmoji: "", sleepQuality: 0, stress: 0,
+  activities: [], habits: { ...DEFAULT_HABITS },
+  gratitude: ["", "", ""], note: "", photoDataUrl: null,
+};
+
+// ── Goals ──
+interface Goal {
+  id: string; emoji: string; name: string; completedDates: string[];
+}
+const DEFAULT_GOALS: Goal[] = [
+  { id: "1", emoji: "🏋️", name: "Krátké cvičení", completedDates: [] },
+];
+
+function loadGoals(): Goal[] {
+  try {
+    const raw = localStorage.getItem("diarium_goals");
+    return raw ? JSON.parse(raw) : [...DEFAULT_GOALS];
+  } catch { return [...DEFAULT_GOALS]; }
+}
+function saveGoals(goals: Goal[]) { localStorage.setItem("diarium_goals", JSON.stringify(goals)); }
+
+function computeStreak(dates: string[]): number {
+  if (dates.length === 0) return 0;
+  const sorted = [...dates].sort().reverse();
+  const today = new Date().toISOString().split("T")[0];
+  let expected = today, streak = 0;
+  for (const d of sorted) {
+    if (d === expected) {
+      streak++;
+      const prev = new Date(expected); prev.setDate(prev.getDate() - 1);
+      expected = prev.toISOString().split("T")[0];
+    } else if (d < expected) break;
+  }
+  return streak;
+}
+
+function pickQuote(mood: number): string {
+  const quotes = MOOD_QUOTES[mood] || MOOD_QUOTES[3];
+  return quotes[Math.floor(Math.random() * quotes.length)];
+}
+
+function Section({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-4">
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 w-full text-left mb-2 group">
+        <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+        <span className="text-sm font-medium text-white/80">{title}</span>
+        <span className="ml-auto text-white/20 text-xs transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+// ── COMPLETED DAY CARD ──
+function CompletedCard({
+  data, goals, aiReflection, onEdit, dateStr,
+}: {
+  data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; dateStr: string;
+}) {
+  const mood = MOODS.find(m => m.value === data.mood);
+  const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
+  const stressLevel = data.stress > 0 ? STRESS_LEVELS[data.stress - 1] : null;
+  const isToday = dateStr === new Date().toISOString().split("T")[0];
+  const goalsDone = goals.filter(g => g.completedDates.includes(dateStr));
+  const hasGratitude = data.gratitude.some(g => g.trim());
+  const hasNote = data.note.trim().length > 0;
+
+  // Habit status
+  const habitStatus = HABIT_DEFS.map(h => ({
+    ...h,
+    kept: h.abstinence ? !data.habits[h.key] : data.habits[h.key],
+  }));
+
+  return (
+    <div className="min-h-screen px-4 pt-4 pb-24 space-y-4">
+      {/* Hero banner */}
+      {isToday && (
+        <div className="text-center animate-fade-in pb-2">
+          <div className="text-5xl mb-1">{data.mood >= 4 ? "✨" : data.mood >= 2 ? "🌟" : "💪"}</div>
+          <h2 className="text-xl font-bold text-white">
+            {data.mood >= 4 ? "Skvělý den!" : data.mood >= 2 ? "Den zapsán" : "I to se počítá"}
+          </h2>
+        </div>
+      )}
+
+      <p className="text-center text-white/25 text-sm">
+        {new Date(dateStr).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })}
+      </p>
+
+      {/* Main mood pill */}
+      <div className="flex justify-center">
+        <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border" style={{
+          background: (mood?.color || "#6366f1") + "15",
+          borderColor: (mood?.color || "#6366f1") + "30",
+        }}>
+          <span className="text-3xl">{mood?.emoji}</span>
+          <span className="text-white font-medium">{mood?.label}</span>
+        </div>
+      </div>
+
+      {/* Quick stats row */}
+      <div className="glass-card">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {/* Sleep */}
+          <div className="p-2">
+            <div className="text-2xl mb-0.5">{sleep?.emoji || "—"}</div>
+            <div className="text-[10px] text-white/30">Spánek</div>
+            <div className="text-[11px] text-white/60 font-medium">{sleep?.label || "—"}</div>
+          </div>
+          {/* Stress */}
+          <div className="p-2">
+            <div className="text-2xl mb-0.5">{stressLevel?.emoji || "—"}</div>
+            <div className="text-[10px] text-white/30">Stres</div>
+            <div className="text-[11px] text-white/60 font-medium">{stressLevel?.label || "—"}</div>
+          </div>
+          {/* Activities count */}
+          <div className="p-2">
+            <div className="text-2xl mb-0.5">{data.activities.length || "—"}</div>
+            <div className="text-[10px] text-white/30">Aktivit</div>
+            <div className="text-[11px] text-white/60 font-medium">
+              {data.activities.length > 0 ? data.activities.slice(0, 2).join(", ") : "žádné"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Activities tags */}
+      {data.activities.length > 0 && (
+        <div className="glass-card">
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Aktivity</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {data.activities.map(a => (
+              <span key={a} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-white/70">{a}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Habits status */}
+      <div className="glass-card">
+        <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Návyky</h3>
+        <div className="flex gap-2">
+          {habitStatus.map(h => (
+            <div key={h.key} className={`flex-1 text-center p-2 rounded-lg ${h.kept ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-red-500/5 border border-red-500/10"}`}>
+              <div className="text-lg">{h.emoji}</div>
+              <div className="text-[10px] text-white/50 mt-0.5">{h.label}</div>
+              <div className={`text-[10px] font-medium ${h.kept ? "text-emerald-400" : "text-red-400"}`}>
+                {h.kept ? "✓" : "✗"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Goals */}
+      {goals.length > 0 && (
+        <div className="glass-card">
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">
+            Cíle {goalsDone.length}/{goals.length}
+          </h3>
+          <div className="space-y-1.5">
+            {goals.map(g => {
+              const done = g.completedDates.includes(dateStr);
+              const streak = computeStreak(g.completedDates);
+              return (
+                <div key={g.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-white/3">
+                  <span className={`text-sm ${done ? "text-indigo-400" : "text-white/15"}`}>
+                    {done ? "✓" : "○"}
+                  </span>
+                  <span className="text-white/70">{g.emoji} {g.name}</span>
+                  {streak > 0 && <span className="text-[10px] text-indigo-400 ml-auto">🔥{streak}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Gratitude */}
+      {hasGratitude && (
+        <div className="glass-card">
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Vděčnost</h3>
+          {data.gratitude.filter(g => g.trim()).map((g, i) => (
+            <p key={i} className="text-white/60 text-sm leading-relaxed">🙏 {g}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Note */}
+      {hasNote && (
+        <div className="glass-card">
+          <h3 className="text-xs font-medium text-white/30 mb-1 uppercase tracking-wider">Poznámka</h3>
+          <p className="text-white/60 text-sm leading-relaxed italic">&ldquo;{data.note}&rdquo;</p>
+        </div>
+      )}
+
+      {/* AI Reflection */}
+      {aiReflection && (
+        <div className="glass-card bg-indigo-500/5 border-indigo-400/10">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">🤖</span>
+            <h3 className="text-xs font-medium text-indigo-300/60 uppercase tracking-wider">AI reflexe</h3>
+          </div>
+          <p className="text-white/70 text-sm leading-relaxed italic">
+            &ldquo;{aiReflection}&rdquo;
+          </p>
+        </div>
+      )}
+
+      {/* Quote fallback */}
+      {!aiReflection && data.mood > 0 && (
+        <div className="text-center py-2">
+          <p className="text-white/30 text-xs italic">&ldquo;{pickQuote(data.mood)}&rdquo;</p>
+        </div>
+      )}
+
+      {/* Edit button */}
+      <button
+        onClick={onEdit}
+        className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
+      >
+        ✏️ Upravit záznam
+      </button>
+    </div>
+  );
+}
+
+// ── MAIN COMPONENT ──
+export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => void; initialDate?: string | null }) {
+  const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [aiReflection, setAiReflection] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [currentDate, setCurrentDate] = useState(
+    initialDate || new Date().toISOString().split("T")[0]
+  );
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaved = useRef<string>("");
+  const dataRef = useRef<CheckInData>(data);
+
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Load entry for current date
+  useEffect(() => {
+    setLoading(true);
+    setSaved(false);
+    setAiReflection(null);
+
+    getEntry(currentDate).then((entry) => {
+      if (entry) {
+        setData({
+          mood: entry.mood,
+          moodEmoji: entry.mood_emoji,
+          sleepQuality: entry.sleep_quality ?? 0,
+          stress: entry.stress ?? 0,
+          activities: entry.activities ?? [],
+          habits: entry.habits ?? {},
+          gratitude: entry.gratitude ?? [],
+          note: entry.note ?? "",
+          photoDataUrl: null,
+        });
+        if (entry.mood > 0) {
+          setSaved(true);
+        }
+      } else {
+        setData({ ...EMPTY_DATA });
+      }
+      setGoals(loadGoals());
+      setLoading(false);
+    }).catch(() => { setGoals(loadGoals()); setLoading(false); });
+  }, [currentDate]);
+
+  useEffect(() => { if (goals.length > 0) saveGoals(goals); }, [goals]);
+
+  const toggleGoal = (id: string) => {
+    const d = currentDate;
+    setGoals(prev => prev.map(g => {
+      if (g.id !== id) return g;
+      const isDone = g.completedDates.includes(d);
+      return {
+        ...g,
+        completedDates: isDone ? g.completedDates.filter(dd => dd !== d) : [...g.completedDates, d],
+      };
+    }));
+  };
+
+  const addGoal = () => {
+    const name = prompt("Název cíle:");
+    if (!name) return;
+    const emoji = prompt("Emoji (např. 🏃):") || "✅";
+    setGoals(prev => [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]);
+  };
+  const removeGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+
+  const doSave = useCallback((currentData: CheckInData, final: boolean) => {
+    const serialized = JSON.stringify(currentData);
+    if (serialized === lastSaved.current && !final) return;
+    lastSaved.current = serialized;
+
+    // Build payload
+    const payload = {
+      mood: currentData.mood,
+      mood_emoji: currentData.moodEmoji,
+      sleep_quality: currentData.sleepQuality,
+      stress: currentData.stress,
+      activities: currentData.activities,
+      habits: currentData.habits,
+      gratitude: currentData.gratitude.filter((g: string) => g.trim()),
+      note: currentData.note,
+      weather: [],
+    };
+    saveEntry(payload as any).catch(() => {});
+  }, []);
+
+  // REMOVED aggressive autosave — was overwriting partial entries during form filling.
+  // Now saves only on explicit "Uložit" button click, with page-close as safety net.
+  //   (The old 2s debounce autosave is removed — see git history if needed)
+
+  // Safety net: save on page close / background
+  useEffect(() => {
+    const handle = () => {
+      const d = dataRef.current;
+      const hasData = d.mood > 0 || d.activities.length > 0 || d.gratitude.some(g => g.trim()) || d.note.trim();
+      if (hasData) doSave(d, false);
+    };
+    window.addEventListener("beforeunload", handle);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") handle(); });
+    return () => { window.removeEventListener("beforeunload", handle); document.removeEventListener("visibilitychange", handle); };
+  }, [doSave]);
+
+  const fetchAIReflection = async (entryData: CheckInData) => {
+    setAiLoading(true);
+    try {
+      const resp = await fetch("/api/ai/reflect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entryData),
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json.reflection) setAiReflection(json.reflection);
+      }
+    } catch {}
+    setAiLoading(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveEntry({
+        mood: data.mood,
+        mood_emoji: data.moodEmoji,
+        sleep_quality: data.sleepQuality,
+        stress: data.stress,
+        activities: data.activities,
+        habits: data.habits,
+        gratitude: data.gratitude.filter((g: string) => g.trim()),
+        note: data.note,
+        weather: [],
+      } as any);
+      setSaved(true);
+      // Fetch AI reflection in background
+      fetchAIReflection(data);
+    } catch {}
+    setSaving(false);
+  };
+
+  const toggleActivity = (label: string) => {
+    setData(d => ({
+      ...d,
+      activities: d.activities.includes(label) ? d.activities.filter(a => a !== label) : [...d.activities, label],
+    }));
+  };
+
+  const navigateDate = (offset: number) => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + offset);
+    setCurrentDate(d.toISOString().split("T")[0]);
+  };
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-white/40">Načítám...</div>;
+  }
+
+  // ── COMPLETED CARD VIEW ──
+  if (saved && !editing) {
+    return (
+      <div>
+        {/* Date nav */}
+        <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+          <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
+          <button
+            onClick={() => setCurrentDate(today)}
+            className={`text-sm font-medium px-3 py-1 rounded-full transition-colors ${
+              currentDate === today ? "bg-indigo-500/20 text-white" : "text-white/30 hover:text-white/50"
+            }`}
+          >
+            {currentDate === today ? "Dnes" : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" })}
+          </button>
+          <button
+            onClick={() => navigateDate(1)}
+            disabled={currentDate === today}
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors"
+          >▶</button>
+        </div>
+        <CompletedCard
+          data={data}
+          goals={goals}
+          aiReflection={aiReflection}
+          onEdit={() => setEditing(true)}
+          dateStr={currentDate}
+        />
+        {aiLoading && (
+          <div className="text-center text-white/20 text-sm py-4 animate-pulse">🤖 AI přemýšlí...</div>
+        )}
+      </div>
+    );
+  }
+
+  // ── FORM VIEW ──
+  return (
+    <div className="min-h-screen pb-24">
+      {/* Header with date nav */}
+      <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+        <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
+        <div className="text-center">
+          <span className={`text-sm font-medium ${currentDate === today ? "text-white" : "text-white/40"}`}>
+            {currentDate === today ? "Dnes" : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "long" })}
+          </span>
+        </div>
+        <button
+          onClick={() => navigateDate(1)}
+          disabled={currentDate === today}
+          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors"
+        >▶</button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="ml-auto flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+        >
+          ✓ {saving ? "Ukládám..." : "Uložit"}
+        </button>
+      </div>
+
+      <div className="px-4 pt-4 space-y-6">
+        {/* ── MOOD ── */}
+        <div>
+          <div className="flex justify-center gap-2 flex-wrap">
+            {MOODS.map(m => (
+              <button
+                key={m.value}
+                onClick={() => setData(d => ({ ...d, mood: m.value, moodEmoji: m.emoji }))}
+                className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
+                style={{
+                  background: data.mood === m.value ? m.color + "20" : "transparent",
+                  border: data.mood === m.value ? `2px solid ${m.color}` : "2px solid transparent",
+                }}
+              >
+                <span className="text-3xl">{m.emoji}</span>
+                <span className="text-[10px] text-white/50">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── SLEEP QUALITY ── */}
+        <div>
+          <p className="text-xs text-white/30 text-center mb-2">Kvalita spánku</p>
+          <div className="flex justify-center gap-1 flex-wrap">
+            {SLEEP_QUALITY.map(s => (
+              <button
+                key={s.value}
+                onClick={() => setData(d => ({ ...d, sleepQuality: s.value }))}
+                className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-all ${
+                  data.sleepQuality === s.value ? "bg-indigo-500/20 ring-1 ring-indigo-400/50" : "bg-white/5"
+                }`}
+              >
+                <span className="text-3xl">{s.emoji}</span>
+                <span className="text-[10px] text-white/40">{s.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── ACTIVITIES ── */}
+        <div className="space-y-1">
+          {ACTIVITY_CATEGORIES.map(cat => (
+            <Section key={cat.title} title={cat.title}>
+              <div className="flex flex-wrap gap-2">
+                {cat.items.map(a => {
+                  const isSelected = data.activities.includes(a.label);
+                  return (
+                    <button
+                      key={a.label}
+                      onClick={() => toggleActivity(a.label)}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-xl min-w-[64px] transition-all ${
+                        isSelected ? "bg-indigo-500/20 ring-1 ring-indigo-400/50" : "bg-white/5 hover:bg-white/10"
+                      }`}
+                    >
+                      <span className="text-2xl">{a.emoji}</span>
+                      <span className="text-[10px] text-white/50 leading-tight text-center">{a.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+          ))}
+        </div>
+
+        {/* ── HABITS ── */}
+        <Section title="Návyky">
+          <div className="space-y-2">
+            {HABIT_DEFS.map(h => {
+              const isOn = data.habits[h.key] ?? false;
+              const isGreen = h.abstinence ? !isOn : isOn;
+              return (
+                <div key={h.key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{h.emoji}</span>
+                    <span className="text-sm text-white/80">{h.label}</span>
+                    <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">dnes ne</span>
+                  </div>
+                  <button
+                    onClick={() => setData(d => ({ ...d, habits: { ...d.habits, [h.key]: !isOn } }))}
+                    className={`w-12 h-7 rounded-full relative transition-colors ${isGreen ? "bg-emerald-500/60" : "bg-white/10"}`}
+                  >
+                    <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${isGreen ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+        {/* ── GOALS ── */}
+        <Section title={`Cíle ${goals.filter(g => g.completedDates.includes(currentDate)).length}/${goals.length}`} defaultOpen={goals.length > 0}>
+          <div className="space-y-2">
+            {goals.map(g => {
+              const isDone = g.completedDates.includes(currentDate);
+              const streak = computeStreak(g.completedDates);
+              return (
+                <div key={g.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5 group">
+                  <button onClick={() => toggleGoal(g.id)} className="flex items-center gap-3 flex-1">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all ${isDone ? "bg-indigo-500 text-white" : "bg-white/10"}`}>
+                      {isDone ? "✓" : ""}
+                    </span>
+                    <span className="text-lg">{g.emoji}</span>
+                    <div className="text-left">
+                      <span className="text-sm text-white/80 block">{g.name}</span>
+                      {streak > 0 && <span className="text-[10px] text-indigo-400">🔥 {streak}-denní řada</span>}
+                    </div>
+                  </button>
+                  <button onClick={() => removeGoal(g.id)} className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 text-sm transition-all ml-2">✕</button>
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={addGoal} className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1">+ Přidat cíl</button>
+        </Section>
+
+        {/* ── STRESS ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+            <span className="text-sm font-medium text-white/80">Stres</span>
+          </div>
+          <div className="flex gap-1">
+            {STRESS_LEVELS.map(s => (
+              <button
+                key={s.value}
+                onClick={() => setData(d => ({ ...d, stress: s.value }))}
+                className={`flex-1 flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${
+                  data.stress === s.value ? "bg-orange-500/20 ring-1 ring-orange-400/50" : "bg-white/5 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-lg">{s.emoji}</span>
+                <span className="text-[9px] text-white/40">{s.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── GRATITUDE ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span className="text-sm font-medium text-white/80">Za co jsi vděčný?</span>
+          </div>
+          <div className="space-y-2">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-white/20 text-sm w-5 text-right">{i + 1}.</span>
+                <input
+                  value={data.gratitude[i]}
+                  onChange={e => { const g = [...data.gratitude]; g[i] = e.target.value; setData(d => ({ ...d, gratitude: g })); }}
+                  placeholder={`${i + 1}. věc...`}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── NOTE ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span className="text-sm font-medium text-white/80">Rychlá poznámka</span>
+          </div>
+          <textarea
+            value={data.note}
+            onChange={e => setData(d => ({ ...d, note: e.target.value }))}
+            placeholder="Co ti dnes běželo hlavou..."
+            rows={3}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50 resize-none"
+          />
+        </div>
+
+        {/* ── PHOTO ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span className="text-sm font-medium text-white/80">Fotka</span>
+          </div>
+          <PhotoPicker
+            onPhotoSelected={url => setData(d => ({ ...d, photoDataUrl: url }))}
+            currentPhoto={data.photoDataUrl}
+          />
+        </div>
+      </div>
+
+      {/* Bottom save bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-white/5">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
+        >
+          {saving ? "⏳ Ukládám..." : "✓ Uložit do vaultu"}
+        </button>
+      </div>
+    </div>
+  );
+}

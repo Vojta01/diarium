@@ -65,6 +65,24 @@ export function SubmitStep({
           <span className="text-2xl">{data.moodEmoji || "—"}</span>
         </div>
 
+        {data.sleepQuality > 0 && (
+          <div className="flex justify-between">
+            <span className="text-white/40">Spánek</span>
+            <span className="text-white/70">
+              {["", "🥴", "😵", "🥱", "💤", "😴"][data.sleepQuality] || "—"} {data.sleepQuality}/5
+            </span>
+          </div>
+        )}
+
+        {data.stress > 0 && (
+          <div className="flex justify-between">
+            <span className="text-white/40">Stres</span>
+            <span className="text-white/70">
+              {["", "😌", "🙂", "😐", "😰", "😤"][data.stress] || "—"} {data.stress}/5
+            </span>
+          </div>
+        )}
+
         <div className="flex justify-between">
           <span className="text-white/40">Aktivity</span>
           <span className="text-right max-w-[60%]">

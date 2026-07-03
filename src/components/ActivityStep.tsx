@@ -39,6 +39,7 @@ const WEATHER = [
   { emoji: "☁️", label: "Zataženo" },
   { emoji: "🌧️", label: "Déšť" },
   { emoji: "❄️", label: "Sníh" },
+  { emoji: "🥶", label: "Mráz" },
   { emoji: "🌡️", label: "Horko" },
   { emoji: "🌩️", label: "Bouřka" },
   { emoji: "💨", label: "Vítr" },
