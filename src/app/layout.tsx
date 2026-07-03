@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { PushNotificationManager } from "@/components/PushNotificationManager";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,7 +39,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>{children}<PushNotificationManager /></body>
     </html>
   );
 }

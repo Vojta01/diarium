@@ -1,70 +1,66 @@
 import type { CheckInData } from "@/lib/types";
 
-const WEATHER_EMOJI: Record<string, string> = {
-  Slunečno: "slunečno",
-  Zataženo: "zataženo",
-  Déšť: "deštivo",
-  Sníh: "sněžno",
-  Horko: "horko",
-  Bouřka: "bouřka",
-  Vítr: "větrno",
+// ── UTF-8 safe base64 encode / decode ──
+function strToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  return btoa(binary);
+}
+
+function base64ToStr(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+const WEATHER_LABELS = new Set([
+  "slunečno", "zataženo", "déšť", "sníh", "mráz", "horko", "bouřka", "vítr",
+]);
+
+const WEATHER_YAML: Record<string, string> = {
+  slunečno: "slunečno",
+  zataženo: "zataženo",
+  déšť: "deštivo",
+  sníh: "sněžno",
+  mráz: "mrazivo",
+  horko: "horko",
+  bouřka: "bouřka",
+  vítr: "větrno",
 };
 
 function getWeather(activities: string[]): string[] {
   return activities
-    .filter((a) => WEATHER_EMOJI[a])
-    .map((a) => WEATHER_EMOJI[a]);
+    .filter((a) => WEATHER_LABELS.has(a))
+    .map((a) => WEATHER_YAML[a] || a);
 }
 
 function getNonWeatherActivities(activities: string[]): string[] {
+  // Map display labels to YAML-friendly keys
+  const map: Record<string, string> = {
+    rodina: "rodina", přátelé: "přátelé", rande: "rande", párty: "párty", office: "office",
+    "filmy a tv": "filmy_a_tv", čtení: "čtení", "hraní her": "hrani_her", sport: "sport", relax: "relax", hudba: "hudba",
+    "brzký spánek": "brzky_spanek", "dobrý spánek": "dobry_spanek", "normální spánek": "normalni_spanek", "špatný spánek": "spatny_spanek",
+    "jíst zdravě": "jist_zdrave", "rychlé občerstvení": "rychle_obcerstveni", "domácí výroba": "domaci_vyroba",
+    restaurace: "restaurace", donáška: "donaska",
+    "den bez masa": "den_bez_masa", "žádné sladkosti": "zadne_sladkosti", "žádné limonády": "zadne_limonady",
+    trénink: "trenink", "pít vodu": "pit_vodu", chůze: "chuze", kolo: "kolo", plavání: "plavani",
+    paddleboard: "paddleboard", snooker: "snooker",
+    meditovat: "meditovat", laskavost: "laskavost", naslouchání: "naslouchání", dárcovství: "darcovství", "dej dárek": "dej_darek",
+    nakupování: "nakupovani", uklízení: "uklizeni", vaření: "vareni", praní: "prani", žehlení: "zehlení",
+  };
   return activities
-    .filter((a) => !WEATHER_EMOJI[a])
-    .map((a) => {
-      const map: Record<string, string> = {
-        Zdravě: "zdravé jídlo",
-        "Fast food": "fast food",
-        Domácí: "domácí výroba",
-        Restaurace: "restaurace",
-        Donáška: "donáška",
-        Trénink: "trénink",
-        Chůze: "chůze",
-        Kolo: "kolo",
-        Plavání: "plavání",
-        Paddleboard: "paddleboard",
-        Snooker: "snooker",
-        Čtení: "čtení",
-        Hudba: "hudba",
-        "Filmy/TV": "filmy/tv",
-        Hry: "hry",
-        Relax: "relax",
-        Přátelé: "přátelé",
-        Rodina: "rodina",
-        Rande: "rande",
-        Párty: "párty",
-        Office: "office",
-        Meditace: "meditace",
-        Terapie: "terapie",
-        Nákupy: "nákupy",
-        Úklid: "úklid",
-        Spánek: "spánek",
-      };
-      return map[a] || a.toLowerCase();
-    });
+    .filter((a) => !WEATHER_LABELS.has(a))
+    .map((a) => map[a] || a.toLowerCase().replace(/\s+/g, "_"));
 }
 
-const STRESS_MAP: Record<number, number> = {
-  5: 2,
-  4: 2,
-  3: 3,
-  2: 4,
-  1: 5,
-};
-
-function buildFrontmatter(data: CheckInData, photoPath?: string): string {
-  const today = new Date().toISOString().split("T")[0];
+function buildFrontmatter(data: CheckInData, dateStr?: string, photoPath?: string): string {
+  const targetDate = dateStr || new Date().toISOString().split("T")[0];
   const weather = getWeather(data.activities);
   const activities = getNonWeatherActivities(data.activities);
-  const stress = STRESS_MAP[data.mood] || 3;
 
   const habits = {
     "cvičení": data.habits["cvičení"] ?? false,
@@ -80,7 +76,14 @@ function buildFrontmatter(data: CheckInData, photoPath?: string): string {
   const gratitude = data.gratitude.filter((g) => g.trim());
   const note = data.note.trim();
 
-  const lines = ["---", `date: ${today}`, `mood: ${data.mood}`, `mood_emoji: ${data.moodEmoji}`, `stress: ${stress}`];
+  const lines = ["---", `date: ${targetDate}`, `mood: ${data.mood}`, `mood_emoji: ${data.moodEmoji}`];
+
+  if (data.sleepQuality > 0) {
+    lines.push(`sleep_quality: ${data.sleepQuality}`);
+  }
+  if (data.stress > 0) {
+    lines.push(`stress: ${data.stress}`);
+  }
 
   if (weather.length > 0) {
     lines.push(`weather: [${weather.join(", ")}]`);
@@ -167,7 +170,7 @@ export async function saveCheckIn(
   }
 
   const content = buildFrontmatter(data, photoPath);
-  const base64 = btoa(unescape(encodeURIComponent(content)));
+  const base64 = strToBase64(content);
 
   const api = (p: string) =>
     `https://api.github.com/repos/${repo}/contents/${p}`;
@@ -254,39 +257,20 @@ function parseYamlFrontmatter(yaml: string): Partial<CheckInData> {
 
 // Reverse mapping: YAML value → display label
 const REVERSE_ACTIVITY_MAP: Record<string, string> = {
-  "zdravé jídlo": "Zdravě",
-  "fast food": "Fast food",
-  "domácí výroba": "Domácí",
-  "restaurace": "Restaurace",
-  "donáška": "Donáška",
-  "trénink": "Trénink",
-  "chůze": "Chůze",
-  "kolo": "Kolo",
-  "plavání": "Plavání",
-  "paddleboard": "Paddleboard",
-  "snooker": "Snooker",
-  "čtení": "Čtení",
-  "hudba": "Hudba",
-  "filmy/tv": "Filmy/TV",
-  "hry": "Hry",
-  "relax": "Relax",
-  "přátelé": "Přátelé",
-  "rodina": "Rodina",
-  "rande": "Rande",
-  "párty": "Párty",
-  "office": "Office",
-  "meditace": "Meditace",
-  "terapie": "Terapie",
-  "nákupy": "Nákupy",
-  "úklid": "Úklid",
-  "spánek": "Spánek",
-  "slunečno": "Slunečno",
-  "zataženo": "Zataženo",
-  "deštivo": "Déšť",
-  "sněžno": "Sníh",
-  "horko": "Horko",
-  "bouřka": "Bouřka",
-  "větrno": "Vítr",
+  // Activities
+  rodina: "rodina", přátelé: "přátelé", rande: "rande", párty: "párty", office: "office",
+  filmy_a_tv: "filmy a tv", čtení: "čtení", hrani_her: "hraní her", sport: "sport", relax: "relax", hudba: "hudba",
+  brzky_spanek: "brzký spánek", dobry_spanek: "dobrý spánek", normalni_spanek: "normální spánek", spatny_spanek: "špatný spánek",
+  jist_zdrave: "jíst zdravě", rychle_obcerstveni: "rychlé občerstvení", domaci_vyroba: "domácí výroba",
+  restaurace: "restaurace", donaska: "donáška",
+  den_bez_masa: "den bez masa", zadne_sladkosti: "žádné sladkosti", zadne_limonady: "žádné limonády",
+  trenink: "trénink", pit_vodu: "pít vodu", chuze: "chůze", kolo: "kolo", plavani: "plavání",
+  paddleboard: "paddleboard", snooker: "snooker",
+  meditovat: "meditovat", laskavost: "laskavost", naslouchání: "naslouchání", darcovství: "dárcovství", dej_darek: "dej dárek",
+  nakupovani: "nakupování", uklizeni: "uklízení", vareni: "vaření", prani: "praní", zehleni: "žehlení",
+  // Weather
+  slunečno: "slunečno", zataženo: "zataženo", deštivo: "déšť", sněžno: "sníh",
+  mrazivo: "mráz", horko: "horko", bouřka: "bouřka", větrno: "vítr",
 };
 
 export async function loadDayEntry(
@@ -308,7 +292,7 @@ export async function loadDayEntry(
 
   let content: string;
   if (file.content) {
-    content = atob(file.content);
+    content = base64ToStr(file.content);
   } else if (file.download_url) {
     const dlRes = await fetch(file.download_url);
     content = await dlRes.text();
@@ -344,11 +328,13 @@ export async function loadDayEntry(
   return {
     mood: parsed.mood ?? 0,
     moodEmoji: parsed.mood_emoji ?? "",
+    sleepQuality: parsed.sleep_quality ?? 0,
+    stress: parsed.stress ?? 0,
     activities: allActivities,
     habits: parsed.habits ?? {},
     gratitude: parsed.gratitude ?? ["", "", ""],
     note: parsed.note ?? "",
-    photoDataUrl: null, // photos not re-loaded to save bandwidth
+    photoDataUrl: null,
   };
 }
 
@@ -356,14 +342,13 @@ export async function savePartialCheckIn(
   token: string,
   repo: string,
   data: CheckInData,
+  dateStr: string,
   isFinal: boolean = false
 ): Promise<void> {
-  // Use the same save logic but with a different commit message
-  const today = new Date().toISOString().split("T")[0];
-  const path = "daily/" + today + ".md";
+  const path = "daily/" + dateStr + ".md";
 
-  const content = buildFrontmatter(data);
-  const base64 = btoa(unescape(encodeURIComponent(content)));
+  const content = buildFrontmatter(data, dateStr);
+  const base64 = strToBase64(content);
 
   const headers = makeHeaders(token);
 
@@ -380,8 +365,8 @@ export async function savePartialCheckIn(
   const now = new Date();
   const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
   const msg = isFinal
-    ? "Check-in " + today + ": nalada " + data.mood + "/5"
-    : "Pruzeny check-in " + today + " " + time;
+    ? "Check-in " + dateStr + ": nalada " + data.mood + "/5"
+    : "Pruzeny check-in " + dateStr + " " + time;
 
   const body: any = {
     message: msg,

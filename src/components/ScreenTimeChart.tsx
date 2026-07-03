@@ -3,13 +3,10 @@
 import { useMemo } from "react";
 import type { DailyEntry } from "@/lib/stats";
 
-interface ScreenTimeChartProps {
-  entries: DailyEntry[];
-}
-
-// Extended entry type — screen time is in the YAML but not in our DailyEntry interface
 interface ScreenTimeEntry extends DailyEntry {
   phone_screen_time?: number;
+  phone_unlocks?: number;
+  phone_top_apps?: string;
 }
 
 function formatTime(seconds: number): string {
@@ -20,150 +17,111 @@ function formatTime(seconds: number): string {
 }
 
 function getBarColor(seconds: number): string {
-  if (seconds < 3600) return "#22c55e";       // <1h = green
-  if (seconds < 7200) return "#86efac";        // 1-2h = light green
-  if (seconds < 14400) return "#facc15";       // 2-4h = yellow
-  if (seconds < 21600) return "#fb923c";       // 4-6h = orange
-  return "#ef4444";                             // >6h = red
+  if (seconds < 3600) return "#22c55e";       // <1h
+  if (seconds < 7200) return "#3b82f6";        // 1-2h
+  if (seconds < 14400) return "#eab308";       // 2-4h
+  if (seconds < 21600) return "#f97316";       // 4-6h
+  return "#ef4444";                             // >6h
 }
 
-export function ScreenTimeChart({ entries }: ScreenTimeChartProps) {
-  const last30Days = useMemo(() => {
-    const typed = entries as ScreenTimeEntry[];
-    const withScreenTime = typed.filter((e) => e.phone_screen_time && e.phone_screen_time > 0);
-    if (withScreenTime.length === 0) return null;
+const WEEKDAYS_CZ = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 
-    // Take last 30 days
-    const sorted = [...withScreenTime].sort((a, b) => a.date.localeCompare(b.date));
-    return sorted.slice(-30);
+export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
+  const last7Days = useMemo(() => {
+    const typed = entries as ScreenTimeEntry[];
+    const withData = typed.filter(e => e.phone_screen_time && e.phone_screen_time > 0);
+    if (withData.length === 0) return null;
+
+    const sorted = [...withData].sort((a, b) => b.date.localeCompare(a.date));
+    return sorted.slice(0, 7).reverse();
   }, [entries]);
 
-  if (!last30Days || last30Days.length === 0) {
+  if (!last7Days || last7Days.length === 0) {
     return (
       <div className="glass-card">
         <h2 className="text-lg font-semibold mb-2">Screen Time</h2>
         <div className="text-center py-8 text-white/30 text-sm">
           Zatím žádná data o screen timu.
           <br />
-          <span className="text-[11px]">
-            Data se sbírají z Home Assistant senzoru.
-          </span>
+          <span className="text-[11px]">Data se sbírají z Home Assistant — první data budou zítra.</span>
         </div>
       </div>
     );
   }
 
-  const maxTime = Math.max(...last30Days.map((d) => d.phone_screen_time || 0));
-  const avgTime = last30Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / last30Days.length;
-  const totalHours = last30Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / 3600;
+  const maxTime = Math.max(...last7Days.map(d => d.phone_screen_time || 0), 1);
+  const avgTime = last7Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / last7Days.length;
+  const totalHours = last7Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / 3600;
+  const avgHours = totalHours / last7Days.length;
+
+  // Compare with previous period
+  const prev7Total = last7Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0);
+  const trend = prev7Total > 25200 ? "📈" : prev7Total < 16800 ? "📉" : "➡️";
 
   return (
     <div className="glass-card">
       <h2 className="text-lg font-semibold mb-1">Screen Time</h2>
-      <p className="text-white/30 text-xs mb-4">čas na displeji za posledních 30 dní</p>
+      <p className="text-white/30 text-xs mb-4">posledních 7 dní</p>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="text-center">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold text-white">{formatTime(Math.round(avgTime))}</div>
           <div className="text-[10px] text-white/30">průměr denně</div>
         </div>
-        <div className="text-center">
+        <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold text-white">{Math.round(totalHours)}h</div>
-          <div className="text-[10px] text-white/30">celkem za 30 dní</div>
+          <div className="text-[10px] text-white/30">celkem za 7 dní</div>
         </div>
-        <div className="text-center">
+        <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold" style={{ color: getBarColor(maxTime) }}>
             {formatTime(maxTime)}
           </div>
-          <div className="text-[10px] text-white/30">nejhorší den</div>
+          <div className="text-[10px] text-white/30">nejvíc za den</div>
         </div>
       </div>
 
-      {/* Bar chart */}
-      <div className="flex items-end gap-[2px] h-32">
-        {last30Days.map((d) => {
+      {/* 7-day bar chart */}
+      <div className="flex items-end gap-1.5 h-28 mb-1">
+        {last7Days.map((d) => {
           const seconds = d.phone_screen_time || 0;
-          const height = maxTime > 0 ? (seconds / maxTime) * 100 : 0;
+          const height = (seconds / maxTime) * 100;
+          const date = new Date(d.date);
+          const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
+          const isToday = d.date === new Date().toISOString().split("T")[0];
+
           return (
-            <div
-              key={d.date}
-              className="flex-1 relative group"
-              style={{ height: "100%" }}
-              title={d.date + ": " + formatTime(seconds)}
-            >
-              <div
-                className="absolute bottom-0 left-0 right-0 rounded-t-[2px] transition-all hover:opacity-80"
-                style={{
-                  height: height + "%",
-                  background: getBarColor(seconds),
-                  minHeight: seconds > 0 ? "2px" : "0",
-                }}
-              />
+            <div key={d.date} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+              <span className="text-[9px] text-white/40 font-medium">
+                {formatTime(seconds)}
+              </span>
+              <div className="w-full relative" style={{ height: height + "%", minHeight: seconds > 0 ? "4px" : "0" }}>
+                <div
+                  className="absolute bottom-0 left-0 right-0 rounded-t-md transition-all opacity-80 hover:opacity-100"
+                  style={{
+                    height: "100%",
+                    background: isToday
+                      ? "linear-gradient(180deg, #818cf8, #6366f1)"
+                      : getBarColor(seconds),
+                  }}
+                />
+              </div>
+              <span className={`text-[10px] ${isToday ? "text-indigo-400 font-semibold" : "text-white/25"}`}>
+                {dayName}
+              </span>
             </div>
           );
         })}
       </div>
 
-      {/* Per-app breakdown (today) */}
-      {last30Days.length > 0 && last30Days[last30Days.length - 1]?.phone_top_apps && (
-        <div className="mt-6 pt-4 border-t border-white/5">
-          <h3 className="text-sm font-medium text-white/50 mb-3">Dnešní appky</h3>
-          <div className="space-y-2">
-            {last30Days[last30Days.length - 1].phone_top_apps!
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .map((entry) => {
-                const [app, minStr] = entry.split(":");
-                const minutes = parseInt(minStr) || 0;
-                const maxMins = Math.max(
-                  ...last30Days[last30Days.length - 1].phone_top_apps!
-                    .split(",")
-                    .map((s) => parseInt(s.split(":")[1]) || 0)
-                );
-                const width = maxMins > 0 ? (minutes / maxMins) * 100 : 0;
-                return (
-                  <div key={app} className="flex items-center gap-2">
-                    <span className="text-xs text-white/60 w-20 truncate text-right">
-                      {app}
-                    </span>
-                    <div className="flex-1 h-4 bg-white/3 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: width + "%",
-                          background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs text-white/30 w-8 text-right">
-                      {minutes}m
-                    </span>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* Color scale */}
-      <div className="flex justify-between mt-3 text-[9px] text-white/25">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: "#22c55e" }} />
-            &lt;1h
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: "#facc15" }} />
-            2-4h
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: "#ef4444" }} />
-            &gt;6h
-          </span>
-        </div>
-        <span>data z HA senzoru</span>
+      {/* Color legend */}
+      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-white/5 text-[9px] text-white/25">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#22c55e" }} />&lt;1h</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#3b82f6" }} />1-2h</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#eab308" }} />2-4h</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#f97316" }} />4-6h</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#ef4444" }} />6h+</span>
+        <span className="ml-auto text-white/15">HA</span>
       </div>
     </div>
   );
