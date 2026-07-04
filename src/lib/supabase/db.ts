@@ -275,18 +275,25 @@ export async function getActivities(): Promise<ActivityDef[]> {
   const user = await getCurrentUser();
   const sb = getAuthenticatedClient();
 
-  const [defaultRes, customRes] = await Promise.all([
+  const [defaultRes, customRes, hiddenRes] = await Promise.all([
     sb.from("activity_catalog").select("*").eq("is_default", true).order("sort_order"),
     user
       ? sb.from("user_activities").select("*").eq("user_id", user.id).eq("is_active", true)
+      : Promise.resolve({ data: [] }),
+    user
+      ? sb.from("user_activities").select("*").eq("user_id", user.id).eq("is_active", false)
       : Promise.resolve({ data: [] }),
   ]);
 
   let defaults: ActivityDef[] = defaultRes.data?.map((a: any) => ({ ...a, source: "default" as const })) ?? [];
   const customs: ActivityDef[] = customRes.data?.map((a: any) => ({ ...a, source: "custom" as const })) ?? [];
+  
+  // Filter out defaults that user has hidden (is_active=false in user_activities)
+  const hiddenKeys = new Set((hiddenRes.data || []).map((h: any) => h.key));
+  defaults = defaults.filter(d => !hiddenKeys.has(d.key));
 
   // Fallback: if DB returned empty, use hardcoded catalog (first-launch / seeding not done yet)
-  if (defaults.length === 0) {
+  if (defaults.length === 0 && customs.length === 0) {
     defaults = FALLBACK_ACTIVITIES;
     // Try to seed the DB in the background (fire-and-forget)
     fetch("/api/seed-activities", { method: "POST" }).catch(() => {});
