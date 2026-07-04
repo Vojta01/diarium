@@ -486,10 +486,22 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const fetchAIReflection = async (entryData: CheckInData) => {
     setAiLoading(true);
     try {
+      // Get user info for personalization
+      let userName = "";
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.user?.email) userName = parsed.user.email;
+          }
+        } catch {}
+      }
+
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entryData),
+        body: JSON.stringify({ ...entryData, userName }),
       });
       if (resp.ok) {
         const json = await resp.json();

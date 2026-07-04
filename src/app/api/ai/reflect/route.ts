@@ -4,18 +4,24 @@ export const runtime = "nodejs";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 
-const SYSTEM_PROMPT = `Jsi Diarium AI — osobní asistent pro denní reflexi. Uživatel právě vyplnil svůj denní záznam.
+const SYSTEM_PROMPT = `Jsi Diarium AI — osobní asistent pro denní reflexi. Uživatel ti posílá svůj denní záznam.
 
-Tvůj úkol: napiš krátkou, osobní reflexi (2-3 věty v češtině), která:
-1. Ocenění — pojmenuj jednu pozitivní věc ze dne
-2. Vhled — pokud je něco znepokojivého (špatná nálada, vysoký stres, hodně screen timu), jemně na to upozorni
-3. Povzbuzení — krátké povzbuzení do zítřka
+Tvůj úkol: napiš krátkou, upřímnou reflexi (2-3 věty v češtině):
 
-Tón: přátelský, lidský, neformální. Jako bys byl/a kamarád/ka, ne terapeut.
-Nikdy neříkej "tvůj záznam ukazuje" nebo "podle dat" — mluv přirozeně.
-Max 3 krátké věty.`;
+1. Ocenění — konkrétně zareaguj na to, co uživatel napsal do poznámky nebo za co byl vděčný. Použij jeho vlastní slova.
+2. Vhled — pokud data ukazují varovné signály (špatná nálada ≤2, vysoký stres ≥4, narušené návyky), krátce a jemně na to upozorni. Pokud je vše v pořádku, přeskoč to.
+3. Povzbuzení — krátké, osobní povzbuzení.
 
-function buildUserPrompt(data: any): string {
+⚠️ DŮLEŽITÁ PRAVIDLA:
+- Mluv přímo k uživateli. Pokud znáš jeho jméno (z emailu nebo metadat), oslov ho jménem.
+- **Respektuj pohlaví:** Pokud z kontextu nebo jména dokážeš určit pohlaví, používej správný rod (on/ona). Pokud nevíš, **výchozí je mužský rod** (on).
+- **Odkazuj POUZE na konkrétní data v promptu.** Pokud uživatel nezmínil meditaci, vodu, cvičení apod., tak o tom NEMLUV.
+- **Nementoruj.** Jsi kamarád, ne rodič ani terapeut. Když všechno klape, jen to ocen.
+- Nikdy neříkej "tvůj záznam ukazuje" nebo "podle dat" — mluv přirozeně jako člověk.
+- Max 3 krátké, smysluplné věty.
+- Pokud uživatel napsal poznámku nebo vděčnost, ODRÁŽEJ TO v reflexi — to je to nejdůležitější.`;
+
+function buildUserPrompt(data: any, userName?: string): string {
   const moodLabels: Record<number, string> = {
     5: "skvěle 😄", 4: "dobře 🙂", 3: "neutrálně 😐", 2: "špatně 😟", 1: "hrozně 😡"
   };
@@ -27,43 +33,56 @@ function buildUserPrompt(data: any): string {
   };
 
   const parts: string[] = [];
+  
+  // User info for personalization
+  if (userName) {
+    parts.push(`👤 Uživatel: ${userName}`);
+  }
+  
+  // Nálada — vždy
   parts.push(`Nálada: ${moodLabels[data.mood] || "nevyplněno"}`);
   
+  // Poznámka — první, je to to nejosobnější
+  if (data.note?.trim()) {
+    parts.push(`💬 Poznámka: "${data.note}"`);
+  }
+  
+  // Vděčnost — druhá nejdůležitější
+  if (data.gratitude?.some((g: string) => g.trim())) {
+    const g = data.gratitude.filter((g: string) => g.trim());
+    parts.push(`🙏 Vděčnost: ${g.join("; ")}`);
+  }
+  
+  // Aktivity
   if (data.activities?.length > 0) {
     parts.push(`Aktivity: ${data.activities.join(", ")}`);
   }
   
-  if (data.sleepQuality) {
+  // Spánek
+  if (data.sleepQuality > 0) {
     parts.push(`Spánek: ${sleepLabels[data.sleepQuality] || "?"}`);
   }
   
-  if (data.stress) {
+  // Stres
+  if (data.stress > 0) {
     parts.push(`Stres: ${stressLabels[data.stress] || "?"}`);
   }
 
-  const goodHabits: string[] = [];
+  // Návyky — jen pokud je co hlásit
   const badHabits: string[] = [];
   if (data.habits) {
     for (const [k, v] of Object.entries(data.habits)) {
       if (v) badHabits.push(k);
-      else goodHabits.push(k);
     }
   }
-  if (goodHabits.length > 0) parts.push(`Dodrženo: ${goodHabits.join(", ")}`);
-  if (badHabits.length > 0) parts.push(`Nedodrženo: ${badHabits.join(", ")}`);
+  if (badHabits.length > 0) {
+    parts.push(`⚠️ Narušené návyky: ${badHabits.join(", ")}`);
+  }
 
+  // Screen time
   if (data.phone_screen_time) {
     const mins = Math.round(data.phone_screen_time / 60);
     parts.push(`Screen time: ${mins} minut`);
-  }
-
-  if (data.gratitude?.some((g: string) => g.trim())) {
-    const g = data.gratitude.filter((g: string) => g.trim());
-    parts.push(`Vděčnost: ${g.join("; ")}`);
-  }
-
-  if (data.note?.trim()) {
-    parts.push(`Poznámka: ${data.note}`);
   }
 
   return parts.join("\n");
@@ -77,7 +96,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const userPrompt = buildUserPrompt(body);
+    const { userName, ...entryData } = body;
+    const userPrompt = buildUserPrompt(entryData, userName);
 
     const resp = await fetch(DEEPSEEK_URL, {
       method: "POST",
@@ -91,7 +111,7 @@ export async function POST(request: NextRequest) {
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 200,
+        max_tokens: 250,
         temperature: 0.7,
       }),
     });
