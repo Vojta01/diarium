@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { saveEntry, getEntry } from "@/lib/supabase/db";
+import { saveEntry, getEntry, getHabits, setHabitVisibility } from "@/lib/supabase/db";
+import type { HabitDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
 
@@ -129,20 +130,17 @@ const ACTIVITY_CATEGORIES: { title: string; items: { emoji: string; label: strin
   },
 ];
 
-// ── Reduced habits ──
-const DEFAULT_HABITS: Record<string, boolean> = {
-  alkohol: false, porno: false, masturbace: false,
-};
+// ── Reduced habits ── (loaded dynamically below)
+const EMPTY_HABITS: Record<string, boolean> = {};
 
-const HABIT_DEFS: { key: string; emoji: string; label: string; abstinence: boolean }[] = [
-  { key: "alkohol", emoji: "🍺", label: "Alkohol", abstinence: true },
-  { key: "porno", emoji: "🔞", label: "Porno", abstinence: true },
-  { key: "masturbace", emoji: "💦", label: "Masturbace", abstinence: true },
+// ── Hardcoded defaults used only as fallback ── (replaced by DB-loaded habits)
+const FALLBACK_HABIT_DEFS: HabitDef[] = [
+  { key: "alkohol", label: "Alkohol", icon: "🍺", category: "zdraví", color: "#ef4444", is_negative: true, source: "default" },
 ];
 
 const EMPTY_DATA: CheckInData = {
   mood: 0, moodEmoji: "", sleepQuality: 0, stress: 0,
-  activities: [], habits: { ...DEFAULT_HABITS },
+  activities: [], habits: { ...EMPTY_HABITS },
   gratitude: ["", "", ""], note: "", photoDataUrl: null,
 };
 
@@ -198,9 +196,10 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
 
 // ── COMPLETED DAY CARD ──
 function CompletedCard({
-  data, goals, aiReflection, onEdit, dateStr,
+  data, goals, aiReflection, onEdit, dateStr, habitDefs,
 }: {
   data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; dateStr: string;
+  habitDefs: HabitDef[];
 }) {
   const mood = MOODS.find(m => m.value === data.mood);
   const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
@@ -211,9 +210,9 @@ function CompletedCard({
   const hasNote = data.note.trim().length > 0;
 
   // Habit status
-  const habitStatus = HABIT_DEFS.map(h => ({
+  const habitStatus = habitDefs.map(h => ({
     ...h,
-    kept: h.abstinence ? !data.habits[h.key] : data.habits[h.key],
+    kept: h.is_negative ? !data.habits[h.key] : data.habits[h.key],
   }));
 
   return (
@@ -287,7 +286,7 @@ function CompletedCard({
         <div className="flex gap-2">
           {habitStatus.map(h => (
             <div key={h.key} className={`flex-1 text-center p-2 rounded-lg ${h.kept ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-red-500/5 border border-red-500/10"}`}>
-              <div className="text-lg">{h.emoji}</div>
+              <div className="text-lg">{h.icon}</div>
               <div className="text-[10px] text-white/50 mt-0.5">{h.label}</div>
               <div className={`text-[10px] font-medium ${h.kept ? "text-emerald-400" : "text-red-400"}`}>
                 {h.kept ? "✓" : "✗"}
@@ -383,6 +382,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [currentDate, setCurrentDate] = useState(
     initialDate || new Date().toISOString().split("T")[0]
   );
+  const [habitDefs, setHabitDefs] = useState<HabitDef[]>(FALLBACK_HABIT_DEFS);
+  const [showSettings, setShowSettings] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
   const dataRef = useRef<CheckInData>(data);
@@ -392,6 +394,28 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   useEffect(() => { dateRef.current = currentDate; }, [currentDate]);
 
   const today = new Date().toISOString().split("T")[0];
+
+  // Load habits from DB and user email
+  useEffect(() => {
+    getHabits().then(defs => {
+      if (defs.length > 0) setHabitDefs(defs);
+      // Initialize habits state from loaded defs
+      const initHabits: Record<string, boolean> = {};
+      defs.forEach(h => { initHabits[h.key] = false; });
+      setData(d => ({ ...d, habits: { ...initHabits, ...d.habits } }));
+    }).catch(() => {});
+    
+    // Get user email
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.user?.email) setUserEmail(parsed.user.email);
+        }
+      } catch {}
+    }
+  }, []);
 
   // Load entry for current date
   useEffect(() => {
@@ -578,6 +602,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           aiReflection={aiReflection}
           onEdit={() => setEditing(true)}
           dateStr={currentDate}
+          habitDefs={habitDefs}
         />
         {aiLoading && (
           <div className="text-center text-white/20 text-sm py-4 animate-pulse">🤖 AI přemýšlí...</div>
@@ -679,13 +704,13 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {/* ── HABITS ── */}
         <Section title="Návyky">
           <div className="space-y-2">
-            {HABIT_DEFS.map(h => {
+            {habitDefs.map(h => {
               const isOn = data.habits[h.key] ?? false;
-              const isGreen = h.abstinence ? !isOn : isOn;
+              const isGreen = h.is_negative ? !isOn : isOn;
               return (
                 <div key={h.key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5">
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">{h.emoji}</span>
+                    <span className="text-xl">{h.icon}</span>
                     <span className="text-sm text-white/80">{h.label}</span>
                     <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">dnes ne</span>
                   </div>
@@ -700,6 +725,52 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             })}
           </div>
         </Section>
+
+        {/* ── SETTINGS TOGGLE ── */}
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="flex items-center gap-2 w-full text-left py-2 group"
+        >
+          <span className="w-2 h-2 rounded-full bg-white/20"></span>
+          <span className="text-sm font-medium text-white/40 group-hover:text-white/60 transition-colors">
+            ⚙️ Přizpůsobit návyky
+          </span>
+          <span className="ml-auto text-white/20 text-xs transition-transform duration-200" style={{ transform: showSettings ? "rotate(180deg)" : "rotate(0deg)" }}>
+            ▼
+          </span>
+        </button>
+        {showSettings && (
+          <div className="mb-4 p-4 bg-white/3 rounded-xl border border-white/5">
+            <p className="text-xs text-white/30 mb-3">Vyber, které návyky chceš sledovat:</p>
+            <div className="space-y-1.5">
+              {habitDefs.map(h => (
+                <label key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5 cursor-pointer">
+                  <span className="flex items-center gap-2 text-sm">
+                    <span>{h.icon}</span>
+                    <span className="text-white/70">{h.label}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    onChange={() => {
+                      setHabitVisibility(h.key, false, { label: h.label, icon: h.icon, is_negative: h.is_negative });
+                      setHabitDefs(prev => prev.filter(d => d.key !== h.key));
+                      setData(d => {
+                        const newHabits = { ...d.habits };
+                        delete newHabits[h.key];
+                        return { ...d, habits: newHabits };
+                      });
+                    }}
+                    className="w-4 h-4 rounded accent-indigo-500 opacity-50 hover:opacity-100"
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-white/20 mt-3">
+              Odebrané návyky můžeš kdykoliv vrátit — obnovením stránky se načtou znovu.
+            </p>
+          </div>
+        )}
 
         {/* ── GOALS ── */}
         <Section title={`Cíle ${goals.filter(g => g.completedDates.includes(currentDate)).length}/${goals.length}`} defaultOpen={goals.length > 0}>

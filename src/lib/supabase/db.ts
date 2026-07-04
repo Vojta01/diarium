@@ -234,14 +234,52 @@ export async function getHabits(): Promise<HabitDef[]> {
   const user = await getCurrentUser();
   const sb = getAuthenticatedClient();
 
-  const [defaultRes, customRes] = await Promise.all([
+  const [defaultRes, userRes] = await Promise.all([
     sb.from("habit_catalog").select("*").eq("is_default", true).order("sort_order"),
     user
-      ? sb.from("user_habits").select("*").eq("user_id", user.id).eq("is_active", true)
+      ? sb.from("user_habits").select("*").eq("user_id", user.id)
       : Promise.resolve({ data: [] }),
   ]);
 
   const defaults: HabitDef[] = defaultRes.data?.map((h: any) => ({ ...h, source: "default" as const })) ?? [];
-  const customs: HabitDef[] = customRes.data?.map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
-  return [...defaults, ...customs];
+  const userHabits: any[] = userRes.data ?? [];
+  
+  // Build a map of user overrides: habit key → is_active
+  const overrides: Record<string, boolean> = {};
+  userHabits.forEach((h: any) => { overrides[h.key] = h.is_active; });
+  
+  // Filter defaults: hide if user has an explicit override with is_active=false
+  const activeDefaults = defaults.filter(h => overrides[h.key] !== false);
+  
+  // Add user's custom active habits (not already in defaults)
+  const customKeys = new Set(defaults.map(d => d.key));
+  const customs: HabitDef[] = userHabits
+    .filter((h: any) => h.is_active && !customKeys.has(h.key))
+    .map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
+  
+  return [...activeDefaults, ...customs];
+}
+
+/** Toggle a habit's visibility for the current user.
+ *  Setting visible=false creates a user_habit with is_active=false (hides it).
+ *  Setting visible=true removes the override (shows default) or creates an active custom habit. */
+export async function setHabitVisibility(key: string, visible: boolean, habitInfo?: { label?: string; icon?: string; is_negative?: boolean }): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+  const sb = getAuthenticatedClient();
+
+  if (visible) {
+    // Remove the "hide" override if it exists
+    await sb.from("user_habits").delete().eq("user_id", user.id).eq("key", key).eq("is_active", false);
+  } else {
+    // Insert or update a "hide" override
+    await sb.from("user_habits").upsert({
+      user_id: user.id,
+      key,
+      label: habitInfo?.label || key,
+      icon: habitInfo?.icon || '✅',
+      is_negative: habitInfo?.is_negative ?? true,
+      is_active: false,
+    }, { onConflict: 'user_id,key' });
+  }
 }
