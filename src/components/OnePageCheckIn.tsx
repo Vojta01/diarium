@@ -355,6 +355,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [activityDefs, setActivityDefs] = useState<ActivityDef[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId] = useState("");
   const [showAddActivity, setShowAddActivity] = useState(false);
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -385,13 +386,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       if (defs.length > 0) setActivityDefs(defs);
     }).catch(() => {});
     
-    // Get user email
+    // Get user email and id
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.user?.email) setUserEmail(parsed.user.email);
+          if (parsed.user?.id) setUserId(parsed.user.id);
         }
       } catch {}
     }
@@ -450,20 +452,50 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   };
   const removeGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
 
-  // Add custom activity
+  // Add custom activity (persisted to DB)
   const addCustomActivity = async () => {
     const name = prompt("Název aktivity (např. běhání):");
     if (!name) return;
     const icon = prompt("Emoji (např. 🏃):") || "📌";
     const category = prompt("Kategorie (volný čas, sport, práce, vlastní...):") || "vlastní";
     
-    // Add to local state immediately
     const key = name.toLowerCase().replace(/\s+/g, "_");
     const newActivity: ActivityDef = { key, label: name, icon, category, color: "#6366f1", source: "custom" };
+    
+    // Add to local state immediately
     setActivityDefs(prev => [...prev, newActivity]);
+    
+    // Persist to DB
+    if (userId) {
+      fetch("/api/manage-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", userId, key, label: name, icon, category }),
+      }).catch(() => {});
+    }
   };
 
-  // Add custom habit
+  // Remove activity (local + DB)
+  const removeActivity = (activityKey: string) => {
+    setActivityDefs(prev => prev.filter(a => a.key !== activityKey));
+    
+    // Also remove from current selection
+    const removedLabel = activityDefs.find(a => a.key === activityKey)?.label;
+    if (removedLabel) {
+      setData(d => ({ ...d, activities: d.activities.filter(a => a !== removedLabel) }));
+    }
+    
+    // Persist to DB
+    if (userId) {
+      fetch("/api/manage-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", userId, key: activityKey }),
+      }).catch(() => {});
+    }
+  };
+
+  // Add custom habit (persisted to DB)
   const addCustomHabit = async () => {
     const name = prompt("Název návyku (např. běhání):");
     if (!name) return;
@@ -474,6 +506,34 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     const newHabit: HabitDef = { key, label: name, icon, category: "vlastní", color: "#6366f1", is_negative: isNegative, source: "custom" };
     setHabitDefs(prev => [...prev, newHabit]);
     setData(d => ({ ...d, habits: { ...d.habits, [key]: false } }));
+    
+    // Persist to DB
+    if (userId) {
+      fetch("/api/manage-habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", userId, key, label: name, icon, is_negative: isNegative }),
+      }).catch(() => {});
+    }
+  };
+
+  // Remove habit (local + DB)
+  const removeHabit = (habitKey: string) => {
+    setHabitDefs(prev => prev.filter(d => d.key !== habitKey));
+    setData(d => {
+      const newHabits = { ...d.habits };
+      delete newHabits[habitKey];
+      return { ...d, habits: newHabits };
+    });
+    
+    // Persist to DB
+    if (userId) {
+      fetch("/api/manage-habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", userId, key: habitKey }),
+      }).catch(() => {});
+    }
   };
 
   const doSave = useCallback((currentData: CheckInData, final: boolean) => {
@@ -775,9 +835,37 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             <div>
               <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">📋 Tvoje aktivity</p>
               <p className="text-[10px] text-white/25 mb-2">
-                Aktuálně {activityDefs.length} aktivit v {groupActivities(activityDefs).length} kategoriích.
-                Kliknutím na ➕ přidáš vlastní.
+                {activityDefs.length} aktivit v {groupActivities(activityDefs).length} kategoriích.
+                Vlastní můžeš odebrat, výchozí schovat.
               </p>
+              
+              {/* Activity list with remove buttons */}
+              <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
+                {groupActivities(activityDefs).map(cat => (
+                  <div key={cat.title}>
+                    <p className="text-[10px] text-white/20 uppercase tracking-wider px-1 py-1">{cat.title}</p>
+                    {cat.items.map(a => (
+                      <div key={a.key} className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-white/5 text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <span>{a.icon}</span>
+                          <span className="text-white/60">{a.label}</span>
+                          <span className="text-[10px] text-white/20">
+                            {a.source === "custom" ? "· vlastní" : "· výchozí"}
+                          </span>
+                        </span>
+                        <button
+                          onClick={() => removeActivity(a.key)}
+                          className="text-red-400/40 hover:text-red-400 text-xs px-1.5 py-0.5 rounded hover:bg-red-500/10 transition-colors"
+                          title={a.source === "custom" ? "Odebrat aktivitu" : "Skrýt aktivitu"}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              
               <button
                 onClick={addCustomActivity}
                 className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
@@ -809,14 +897,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         </span>
                       </span>
                       <button
-                        onClick={() => {
-                          setHabitDefs(prev => prev.filter(d => d.key !== h.key));
-                          setData(d => {
-                            const newHabits = { ...d.habits };
-                            delete newHabits[h.key];
-                            return { ...d, habits: newHabits };
-                          });
-                        }}
+                        onClick={() => removeHabit(h.key)}
                         className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
                       >
                         ✕ Odebrat
