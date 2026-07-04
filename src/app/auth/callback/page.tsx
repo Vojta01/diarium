@@ -12,7 +12,7 @@ function decodeJWT(token: string) {
   }
 }
 
-function storeAndRedirect(access_token: string, refresh_token: string, expires_at?: number) {
+async function storeAndSetSession(access_token: string, refresh_token: string, expires_at?: number) {
   // Decode JWT to get user info
   const payload = decodeJWT(access_token);
   if (!payload) return false;
@@ -27,10 +27,22 @@ function storeAndRedirect(access_token: string, refresh_token: string, expires_a
   };
 
   const exp = expires_at || Math.floor(Date.now() / 1000) + 3600;
+  
+  // Store in localStorage (for client-side use)
   localStorage.setItem(
     'sb-vmqbslghzgfotwhzgawa-auth-token',
     JSON.stringify({ access_token, refresh_token, expires_at: exp, token_type: 'bearer', user })
   );
+
+  // Also set session via Supabase client (sets cookies for middleware)
+  try {
+    const { createSupabaseClient } = await import('@/lib/supabase/client');
+    const sb = createSupabaseClient();
+    await sb.auth.setSession({ access_token, refresh_token });
+  } catch {
+    // Cookie-based auth failed, but localStorage works for client-side
+    console.warn('Failed to set Supabase session cookies, falling back to localStorage-only auth');
+  }
 
   return true;
 }
@@ -39,7 +51,6 @@ function CallbackInner() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string[]>([]);
-  const [done, setDone] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -54,8 +65,8 @@ function CallbackInner() {
 
         if (access_token && refresh_token) {
           setDebug(d => [...d, 'Tokens found in hash, storing...']);
-          if (storeAndRedirect(access_token, refresh_token, expires_at)) {
-            setDebug(d => [...d, 'Redirecting to / ...']);
+          if (await storeAndSetSession(access_token, refresh_token, expires_at)) {
+            setDebug(d => [...d, 'Session stored, redirecting...']);
             window.location.href = '/';
             return;
           }
@@ -74,8 +85,6 @@ function CallbackInner() {
         
         if (code) {
           setDebug(d => [...d, `Code found: ${code.substring(0, 10)}...`]);
-          // For PKCE, we need the Supabase client to exchange the code
-          // Dynamic import to avoid SSR issues
           try {
             const { createSupabaseClient } = await import('@/lib/supabase/client');
             const sb = createSupabaseClient();

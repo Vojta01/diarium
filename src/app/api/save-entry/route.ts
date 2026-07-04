@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtcWJzbGdoemdmb3R3aHpnYXdhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTI2ODU4NCwiZXhwIjoyMDk2ODQ0NTg0fQ.WPFndGpamQKsWAvwEv1T9AsllDCaRD9FQGbJUEZL5xg';
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function POST(req: NextRequest) {
   try {

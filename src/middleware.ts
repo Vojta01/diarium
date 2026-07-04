@@ -30,8 +30,8 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await sb.auth.getUser();
 
-  // Chráněné routy: stats, api/ai, api/push
-  const protectedPaths = ["/stats", "/api/ai", "/api/push"];
+  // Chráněné routy: stats, api/push (AI endpointy používají vlastní auth přes user_id)
+  const protectedPaths = ["/stats", "/api/push"];
   const isProtected = protectedPaths.some((p) =>
     request.nextUrl.pathname.startsWith(p)
   );

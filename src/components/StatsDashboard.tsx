@@ -5,12 +5,14 @@ import { YearInPixels } from "@/components/YearInPixels";
 import { CalendarView } from "@/components/CalendarView";
 import { ScreenTimeChart } from "@/components/ScreenTimeChart";
 import { ActivityMoodChart } from "@/components/ActivityMoodChart";
+import { PeriodicSummary } from "@/components/PeriodicSummary";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"year" | "calendar" | "screentime" | "correlation">("year");
+  const [tab, setTab] = useState<"year" | "calendar" | "screentime" | "correlation" | "ai">("year");
+  const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
     fetchDailyEntries()
@@ -19,6 +21,17 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Get userId from localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.user?.id) setUserId(parsed.user.id);
+        }
+      } catch {}
+    }
   }, []);
 
   if (loading) {
@@ -80,6 +93,16 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         >
           🔗 Korelace
         </button>
+        <button
+          onClick={() => setTab("ai")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "ai"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          🤖 AI
+        </button>
       </div>
 
       <div className="max-w-2xl mx-auto">
@@ -87,6 +110,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "screentime" && <ScreenTimeChart entries={entries} />}
         {tab === "correlation" && <ActivityMoodChart entries={entries} />}
+        {tab === "ai" && <PeriodicSummary userId={userId} />}
       </div>
     </div>
   );
