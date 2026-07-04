@@ -214,6 +214,63 @@ export interface HabitDef {
   source: "default" | "custom";
 }
 
+// Hardcoded fallback — original activity catalog, used when DB is empty
+const FALLBACK_ACTIVITIES: ActivityDef[] = [
+  // Společenské
+  { key: "rodina", label: "Rodina", icon: "👨‍👩‍👧", category: "sociální", color: "#8b5cf6", source: "default" },
+  { key: "pratele", label: "Přátelé", icon: "👥", category: "sociální", color: "#8b5cf6", source: "default" },
+  { key: "rande", label: "Rande", icon: "💑", category: "sociální", color: "#ec4899", source: "default" },
+  { key: "party", label: "Párty", icon: "🎉", category: "sociální", color: "#f97316", source: "default" },
+  { key: "office", label: "Office", icon: "🏢", category: "sociální", color: "#3b82f6", source: "default" },
+  // Záliby
+  { key: "filmy_a_tv", label: "Filmy a TV", icon: "🎬", category: "volný čas", color: "#eab308", source: "default" },
+  { key: "cteni", label: "Čtení", icon: "📖", category: "volný čas", color: "#a855f7", source: "default" },
+  { key: "hrani_her", label: "Hraní her", icon: "🎮", category: "volný čas", color: "#22c55e", source: "default" },
+  { key: "sport", label: "Sport", icon: "🏃", category: "volný čas", color: "#22c55e", source: "default" },
+  { key: "relax", label: "Relax", icon: "😌", category: "volný čas", color: "#8b5cf6", source: "default" },
+  { key: "hudba", label: "Hudba", icon: "🎵", category: "volný čas", color: "#ef4444", source: "default" },
+  // Jídlo
+  { key: "jist_zdrave", label: "Jíst zdravě", icon: "🥗", category: "jídlo", color: "#22c55e", source: "default" },
+  { key: "rychle_obcerstveni", label: "Rychlé občerstvení", icon: "🍔", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "domaci_vyroba", label: "Domácí výroba", icon: "🍳", category: "jídlo", color: "#f59e0b", source: "default" },
+  { key: "restaurace", label: "Restaurace", icon: "🍽️", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "donaska", label: "Donáška", icon: "📦", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "den_bez_masa", label: "Den bez masa", icon: "🥬", category: "jídlo", color: "#22c55e", source: "default" },
+  { key: "zadne_sladkosti", label: "Žádné sladkosti", icon: "🚫🍰", category: "jídlo", color: "#ef4444", source: "default" },
+  { key: "zadne_limonady", label: "Žádné limonády", icon: "🚫🥤", category: "jídlo", color: "#ef4444", source: "default" },
+  // Zdraví / Sport
+  { key: "trenink", label: "Trénink", icon: "🏋️", category: "sport", color: "#16a34a", source: "default" },
+  { key: "pit_vody", label: "Pít vodu", icon: "💧", category: "sport", color: "#3b82f6", source: "default" },
+  { key: "chuze", label: "Chůze", icon: "🚶", category: "sport", color: "#84cc16", source: "default" },
+  { key: "kolo", label: "Kolo", icon: "🚴", category: "sport", color: "#84cc16", source: "default" },
+  { key: "plavani", label: "Plavání", icon: "🏊", category: "sport", color: "#06b6d4", source: "default" },
+  { key: "paddleboard", label: "Paddleboard", icon: "🏄", category: "sport", color: "#06b6d4", source: "default" },
+  { key: "snooker", label: "Snooker", icon: "🎱", category: "sport", color: "#ef4444", source: "default" },
+  // Mé lepší já
+  { key: "meditovat", label: "Meditovat", icon: "🧘", category: "wellness", color: "#7c3aed", source: "default" },
+  { key: "laskavost", label: "Laskavost", icon: "💝", category: "wellness", color: "#ec4899", source: "default" },
+  { key: "naslouchani", label: "Naslouchání", icon: "👂", category: "wellness", color: "#8b5cf6", source: "default" },
+  { key: "darcovstvi", label: "Dárcovství", icon: "💰", category: "wellness", color: "#22c55e", source: "default" },
+  { key: "dej_darek", label: "Dej dárek", icon: "🎁", category: "wellness", color: "#f97316", source: "default" },
+  { key: "terapie", label: "Terapie", icon: "🛋️", category: "wellness", color: "#8b5cf6", source: "default" },
+  { key: "integrita", label: "Integrita", icon: "⚖️", category: "wellness", color: "#6366f1", source: "default" },
+  // Domácí práce
+  { key: "nakupovani", label: "Nakupování", icon: "🛒", category: "domácí práce", color: "#f59e0b", source: "default" },
+  { key: "uklizeni", label: "Uklízení", icon: "🧹", category: "domácí práce", color: "#3b82f6", source: "default" },
+  { key: "vareni", label: "Vaření", icon: "🍲", category: "domácí práce", color: "#f97316", source: "default" },
+  { key: "prani", label: "Praní", icon: "🧺", category: "domácí práce", color: "#3b82f6", source: "default" },
+  { key: "zehleni", label: "Žehlení", icon: "👕", category: "domácí práce", color: "#ef4444", source: "default" },
+  // Počasí
+  { key: "slunecno", label: "Slunečno", icon: "☀️", category: "počasí", color: "#eab308", source: "default" },
+  { key: "zatazeno", label: "Zataženo", icon: "☁️", category: "počasí", color: "#9ca3af", source: "default" },
+  { key: "dest", label: "Déšť", icon: "🌧️", category: "počasí", color: "#3b82f6", source: "default" },
+  { key: "snih", label: "Sníh", icon: "❄️", category: "počasí", color: "#e0e7ff", source: "default" },
+  { key: "mraz", label: "Mráz", icon: "🥶", category: "počasí", color: "#93c5fd", source: "default" },
+  { key: "horko", label: "Horko", icon: "🌡️", category: "počasí", color: "#ef4444", source: "default" },
+  { key: "bourka", label: "Bouřka", icon: "🌩️", category: "počasí", color: "#f59e0b", source: "default" },
+  { key: "vitr", label: "Vítr", icon: "💨", category: "počasí", color: "#9ca3af", source: "default" },
+];
+
 export async function getActivities(): Promise<ActivityDef[]> {
   const user = await getCurrentUser();
   const sb = getAuthenticatedClient();
@@ -225,8 +282,16 @@ export async function getActivities(): Promise<ActivityDef[]> {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const defaults: ActivityDef[] = defaultRes.data?.map((a: any) => ({ ...a, source: "default" as const })) ?? [];
+  let defaults: ActivityDef[] = defaultRes.data?.map((a: any) => ({ ...a, source: "default" as const })) ?? [];
   const customs: ActivityDef[] = customRes.data?.map((a: any) => ({ ...a, source: "custom" as const })) ?? [];
+
+  // Fallback: if DB returned empty, use hardcoded catalog (first-launch / seeding not done yet)
+  if (defaults.length === 0) {
+    defaults = FALLBACK_ACTIVITIES;
+    // Try to seed the DB in the background (fire-and-forget)
+    fetch("/api/seed-activities", { method: "POST" }).catch(() => {});
+  }
+
   return [...defaults, ...customs];
 }
 
@@ -241,8 +306,22 @@ export async function getHabits(): Promise<HabitDef[]> {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const defaults: HabitDef[] = defaultRes.data?.map((h: any) => ({ ...h, source: "default" as const })) ?? [];
+  let defaults: HabitDef[] = defaultRes.data?.map((h: any) => ({ ...h, source: "default" as const })) ?? [];
   const userHabits: any[] = userRes.data ?? [];
+
+  // Fallback: if DB returned empty, use hardcoded alkohol only + auto-seed
+  if (defaults.length === 0) {
+    defaults = [
+      { key: "alkohol", label: "Alkohol", icon: "🍺", category: "zdraví", color: "#ef4444", is_negative: true, source: "default" as const },
+    ];
+    // Try to seed + clean up the DB in the background
+    fetch("/api/seed-habits", { method: "POST" }).catch(() => {});
+  }
+  
+  // Auto-seed if DB has more than just alkohol as default (old data)
+  if (defaults.length > 1) {
+    fetch("/api/seed-habits", { method: "POST" }).catch(() => {});
+  }
   
   // Build a map of user overrides: habit key → is_active
   const overrides: Record<string, boolean> = {};
