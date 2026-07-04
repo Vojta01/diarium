@@ -75,31 +75,62 @@ CREATE TABLE IF NOT EXISTS activity_catalog (
 );
 
 INSERT INTO activity_catalog (key, label, icon, category, color, sort_order) VALUES
-  ('rodina', 'Rodina', '👨‍👩‍👧‍👦', 'sociální', '#8b5cf6', 1),
+  -- Společenské
+  ('rodina', 'Rodina', '👨‍👩‍👧', 'sociální', '#8b5cf6', 1),
   ('pratele', 'Přátelé', '👥', 'sociální', '#8b5cf6', 2),
-  ('rande', 'Rande', '💕', 'sociální', '#ec4899', 3),
+  ('rande', 'Rande', '💑', 'sociální', '#ec4899', 3),
   ('party', 'Párty', '🎉', 'sociální', '#f97316', 4),
-  ('office', 'Práce', '💼', 'práce', '#3b82f6', 10),
-  ('filmy_a_tv', 'Filmy a TV', '🍿', 'volný čas', '#eab308', 20),
-  ('cteni', 'Čtení', '📚', 'volný čas', '#a855f7', 21),
-  ('hrani_her', 'Hraní her', '🎮', 'volný čas', '#22c55e', 22),
-  ('hudba', 'Hudba', '🎵', 'volný čas', '#ef4444', 23),
-  ('sport', 'Sport', '🏃', 'sport', '#22c55e', 30),
-  ('trenink', 'Trénink', '🏋️', 'sport', '#16a34a', 31),
+  ('office', 'Office', '🏢', 'sociální', '#3b82f6', 5),
+  -- Záliby
+  ('filmy_a_tv', 'Filmy a TV', '🎬', 'volný čas', '#eab308', 10),
+  ('cteni', 'Čtení', '📖', 'volný čas', '#a855f7', 11),
+  ('hrani_her', 'Hraní her', '🎮', 'volný čas', '#22c55e', 12),
+  ('sport', 'Sport', '🏃', 'volný čas', '#22c55e', 13),
+  ('relax', 'Relax', '😌', 'volný čas', '#8b5cf6', 14),
+  ('hudba', 'Hudba', '🎵', 'volný čas', '#ef4444', 15),
+  -- Jídlo
+  ('jist_zdrave', 'Jíst zdravě', '🥗', 'jídlo', '#22c55e', 20),
+  ('rychle_obcerstveni', 'Rychlé občerstvení', '🍔', 'jídlo', '#f97316', 21),
+  ('domaci_vyroba', 'Domácí výroba', '🍳', 'jídlo', '#f59e0b', 22),
+  ('restaurace', 'Restaurace', '🍽️', 'jídlo', '#f97316', 23),
+  ('donaska', 'Donáška', '📦', 'jídlo', '#f97316', 24),
+  ('den_bez_masa', 'Den bez masa', '🥬', 'jídlo', '#22c55e', 25),
+  ('zadne_sladkosti', 'Žádné sladkosti', '🚫🍰', 'jídlo', '#ef4444', 26),
+  ('zadne_limonady', 'Žádné limonády', '🚫🥤', 'jídlo', '#ef4444', 27),
+  -- Zdraví / Sport
+  ('trenink', 'Trénink', '🏋️', 'sport', '#16a34a', 30),
+  ('pit_vody', 'Pít vodu', '💧', 'sport', '#3b82f6', 31),
   ('chuze', 'Chůze', '🚶', 'sport', '#84cc16', 32),
-  ('kolo', 'Kolo', '🚲', 'sport', '#84cc16', 33),
+  ('kolo', 'Kolo', '🚴', 'sport', '#84cc16', 33),
   ('plavani', 'Plavání', '🏊', 'sport', '#06b6d4', 34),
-  ('jist_zdrave', 'Jíst zdravě', '🥗', 'jídlo', '#22c55e', 40),
-  ('restaurace', 'Restaurace', '🍽️', 'jídlo', '#f97316', 41),
-  ('domaci_vyroba', 'Domácí výroba', '🧑‍🍳', 'jídlo', '#f59e0b', 42),
-  ('relax', 'Relax', '🧘', 'wellness', '#8b5cf6', 50),
-  ('meditovat', 'Meditovat', '🧘‍♂️', 'wellness', '#7c3aed', 51),
-  ('slunecno', 'Slunečno', '☀️', 'počasí', '#eab308', 100),
-  ('zatazeno', 'Zataženo', '☁️', 'počasí', '#9ca3af', 101),
-  ('dest', 'Déšť', '🌧️', 'počasí', '#3b82f6', 102),
-  ('snih', 'Sníh', '🌨️', 'počasí', '#e0e7ff', 103),
-  ('horko', 'Horko', '🥵', 'počasí', '#ef4444', 104)
-ON CONFLICT (key) DO NOTHING;
+  ('paddleboard', 'Paddleboard', '🏄', 'sport', '#06b6d4', 35),
+  ('snooker', 'Snooker', '🎱', 'sport', '#ef4444', 36),
+  -- Mé lepší já
+  ('meditovat', 'Meditovat', '🧘', 'wellness', '#7c3aed', 40),
+  ('laskavost', 'Laskavost', '💝', 'wellness', '#ec4899', 41),
+  ('naslouchani', 'Naslouchání', '👂', 'wellness', '#8b5cf6', 42),
+  ('darcovstvi', 'Dárcovství', '💰', 'wellness', '#22c55e', 43),
+  ('dej_darek', 'Dej dárek', '🎁', 'wellness', '#f97316', 44),
+  ('terapie', 'Terapie', '🛋️', 'wellness', '#8b5cf6', 45),
+  ('integrita', 'Integrita', '⚖️', 'wellness', '#6366f1', 46),
+  -- Domácí práce
+  ('nakupovani', 'Nakupování', '🛒', 'domácí práce', '#f59e0b', 50),
+  ('uklizeni', 'Uklízení', '🧹', 'domácí práce', '#3b82f6', 51),
+  ('vareni', 'Vaření', '🍲', 'domácí práce', '#f97316', 52),
+  ('prani', 'Praní', '🧺', 'domácí práce', '#3b82f6', 53),
+  ('zehleni', 'Žehlení', '👕', 'domácí práce', '#ef4444', 54),
+  -- Počasí
+  ('slunecno', 'Slunečno', '☀️', 'počasí', '#eab308', 60),
+  ('zatazeno', 'Zataženo', '☁️', 'počasí', '#9ca3af', 61),
+  ('dest', 'Déšť', '🌧️', 'počasí', '#3b82f6', 62),
+  ('snih', 'Sníh', '❄️', 'počasí', '#e0e7ff', 63),
+  ('mraz', 'Mráz', '🥶', 'počasí', '#93c5fd', 64),
+  ('horko', 'Horko', '🌡️', 'počasí', '#ef4444', 65),
+  ('bourka', 'Bouřka', '🌩️', 'počasí', '#f59e0b', 66),
+  ('vitr', 'Vítr', '💨', 'počasí', '#9ca3af', 67)
+ON CONFLICT (key) DO UPDATE SET
+  label = EXCLUDED.label, icon = EXCLUDED.icon,
+  category = EXCLUDED.category, sort_order = EXCLUDED.sort_order;
 
 -- 4. HABIT CATALOG — výchozí návyky
 CREATE TABLE IF NOT EXISTS habit_catalog (
@@ -115,14 +146,7 @@ CREATE TABLE IF NOT EXISTS habit_catalog (
 );
 
 INSERT INTO habit_catalog (key, label, icon, category, is_negative, sort_order) VALUES
-  ('cviceni', 'Cvičení', '🏋️', 'zdraví', false, 1),
-  ('cist', 'Čtení', '📖', 'mysl', false, 2),
-  ('meditace', 'Meditace', '🧘', 'mysl', false, 3),
-  ('zdrave_jidlo', 'Zdravé jídlo', '🥗', 'zdraví', false, 4),
-  ('piti_vody', 'Pití vody', '💧', 'zdraví', false, 5),
-  ('alkohol', 'Alkohol', '🍺', 'zdraví', true, 10),
-  ('porno', 'Porno', '🔞', 'mysl', true, 11),
-  ('masturbace', 'Masturbace', '🫣', 'mysl', true, 12)
+  ('alkohol', 'Alkohol', '🍺', 'zdraví', true, 1)
 ON CONFLICT (key) DO NOTHING;
 
 -- 5. USER_ACTIVITIES — vlastní aktivity
