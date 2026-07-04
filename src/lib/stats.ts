@@ -18,13 +18,36 @@ export interface DailyEntry {
 /** Načte všechny daily entries pro aktuálního uživatele */
 export async function fetchDailyEntries(): Promise<DailyEntry[]> {
   const sb = createSupabaseClient();
-  const { data: userData } = await sb.auth.getUser();
-  if (!userData.user) return [];
+  
+  // Get user from localStorage (bypasses supabase-js auth issues)
+  let userId: string | null = null;
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.user?.id) {
+          userId = parsed.user.id;
+          // Set session explicitly so RLS queries work
+          if (parsed.access_token) {
+            await sb.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' }).catch(() => {});
+          }
+        }
+      }
+    } catch {}
+  }
+  
+  if (!userId) {
+    // Fallback to supabase-js getUser
+    const { data: userData } = await sb.auth.getUser();
+    if (!userData.user) return [];
+    userId = userData.user.id;
+  }
 
   const { data, error } = await sb
     .from("entries")
     .select("*")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", userId)
     .order("date", { ascending: true });
 
   if (error) {
