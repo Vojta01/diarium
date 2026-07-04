@@ -87,7 +87,18 @@ export default function Home() {
         <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Diarium</h1>
         <div className="flex items-center justify-center gap-2 mt-1">
           <span className="text-white/20 text-xs">{user.email}</span>
-          <button onClick={async () => { await createSupabaseClient().auth.signOut(); }} className="text-white/15 text-xs hover:text-white/40 transition-colors">(odhlásit)</button>
+          <button
+            onClick={async () => {
+              // Clear local storage token
+              localStorage.removeItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+              // Sign out from Supabase
+              const sb = createSupabaseClient();
+              await sb.auth.signOut();
+              // Force re-render
+              setUser(null);
+            }}
+            className="text-white/15 text-xs hover:text-white/40 transition-colors"
+          >(odhlásit)</button>
         </div>
       </header>
       <OnePageCheckIn initialDate={checkinDate} onSaveDone={() => { setCheckinDate(null); setView("stats"); }} />
