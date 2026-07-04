@@ -108,6 +108,7 @@ const ACTIVITY_CATEGORIES: { title: string; items: { emoji: string; label: strin
     items: [
       { emoji: "🧘", label: "meditovat" }, { emoji: "💝", label: "laskavost" },
       { emoji: "👂", label: "naslouchání" }, { emoji: "💰", label: "dárcovství" }, { emoji: "🎁", label: "dej dárek" },
+      { emoji: "🛋️", label: "terapie" }, { emoji: "⚖️", label: "integrita" },
     ],
   },
   {
