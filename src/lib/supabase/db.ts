@@ -302,6 +302,43 @@ export async function getActivities(): Promise<ActivityDef[]> {
   return [...defaults, ...customs];
 }
 
+/** Returns activities that user has hidden (is_active=false) — for the "restore" UI */
+export async function getHiddenActivities(): Promise<ActivityDef[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const sb = getAuthenticatedClient();
+
+  const { data } = await sb
+    .from("user_activities")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("is_active", false);
+
+  if (!data || data.length === 0) return [];
+
+  // Enrich with default catalog data if available
+  const hiddenKeys = data.map((h: any) => h.key);
+  const { data: catalogData } = await sb
+    .from("activity_catalog")
+    .select("*")
+    .in("key", hiddenKeys);
+
+  const catalogMap: Record<string, any> = {};
+  (catalogData || []).forEach((c: any) => { catalogMap[c.key] = c; });
+
+  return data.map((h: any) => {
+    const catalog = catalogMap[h.key];
+    return {
+      key: h.key,
+      label: catalog?.label || h.label || h.key,
+      icon: catalog?.icon || h.icon || "📌",
+      category: catalog?.category || "skryté",
+      color: catalog?.color || "#6366f1",
+      source: "default" as const,
+    };
+  });
+}
+
 export async function getHabits(): Promise<HabitDef[]> {
   const user = await getCurrentUser();
   const sb = getAuthenticatedClient();

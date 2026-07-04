@@ -64,5 +64,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, action: "remove", key });
   }
 
+  if (action === "restore") {
+    if (!key) {
+      return NextResponse.json({ error: "Missing key" }, { status: 400 });
+    }
+
+    // Delete the is_active=false entry — activity becomes visible again
+    const { error } = await sb
+      .from("user_activities")
+      .delete()
+      .eq("user_id", userId)
+      .eq("key", key)
+      .eq("is_active", false);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, action: "restore", key });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

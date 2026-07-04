@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities } from "@/lib/supabase/db";
+import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getHiddenActivities } from "@/lib/supabase/db";
 import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
@@ -353,6 +353,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   );
   const [habitDefs, setHabitDefs] = useState<HabitDef[]>(FALLBACK_HABIT_DEFS);
   const [activityDefs, setActivityDefs] = useState<ActivityDef[]>([]);
+  const [hiddenActivities, setHiddenActivities] = useState<ActivityDef[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [userId, setUserId] = useState("");
@@ -384,6 +385,11 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     // Load activities
     getActivities().then(defs => {
       if (defs.length > 0) setActivityDefs(defs);
+    }).catch(() => {});
+    
+    // Load hidden activities (for restore UI)
+    getHiddenActivities().then(defs => {
+      if (defs.length > 0) setHiddenActivities(defs);
     }).catch(() => {});
     
     // Get user email and id
@@ -477,12 +483,17 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
   // Remove activity (local + DB)
   const removeActivity = (activityKey: string) => {
+    const removed = activityDefs.find(a => a.key === activityKey);
     setActivityDefs(prev => prev.filter(a => a.key !== activityKey));
     
+    // Add to hidden list for potential restore
+    if (removed) {
+      setHiddenActivities(prev => [...prev, removed]);
+    }
+    
     // Also remove from current selection
-    const removedLabel = activityDefs.find(a => a.key === activityKey)?.label;
-    if (removedLabel) {
-      setData(d => ({ ...d, activities: d.activities.filter(a => a !== removedLabel) }));
+    if (removed?.label) {
+      setData(d => ({ ...d, activities: d.activities.filter(a => a !== removed.label) }));
     }
     
     // Persist to DB
@@ -491,6 +502,24 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "remove", userId, key: activityKey }),
+      }).catch(() => {});
+    }
+  };
+
+  // Restore a previously hidden activity
+  const restoreActivity = (activityKey: string) => {
+    const restored = hiddenActivities.find(a => a.key === activityKey);
+    if (restored) {
+      setActivityDefs(prev => [...prev, restored]);
+      setHiddenActivities(prev => prev.filter(a => a.key !== activityKey));
+    }
+    
+    // Persist to DB
+    if (userId) {
+      fetch("/api/manage-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", userId, key: activityKey }),
       }).catch(() => {});
     }
   };
@@ -872,6 +901,29 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               >
                 ➕ Přidat vlastní aktivitu
               </button>
+
+              {/* Hidden activities — restore section */}
+              {hiddenActivities.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/5">
+                  <p className="text-[10px] text-white/20 uppercase tracking-wider mb-2">
+                    🔒 Skryté aktivity ({hiddenActivities.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {hiddenActivities.map(a => (
+                      <button
+                        key={a.key}
+                        onClick={() => restoreActivity(a.key)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/20 text-xs text-white/40 hover:text-emerald-400 transition-colors"
+                        title="Kliknutím obnovíš"
+                      >
+                        <span>{a.icon}</span>
+                        <span>{a.label}</span>
+                        <span className="text-[10px] text-emerald-500/40 ml-0.5">↩</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Divider */}
