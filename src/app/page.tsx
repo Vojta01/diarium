@@ -16,20 +16,30 @@ export default function Home() {
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
 
   useEffect(() => {
-    const sb = createSupabaseClient();
+    // Try manual localStorage first (set by callback page)
+    const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.user) {
+          setUser(parsed.user as User);
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
 
-    // Zkontroluj existující session
-    sb.auth.getUser().then(({ data }) => {
-      setUser(data.user);
+    // Fallback: supabase-js
+    const sb = createSupabaseClient();
+    sb.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
       setLoading(false);
     });
 
-    // Poslouchej změny auth stavu
     const { data: listener } = sb.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
-    // Handle ?edit=YYYY-MM-DD from Calendar
     const params = new URLSearchParams(window.location.search);
     const editDate = params.get("edit");
     if (editDate) {
@@ -64,21 +74,8 @@ export default function Home() {
       <div>
         <StatsDashboard onNavigateToDate={navigateToCheckIn} />
         <div className="fixed bottom-0 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl">
-          <button
-            onClick={() => {
-              setCheckinDate(null);
-              setView("checkin");
-            }}
-            className="flex-1 py-3 text-center text-sm text-white/30"
-          >
-            ✏️ Check-in
-          </button>
-          <button
-            onClick={() => setView("stats")}
-            className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400"
-          >
-            📊 Statistiky
-          </button>
+          <button onClick={() => { setCheckinDate(null); setView("checkin"); }} className="flex-1 py-3 text-center text-sm text-white/30">✏️ Check-in</button>
+          <button onClick={() => setView("stats")} className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400">📊 Statistiky</button>
         </div>
       </div>
     );
@@ -87,43 +84,16 @@ export default function Home() {
   return (
     <div>
       <header className="text-center pt-4 pb-1">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-          Diarium
-        </h1>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Diarium</h1>
         <div className="flex items-center justify-center gap-2 mt-1">
-          <span className="text-white/20 text-xs">
-            {user.email}
-          </span>
-          <button
-            onClick={async () => {
-              await createSupabaseClient().auth.signOut();
-            }}
-            className="text-white/15 text-xs hover:text-white/40 transition-colors"
-          >
-            (odhlásit)
-          </button>
+          <span className="text-white/20 text-xs">{user.email}</span>
+          <button onClick={async () => { await createSupabaseClient().auth.signOut(); }} className="text-white/15 text-xs hover:text-white/40 transition-colors">(odhlásit)</button>
         </div>
       </header>
-      <OnePageCheckIn
-        initialDate={checkinDate}
-        onSaveDone={() => {
-          setCheckinDate(null);
-          setView("stats");
-        }}
-      />
+      <OnePageCheckIn initialDate={checkinDate} onSaveDone={() => { setCheckinDate(null); setView("stats"); }} />
       <div className="fixed bottom-16 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl">
-        <button
-          onClick={() => setView("checkin")}
-          className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400"
-        >
-          ✏️ Check-in
-        </button>
-        <button
-          onClick={() => setView("stats")}
-          className="flex-1 py-3 text-center text-sm text-white/30 hover:text-white/50 transition-colors"
-        >
-          📊 Statistiky
-        </button>
+        <button onClick={() => setView("checkin")} className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400">✏️ Check-in</button>
+        <button onClick={() => setView("stats")} className="flex-1 py-3 text-center text-sm text-white/30 hover:text-white/50 transition-colors">📊 Statistiky</button>
       </div>
     </div>
   );

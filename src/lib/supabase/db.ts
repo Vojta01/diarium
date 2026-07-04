@@ -39,16 +39,54 @@ export interface CheckInPayload {
   gratitude: string[];
   note: string;
   weather: string[];
+  date?: string; // ISO date string — defaults to today if not set
 }
 
 // ── Helpers ──
 
-function getSupabase(): any {
+function getSupabase() {
   return createSupabaseClient();
 }
 
-/** Získá aktuálně přihlášeného uživatele */
+/** Get the stored access token from localStorage (bypasses supabase-js auth issues) */
+function getAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.access_token || null;
+    }
+  } catch {}
+  return null;
+}
+
+/** Vytvoří Supabase klienta s explicitním session tokenem pro obcházení "Invalid API key" */
+function getAuthenticatedClient() {
+  const token = getAccessToken();
+  if (!token) return getSupabase();
+  
+  const sb = getSupabase();
+  // Don't await — we just need the client to have the session in its internal state
+  // The session will be used for subsequent queries
+  sb.auth.setSession({ access_token: token, refresh_token: '' }).catch(() => {});
+  return sb;
+}
+
+/** Získá aktuálně přihlášeného uživatele — z localStorage (rychlé, offline) */
 export async function getCurrentUser() {
+  // Try localStorage first (set by callback page)
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.user) return parsed.user;
+      } catch {}
+    }
+  }
+
+  // Fallback: Supabase API
   const sb = getSupabase();
   const { data } = await sb.auth.getUser();
   return data.user ?? null;
@@ -66,17 +104,12 @@ export async function getProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
 
-  // Profil neexistuje → vytvořit
   if (!data) {
     const { data: created } = await (sb
       .from("profiles") as any)
-      .insert([{
-        id: user.id,
-        github_user: user.user_metadata?.user_name ?? null,
-      }])
+      .insert([{ id: user.id, github_user: user.user_metadata?.user_name ?? null }])
       .select()
       .single();
-
     return created ?? null;
   }
 
@@ -85,16 +118,16 @@ export async function getProfile(): Promise<Profile | null> {
 
 // ── Entries ──
 
-/** Uloží nebo updatuje denní check-in */
+/** Uloží nebo updatuje denní check-in — používá interní API (service_role) */
 export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Nepřihlášen");
 
-  const today = new Date().toISOString().split("T")[0];
+  const entryDate = payload.date || new Date().toISOString().split("T")[0];
 
   const row = {
     user_id: user.id,
-    date: today,
+    date: entryDate,
     mood: payload.mood,
     mood_emoji: payload.mood_emoji,
     sleep_quality: payload.sleep_quality,
@@ -106,29 +139,27 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
     weather: payload.weather,
   };
 
-  const sb = getSupabase();
-  const { data, error } = await sb
-    .from("entries")
-    .upsert(row, {
-      onConflict: "user_id, date",
-      ignoreDuplicates: false,
-    })
-    .select()
-    .single();
+  // Use our API endpoint which has the service_role key
+  const res = await fetch("/api/save-entry", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(row),
+  });
 
-  if (error) throw error;
-  return data as Entry;
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Save failed");
+  }
+
+  return (await res.json()) as Entry;
 }
 
 /** Načte entries pro dané období */
-export async function getEntries(
-  from?: string,
-  to?: string
-): Promise<Entry[]> {
+export async function getEntries(from?: string, to?: string): Promise<Entry[]> {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  const sb = getSupabase();
+  const sb = getAuthenticatedClient();
   let query = sb
     .from("entries")
     .select("*")
@@ -151,7 +182,7 @@ export async function getEntry(date: string): Promise<Entry | null> {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const sb = getSupabase();
+  const sb = getAuthenticatedClient();
   const { data } = await sb
     .from("entries")
     .select("*")
@@ -183,10 +214,9 @@ export interface HabitDef {
   source: "default" | "custom";
 }
 
-/** Vrátí všechny aktivity (výchozí + vlastní) */
 export async function getActivities(): Promise<ActivityDef[]> {
   const user = await getCurrentUser();
-  const sb = getSupabase();
+  const sb = getAuthenticatedClient();
 
   const [defaultRes, customRes] = await Promise.all([
     sb.from("activity_catalog").select("*").eq("is_default", true).order("sort_order"),
@@ -195,25 +225,14 @@ export async function getActivities(): Promise<ActivityDef[]> {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const defaults: ActivityDef[] =
-    defaultRes.data?.map((a: any) => ({
-      ...a,
-      source: "default" as const,
-    })) ?? [];
-
-  const customs: ActivityDef[] =
-    customRes.data?.map((a: any) => ({
-      ...a,
-      source: "custom" as const,
-    })) ?? [];
-
+  const defaults: ActivityDef[] = defaultRes.data?.map((a: any) => ({ ...a, source: "default" as const })) ?? [];
+  const customs: ActivityDef[] = customRes.data?.map((a: any) => ({ ...a, source: "custom" as const })) ?? [];
   return [...defaults, ...customs];
 }
 
-/** Vrátí všechny návyky (výchozí + vlastní) */
 export async function getHabits(): Promise<HabitDef[]> {
   const user = await getCurrentUser();
-  const sb = getSupabase();
+  const sb = getAuthenticatedClient();
 
   const [defaultRes, customRes] = await Promise.all([
     sb.from("habit_catalog").select("*").eq("is_default", true).order("sort_order"),
@@ -222,17 +241,7 @@ export async function getHabits(): Promise<HabitDef[]> {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const defaults: HabitDef[] =
-    defaultRes.data?.map((h: any) => ({
-      ...h,
-      source: "default" as const,
-    })) ?? [];
-
-  const customs: HabitDef[] =
-    customRes.data?.map((h: any) => ({
-      ...h,
-      source: "custom" as const,
-    })) ?? [];
-
+  const defaults: HabitDef[] = defaultRes.data?.map((h: any) => ({ ...h, source: "default" as const })) ?? [];
+  const customs: HabitDef[] = customRes.data?.map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
   return [...defaults, ...customs];
 }

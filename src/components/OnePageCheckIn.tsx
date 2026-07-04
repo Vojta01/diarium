@@ -385,8 +385,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
   const dataRef = useRef<CheckInData>(data);
+  const dateRef = useRef<string>(currentDate);
 
   useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { dateRef.current = currentDate; }, [currentDate]);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -394,6 +396,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   useEffect(() => {
     setLoading(true);
     setSaved(false);
+    setEditing(false);
     setAiReflection(null);
 
     getEntry(currentDate).then((entry) => {
@@ -458,6 +461,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       gratitude: currentData.gratitude.filter((g: string) => g.trim()),
       note: currentData.note,
       weather: [],
+      date: dateRef.current,
     };
     saveEntry(payload as any).catch(() => {});
   }, []);
@@ -507,8 +511,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         gratitude: data.gratitude.filter((g: string) => g.trim()),
         note: data.note,
         weather: [],
+        date: currentDate,
       } as any);
       setSaved(true);
+      setEditing(false);
       // Fetch AI reflection in background
       fetchAIReflection(data);
     } catch {}
