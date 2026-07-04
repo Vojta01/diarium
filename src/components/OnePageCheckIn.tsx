@@ -706,12 +706,24 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             </Section>
           ))}
         </div>
-        <button
-          onClick={addCustomActivity}
-          className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
-        >
-          ➕ Přidat vlastní aktivitu
-        </button>
+
+        {/* Activity management buttons */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={addCustomActivity}
+            className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
+          >
+            ➕ Přidat vlastní aktivitu
+          </button>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`py-2 px-3 rounded-xl transition-colors text-xs flex items-center gap-1 ${
+              showSettings ? "bg-indigo-500/20 text-indigo-300 border border-indigo-400/20" : "bg-white/5 border border-white/10 text-white/40 hover:text-white"
+            }`}
+          >
+            ⚙️ Spravovat
+          </button>
+        </div>
 
         {/* ── HABITS ── */}
         <Section title="Návyky">
@@ -736,66 +748,90 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               );
             })}
           </div>
-          <button
-            onClick={addCustomHabit}
-            className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
-          >
-            ➕ Přidat vlastní návyk
-          </button>
-        </Section>
-
-        {/* ── SETTINGS TOGGLE ── */}
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="flex items-center gap-2 w-full text-left py-2 group"
-        >
-          <span className="w-2 h-2 rounded-full bg-white/20"></span>
-          <span className="text-sm font-medium text-white/40 group-hover:text-white/60 transition-colors">
-            ⚙️ Přizpůsobit návyky
-          </span>
-          <span className="ml-auto text-white/20 text-xs transition-transform duration-200" style={{ transform: showSettings ? "rotate(180deg)" : "rotate(0deg)" }}>
-            ▼
-          </span>
-        </button>
-        {showSettings && (
-          <div className="mb-4 p-4 bg-white/3 rounded-xl border border-white/5">
-            <p className="text-xs text-white/30 mb-3">Tvoje sledované návyky:</p>
-            {habitDefs.length === 0 ? (
-              <p className="text-xs text-white/20 italic mb-3">
-                Zatím žádné. Přidej první tlačítkem níže nebo přímo v sekci Návyky.
-              </p>
-            ) : (
-              <div className="space-y-1.5 mb-3">
-                {habitDefs.map(h => (
-                  <label key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5 cursor-pointer">
-                    <span className="flex items-center gap-2 text-sm">
-                      <span>{h.icon}</span>
-                      <span className="text-white/70">{h.label}</span>
-                      <span className="text-[10px] text-white/25">{h.is_negative ? "(abstinenční)" : "(pozitivní)"}</span>
-                    </span>
-                    <button
-                      onClick={() => {
-                        setHabitDefs(prev => prev.filter(d => d.key !== h.key));
-                        setData(d => {
-                          const newHabits = { ...d.habits };
-                          delete newHabits[h.key];
-                          return { ...d, habits: newHabits };
-                        });
-                      }}
-                      className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
-                    >
-                      ✕ Odebrat
-                    </button>
-                  </label>
-                ))}
-              </div>
-            )}
+          
+          {/* Habit management buttons */}
+          <div className="flex gap-2 mt-2">
             <button
               onClick={addCustomHabit}
-              className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
+              className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
             >
-              ➕ Přidat návyk
+              ➕ Přidat vlastní návyk
             </button>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`py-2 px-3 rounded-xl transition-colors text-xs flex items-center gap-1 ${
+                showSettings ? "bg-indigo-500/20 text-indigo-300 border border-indigo-400/20" : "bg-white/5 border border-white/10 text-white/40 hover:text-white"
+              }`}
+            >
+              ⚙️ Spravovat
+            </button>
+          </div>
+        </Section>
+
+        {/* ── SETTINGS PANEL ── */}
+        {showSettings && (
+          <div className="mb-4 p-4 bg-white/3 rounded-xl border border-white/5 space-y-4">
+            {/* Activity Management */}
+            <div>
+              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">📋 Tvoje aktivity</p>
+              <p className="text-[10px] text-white/25 mb-2">
+                Aktuálně {activityDefs.length} aktivit v {groupActivities(activityDefs).length} kategoriích.
+                Kliknutím na ➕ přidáš vlastní.
+              </p>
+              <button
+                onClick={addCustomActivity}
+                className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
+              >
+                ➕ Přidat vlastní aktivitu
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/5"></div>
+
+            {/* Habit Management */}
+            <div>
+              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">🎯 Tvoje návyky</p>
+              {habitDefs.length === 0 ? (
+                <p className="text-xs text-white/20 italic mb-3">
+                  Zatím žádné. Přidej první tlačítkem níže.
+                </p>
+              ) : (
+                <div className="space-y-1.5 mb-3">
+                  {habitDefs.map(h => (
+                    <div key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5">
+                      <span className="flex items-center gap-2 text-sm">
+                        <span>{h.icon}</span>
+                        <span className="text-white/70">{h.label}</span>
+                        <span className="text-[10px] text-white/25">
+                          {h.is_negative ? "(abstinenční)" : "(pozitivní)"}
+                          {h.source === "default" ? " · výchozí" : ""}
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => {
+                          setHabitDefs(prev => prev.filter(d => d.key !== h.key));
+                          setData(d => {
+                            const newHabits = { ...d.habits };
+                            delete newHabits[h.key];
+                            return { ...d, habits: newHabits };
+                          });
+                        }}
+                        className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
+                      >
+                        ✕ Odebrat
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={addCustomHabit}
+                className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
+              >
+                ➕ Přidat návyk
+              </button>
+            </div>
           </div>
         )}
 

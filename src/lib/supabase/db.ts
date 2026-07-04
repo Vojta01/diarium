@@ -327,16 +327,22 @@ export async function getHabits(): Promise<HabitDef[]> {
   const overrides: Record<string, boolean> = {};
   userHabits.forEach((h: any) => { overrides[h.key] = h.is_active; });
   
-  // Filter defaults: hide if user has an explicit override with is_active=false
-  const activeDefaults = defaults.filter(h => overrides[h.key] !== false);
+  // Default habits ALWAYS show (no filtering). User custom habits show in addition.
+  const defaultKeys = new Set(defaults.map(d => d.key));
   
-  // Add user's custom active habits (not already in defaults)
-  const customKeys = new Set(defaults.map(d => d.key));
+  // Auto-clean: delete any user_habit entries that collide with defaults (they're redundant/stale)
+  for (const uh of userHabits) {
+    if (defaultKeys.has(uh.key)) {
+      try { await sb.from("user_habits").delete().eq("id", uh.id); } catch {}
+    }
+  }
+  
+  // Add user's custom active habits (not in defaults)
   const customs: HabitDef[] = userHabits
-    .filter((h: any) => h.is_active && !customKeys.has(h.key))
+    .filter((h: any) => h.is_active && !defaultKeys.has(h.key))
     .map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
   
-  return [...activeDefaults, ...customs];
+  return [...defaults, ...customs];
 }
 
 /** Toggle a habit's visibility for the current user.
