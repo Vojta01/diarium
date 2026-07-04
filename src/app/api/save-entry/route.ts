@@ -18,16 +18,16 @@ export async function POST(req: NextRequest) {
     const row: Record<string, any> = {
       user_id,
       date,
-      mood: mood || 0,
+      mood: mood > 0 ? mood : null,
       mood_emoji: mood_emoji || '',
-      stress: stress || 0,
+      stress: stress > 0 ? stress : null,
       activities: activities || [],
       habits: habits || {},
       gratitude: gratitude || [],
       note: note || '',
       weather: weather || [],
     };
-    if (sleep_quality > 0) row.sleep_quality = sleep_quality;
+    if (sleep_quality && sleep_quality > 0) row.sleep_quality = sleep_quality;
 
     const { data, error } = await supabase
       .from('entries')
