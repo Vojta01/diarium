@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { saveEntry, getEntry, getHabits, setHabitVisibility } from "@/lib/supabase/db";
-import type { HabitDef } from "@/lib/supabase/db";
+import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities } from "@/lib/supabase/db";
+import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
 
@@ -70,65 +70,34 @@ const MOOD_QUOTES: Record<number, string[]> = {
   ],
 };
 
-// ── Activities by category ──
-const ACTIVITY_CATEGORIES: { title: string; items: { emoji: string; label: string }[] }[] = [
-  {
-    title: "Společenské",
-    items: [
-      { emoji: "👨‍👩‍👧", label: "rodina" }, { emoji: "👥", label: "přátelé" },
-      { emoji: "💑", label: "rande" }, { emoji: "🎉", label: "párty" }, { emoji: "🏢", label: "office" },
-    ],
-  },
-  {
-    title: "Záliby",
-    items: [
-      { emoji: "🎬", label: "filmy a tv" }, { emoji: "📖", label: "čtení" },
-      { emoji: "🎮", label: "hraní her" }, { emoji: "🏃", label: "sport" },
-      { emoji: "😌", label: "relax" }, { emoji: "🎵", label: "hudba" },
-    ],
-  },
-  {
-    title: "Jídlo",
-    items: [
-      { emoji: "🥗", label: "jíst zdravě" }, { emoji: "🍔", label: "rychlé občerstvení" },
-      { emoji: "🍳", label: "domácí výroba" }, { emoji: "🍽️", label: "restaurace" },
-      { emoji: "📦", label: "donáška" }, { emoji: "🥬", label: "den bez masa" },
-      { emoji: "🚫🍰", label: "žádné sladkosti" }, { emoji: "🚫🥤", label: "žádné limonády" },
-    ],
-  },
-  {
-    title: "Zdraví",
-    items: [
-      { emoji: "🏋️", label: "trénink" }, { emoji: "💧", label: "pít vodu" },
-      { emoji: "🚶", label: "chůze" }, { emoji: "🚴", label: "kolo" },
-      { emoji: "🏊", label: "plavání" }, { emoji: "🏄", label: "paddleboard" }, { emoji: "🎱", label: "snooker" },
-    ],
-  },
-  {
-    title: "Mé lepší já",
-    items: [
-      { emoji: "🧘", label: "meditovat" }, { emoji: "💝", label: "laskavost" },
-      { emoji: "👂", label: "naslouchání" }, { emoji: "💰", label: "dárcovství" }, { emoji: "🎁", label: "dej dárek" },
-      { emoji: "🛋️", label: "terapie" }, { emoji: "⚖️", label: "integrita" },
-    ],
-  },
-  {
-    title: "Domácí práce",
-    items: [
-      { emoji: "🛒", label: "nakupování" }, { emoji: "🧹", label: "uklízení" },
-      { emoji: "🍲", label: "vaření" }, { emoji: "🧺", label: "praní" }, { emoji: "👕", label: "žehlení" },
-    ],
-  },
-  {
-    title: "Počasí",
-    items: [
-      { emoji: "☀️", label: "slunečno" }, { emoji: "☁️", label: "zataženo" },
-      { emoji: "🌧️", label: "déšť" }, { emoji: "❄️", label: "sníh" },
-      { emoji: "🥶", label: "mráz" }, { emoji: "🌡️", label: "horko" },
-      { emoji: "🌩️", label: "bouřka" }, { emoji: "💨", label: "vítr" },
-    ],
-  },
-];
+// ── Activity groups (category → group name) ──
+const CATEGORY_GROUPS: Record<string, string> = {
+  "sociální": "Společenské",
+  "volný čas": "Záliby", 
+  "jídlo": "Jídlo",
+  "sport": "Zdraví",
+  "zdraví": "Zdraví",
+  "wellness": "Mé lepší já",
+  "práce": "Práce",
+  "počasí": "Počasí",
+  "domácí práce": "Domácí práce",
+  "vlastní": "Vlastní",
+  "obecné": "Ostatní",
+};
+
+function groupActivities(defs: ActivityDef[]): { title: string; items: ActivityDef[] }[] {
+  const groups: Record<string, ActivityDef[]> = {};
+  for (const d of defs) {
+    const cat = d.category || "obecné";
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(d);
+  }
+  // Order groups by predefined order, then any unknowns
+  const order = ["sociální", "práce", "volný čas", "sport", "jídlo", "zdraví", "wellness", "domácí práce", "počasí", "vlastní", "obecné"];
+  return order
+    .filter(cat => groups[cat]?.length > 0)
+    .map(cat => ({ title: CATEGORY_GROUPS[cat] || cat, items: groups[cat] }));
+}
 
 // ── Reduced habits ── (loaded dynamically below)
 const EMPTY_HABITS: Record<string, boolean> = {};
@@ -383,8 +352,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     initialDate || new Date().toISOString().split("T")[0]
   );
   const [habitDefs, setHabitDefs] = useState<HabitDef[]>(FALLBACK_HABIT_DEFS);
+  const [activityDefs, setActivityDefs] = useState<ActivityDef[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [showAddActivity, setShowAddActivity] = useState(false);
+  const [showAddHabit, setShowAddHabit] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemIcon, setNewItemIcon] = useState("📌");
+  const [newItemCategory, setNewItemCategory] = useState("vlastní");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
   const dataRef = useRef<CheckInData>(data);
@@ -395,14 +370,19 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Load habits from DB and user email
+  // Load habits and activities from DB and user email
   useEffect(() => {
+    // Load habits
     getHabits().then(defs => {
       if (defs.length > 0) setHabitDefs(defs);
-      // Initialize habits state from loaded defs
       const initHabits: Record<string, boolean> = {};
       defs.forEach(h => { initHabits[h.key] = false; });
       setData(d => ({ ...d, habits: { ...initHabits, ...d.habits } }));
+    }).catch(() => {});
+    
+    // Load activities
+    getActivities().then(defs => {
+      if (defs.length > 0) setActivityDefs(defs);
     }).catch(() => {});
     
     // Get user email
@@ -469,6 +449,32 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     setGoals(prev => [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]);
   };
   const removeGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+
+  // Add custom activity
+  const addCustomActivity = async () => {
+    const name = prompt("Název aktivity (např. běhání):");
+    if (!name) return;
+    const icon = prompt("Emoji (např. 🏃):") || "📌";
+    const category = prompt("Kategorie (volný čas, sport, práce, vlastní...):") || "vlastní";
+    
+    // Add to local state immediately
+    const key = name.toLowerCase().replace(/\s+/g, "_");
+    const newActivity: ActivityDef = { key, label: name, icon, category, color: "#6366f1", source: "custom" };
+    setActivityDefs(prev => [...prev, newActivity]);
+  };
+
+  // Add custom habit
+  const addCustomHabit = async () => {
+    const name = prompt("Název návyku (např. běhání):");
+    if (!name) return;
+    const icon = prompt("Emoji (např. 🏃):") || "✅";
+    const isNegative = confirm("Je to 'abstinenční' návyk? (tj. zelená = dnes jsem to NEdělal)\nOK = Ano (např. alkohol, kouření), Zrušit = Ne (např. cvičení)");
+    
+    const key = name.toLowerCase().replace(/\s+/g, "_");
+    const newHabit: HabitDef = { key, label: name, icon, category: "vlastní", color: "#6366f1", is_negative: isNegative, source: "custom" };
+    setHabitDefs(prev => [...prev, newHabit]);
+    setData(d => ({ ...d, habits: { ...d.habits, [key]: false } }));
+  };
 
   const doSave = useCallback((currentData: CheckInData, final: boolean) => {
     const serialized = JSON.stringify(currentData);
@@ -678,20 +684,20 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
         {/* ── ACTIVITIES ── */}
         <div className="space-y-1">
-          {ACTIVITY_CATEGORIES.map(cat => (
+          {groupActivities(activityDefs).map(cat => (
             <Section key={cat.title} title={cat.title}>
               <div className="flex flex-wrap gap-2">
                 {cat.items.map(a => {
                   const isSelected = data.activities.includes(a.label);
                   return (
                     <button
-                      key={a.label}
+                      key={a.key}
                       onClick={() => toggleActivity(a.label)}
                       className={`flex flex-col items-center gap-1 p-2 rounded-xl min-w-[64px] transition-all ${
                         isSelected ? "bg-indigo-500/20 ring-1 ring-indigo-400/50" : "bg-white/5 hover:bg-white/10"
                       }`}
                     >
-                      <span className="text-2xl">{a.emoji}</span>
+                      <span className="text-2xl">{a.icon}</span>
                       <span className="text-[10px] text-white/50 leading-tight text-center">{a.label}</span>
                     </button>
                   );
@@ -700,6 +706,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             </Section>
           ))}
         </div>
+        <button
+          onClick={addCustomActivity}
+          className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
+        >
+          ➕ Přidat vlastní aktivitu
+        </button>
 
         {/* ── HABITS ── */}
         <Section title="Návyky">
@@ -724,6 +736,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               );
             })}
           </div>
+          <button
+            onClick={addCustomHabit}
+            className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
+          >
+            ➕ Přidat vlastní návyk
+          </button>
         </Section>
 
         {/* ── SETTINGS TOGGLE ── */}
@@ -741,34 +759,43 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         </button>
         {showSettings && (
           <div className="mb-4 p-4 bg-white/3 rounded-xl border border-white/5">
-            <p className="text-xs text-white/30 mb-3">Vyber, které návyky chceš sledovat:</p>
-            <div className="space-y-1.5">
-              {habitDefs.map(h => (
-                <label key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5 cursor-pointer">
-                  <span className="flex items-center gap-2 text-sm">
-                    <span>{h.icon}</span>
-                    <span className="text-white/70">{h.label}</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={true}
-                    onChange={() => {
-                      setHabitVisibility(h.key, false, { label: h.label, icon: h.icon, is_negative: h.is_negative });
-                      setHabitDefs(prev => prev.filter(d => d.key !== h.key));
-                      setData(d => {
-                        const newHabits = { ...d.habits };
-                        delete newHabits[h.key];
-                        return { ...d, habits: newHabits };
-                      });
-                    }}
-                    className="w-4 h-4 rounded accent-indigo-500 opacity-50 hover:opacity-100"
-                  />
-                </label>
-              ))}
-            </div>
-            <p className="text-[10px] text-white/20 mt-3">
-              Odebrané návyky můžeš kdykoliv vrátit — obnovením stránky se načtou znovu.
-            </p>
+            <p className="text-xs text-white/30 mb-3">Tvoje sledované návyky:</p>
+            {habitDefs.length === 0 ? (
+              <p className="text-xs text-white/20 italic mb-3">
+                Zatím žádné. Přidej první tlačítkem níže nebo přímo v sekci Návyky.
+              </p>
+            ) : (
+              <div className="space-y-1.5 mb-3">
+                {habitDefs.map(h => (
+                  <label key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5 cursor-pointer">
+                    <span className="flex items-center gap-2 text-sm">
+                      <span>{h.icon}</span>
+                      <span className="text-white/70">{h.label}</span>
+                      <span className="text-[10px] text-white/25">{h.is_negative ? "(abstinenční)" : "(pozitivní)"}</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setHabitDefs(prev => prev.filter(d => d.key !== h.key));
+                        setData(d => {
+                          const newHabits = { ...d.habits };
+                          delete newHabits[h.key];
+                          return { ...d, habits: newHabits };
+                        });
+                      }}
+                      className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
+                    >
+                      ✕ Odebrat
+                    </button>
+                  </label>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={addCustomHabit}
+              className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
+            >
+              ➕ Přidat návyk
+            </button>
           </div>
         )}
 
