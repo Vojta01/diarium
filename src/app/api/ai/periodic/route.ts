@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const GITHUB_API = "https://api.github.com";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   weekly: `Jsi Diarium AI — osobní asistent pro týdenní reflexi.
@@ -53,84 +55,14 @@ Formát: používej emoji, nadpisy ###, krátké odstavce. Maximálně 2000 znak
 interface DayEntry {
   date: string;
   mood: number;
+  mood_emoji: string;
   activities: string[];
   stress?: number;
-  sleepQuality?: number;
+  sleep_quality?: number;
   habits?: Record<string, boolean>;
   gratitude?: string[];
   note?: string;
   phone_screen_time?: number;
-}
-
-async function fetchEntries(token: string, repo: string): Promise<DayEntry[]> {
-  const headers = {
-    Authorization: "Bearer " + token,
-    Accept: "application/vnd.github+json",
-  };
-
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/contents/daily`, { headers });
-  if (!res.ok) return [];
-  const files: { name: string; download_url: string }[] = await res.json();
-
-  const entries: DayEntry[] = [];
-  const recentFiles = files.slice(-400);
-
-  for (const file of recentFiles) {
-    if (!file.name.endsWith(".md")) continue;
-    const dateStr = file.name.replace(".md", "");
-    try {
-      const contentRes = await fetch(file.download_url);
-      if (!contentRes.ok) continue;
-      const content = await contentRes.text();
-      const fm = parseFrontmatter(content);
-      entries.push({ date: dateStr, ...fm } as DayEntry);
-    } catch {}
-  }
-  return entries.sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function parseFrontmatter(content: string): Partial<DayEntry> {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  const fm: Record<string, any> = {};
-  let currentKey: string | null = null;
-  let inList = false;
-
-  const lines = match[1].split("\n");
-  for (const line of lines) {
-    if (inList && line.startsWith("  - ")) {
-      const val = line.replace(/^\s*-\s*"/, "").replace(/"\s*$/, "");
-      if (currentKey && fm[currentKey]) fm[currentKey].push(val);
-      continue;
-    }
-    inList = false;
-
-    const habitMatch = line.match(/^  (\w+):\s*(.+)/);
-    if (habitMatch) {
-      if (!fm.habits) fm.habits = {};
-      fm.habits[habitMatch[1]] = habitMatch[2].trim() === "true";
-      continue;
-    }
-
-    const kv = line.match(/^(\w+):\s*(.+)/);
-    if (!kv) continue;
-    currentKey = kv[1];
-    const val = kv[2].trim();
-
-    if (currentKey === "gratitude") {
-      fm.gratitude = [];
-      inList = true;
-    } else if (val.startsWith("[") && val.endsWith("]")) {
-      fm[currentKey] = val.slice(1, -1).split(",").map(s => s.trim()).filter(Boolean);
-    } else if (val === "true" || val === "false") {
-      fm[currentKey] = val === "true";
-    } else if (!isNaN(Number(val)) && val !== "") {
-      fm[currentKey] = Number(val);
-    } else {
-      fm[currentKey] = val.replace(/^"(.*)"$/, "$1");
-    }
-  }
-  return fm;
 }
 
 function buildPeriodPrompt(entries: DayEntry[], type: string): string {
@@ -156,7 +88,7 @@ function buildPeriodPrompt(entries: DayEntry[], type: string): string {
   }
 
   // Sleep
-  const sleeps = entries.filter(e => e.sleepQuality && e.sleepQuality > 0).map(e => e.sleepQuality!);
+  const sleeps = entries.filter(e => e.sleep_quality && e.sleep_quality > 0).map(e => e.sleep_quality!);
   if (sleeps.length > 0) {
     const sleepLabels: Record<number, string> = { 3: "skvělý", 2: "normální", 1: "špatný" };
     const sleepCounts: Record<string, number> = {};
@@ -210,7 +142,7 @@ function buildPeriodPrompt(entries: DayEntry[], type: string): string {
     lines.push(`\nPoznámky (výběr): ${notes.slice(0, 10).join(" | ")}`);
   }
 
-  // Individual days (for weekly, include all; for monthly/yearly, summarize)
+  // Individual days (for weekly)
   if (type === "weekly") {
     lines.push(`\n─── Denní přehled ───`);
     entries.forEach(e => {
@@ -224,53 +156,65 @@ function buildPeriodPrompt(entries: DayEntry[], type: string): string {
   return lines.join("\n");
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.DEEPSEEK_API_KEY;
-    const githubToken = process.env.GITHUB_TOKEN;
-    if (!apiKey || !githubToken) {
-      return Response.json({ error: "API keys not configured" }, { status: 500 });
+    if (!apiKey) {
+      return Response.json({ error: "DEEPSEEK_API_KEY not configured" }, { status: 500 });
     }
 
-    const type = request.nextUrl.searchParams.get("type") || "weekly";
+    const body = await request.json();
+    const { type = "weekly", user_id, access_token } = body;
+
     if (!["weekly", "monthly", "yearly"].includes(type)) {
       return Response.json({ error: "Invalid type. Use: weekly, monthly, yearly" }, { status: 400 });
     }
 
-    const repo = "Vojta01/obsidian-druhy-mozek";
-    const entries = await fetchEntries(githubToken, repo);
-
-    if (entries.length === 0) {
-      return Response.json({ error: "No entries found" }, { status: 404 });
+    if (!user_id) {
+      return Response.json({ error: "user_id is required" }, { status: 400 });
     }
 
-    // Filter entries for the relevant period
+    // Query entries from Supabase
+    const serviceKey = SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) {
+      return Response.json({ error: "Service key not configured" }, { status: 500 });
+    }
+
+    const supabase = createClient(SUPABASE_URL, serviceKey);
+
+    // Determine date range
     const now = new Date();
-    let filtered: typeof entries;
+    let fromDate: string;
 
     if (type === "weekly") {
-      // Last 7 days
       const cutoff = new Date(now);
       cutoff.setDate(cutoff.getDate() - 7);
-      const cutoffStr = cutoff.toISOString().split("T")[0];
-      filtered = entries.filter(e => e.date >= cutoffStr);
+      fromDate = cutoff.toISOString().split("T")[0];
     } else if (type === "monthly") {
-      // Last 30 days
       const cutoff = new Date(now);
       cutoff.setDate(cutoff.getDate() - 30);
-      const cutoffStr = cutoff.toISOString().split("T")[0];
-      filtered = entries.filter(e => e.date >= cutoffStr);
+      fromDate = cutoff.toISOString().split("T")[0];
     } else {
-      // This year
-      const yearStr = String(now.getFullYear());
-      filtered = entries.filter(e => e.date.startsWith(yearStr));
+      fromDate = `${now.getFullYear()}-01-01`;
     }
 
-    if (filtered.length < 2) {
-      return Response.json({ error: "Not enough data yet" }, { status: 200, statusText: "OK" });
+    const { data: entries, error: dbError } = await supabase
+      .from("entries")
+      .select("date, mood, mood_emoji, activities, stress, sleep_quality, habits, gratitude, note, phone_screen_time")
+      .eq("user_id", user_id)
+      .gte("date", fromDate)
+      .order("date", { ascending: true });
+
+    if (dbError) {
+      console.error("Supabase query error:", dbError);
+      return Response.json({ error: "Failed to fetch entries" }, { status: 500 });
     }
 
-    const userPrompt = buildPeriodPrompt(filtered, type);
+    if (!entries || entries.length < 2) {
+      return Response.json({ error: "Not enough data yet", daysFound: entries?.length || 0 }, { status: 200 });
+    }
+
+    const userPrompt = buildPeriodPrompt(entries as DayEntry[], type);
     const systemPrompt = SYSTEM_PROMPTS[type];
 
     const resp = await fetch(DEEPSEEK_URL, {
@@ -299,41 +243,10 @@ export async function GET(request: NextRequest) {
     const json = await resp.json();
     const analysis = json.choices?.[0]?.message?.content?.trim() || "";
 
-    // Save analysis to vault summaries folder
-    let summaryPath = "";
-    if (type === "weekly") {
-      const weekNum = Math.ceil(
-        (new Date().getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 604800000
-      );
-      summaryPath = `summaries/${now.getFullYear()}-W${String(weekNum).padStart(2, "0")}.md`;
-    } else if (type === "monthly") {
-      const months = ["01","02","03","04","05","06","07","08","09","10","11","12"];
-      summaryPath = `summaries/${now.getFullYear()}-${months[now.getMonth()]}.md`;
-    } else {
-      summaryPath = `summaries/${now.getFullYear()}.md`;
-    }
-
-    // Save to GitHub
-    const content = Buffer.from(`# ${type === "weekly" ? "Týdenní" : type === "monthly" ? "Měsíční" : "Roční"} shrnutí\n\n${analysis}\n`).toString("base64");
-
-    await fetch(`${GITHUB_API}/repos/${repo}/contents/${summaryPath}`, {
-      method: "PUT",
-      headers: {
-        Authorization: "Bearer " + githubToken,
-        Accept: "application/vnd.github+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: `AI: ${type} summary`,
-        content,
-      }),
-    });
-
     return Response.json({
       type,
       analysis,
-      savedTo: summaryPath,
-      daysAnalyzed: filtered.length,
+      daysAnalyzed: entries.length,
     });
   } catch (err) {
     console.error("Periodic AI error:", err);
