@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
+import { Dashboard } from "@/components/Dashboard";
 import { StatsDashboard } from "@/components/StatsDashboard";
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-type View = "checkin" | "stats";
+type View = "dashboard" | "checkin" | "stats";
 
 function doLogout() {
   // Clear ALL supabase auth data from localStorage
@@ -34,7 +35,7 @@ function doLogout() {
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<View>("checkin");
+  const [view, setView] = useState<View>("dashboard");
   const [loading, setLoading] = useState(true);
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
 
@@ -92,14 +93,56 @@ export default function Home() {
     return <AuthScreen onSignedIn={() => {}} />;
   }
 
+  // ── Bottom Tab Bar ──
+  const TabBar = () => (
+    <div className="fixed bottom-0 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl z-30">
+      <button
+        onClick={() => { setCheckinDate(null); setView("dashboard"); }}
+        className={`flex-1 py-3 text-center text-sm transition-colors ${
+          view === "dashboard"
+            ? "text-white border-t-2 border-indigo-400"
+            : "text-white/30 hover:text-white/50"
+        }`}
+      >
+        🏠 Dashboard
+      </button>
+      <button
+        onClick={() => { setCheckinDate(null); setView("checkin"); }}
+        className={`flex-1 py-3 text-center text-sm transition-colors ${
+          view === "checkin"
+            ? "text-white border-t-2 border-indigo-400"
+            : "text-white/30 hover:text-white/50"
+        }`}
+      >
+        ✏️ Check-in
+      </button>
+      <button
+        onClick={() => setView("stats")}
+        className={`flex-1 py-3 text-center text-sm transition-colors ${
+          view === "stats"
+            ? "text-white border-t-2 border-indigo-400"
+            : "text-white/30 hover:text-white/50"
+        }`}
+      >
+        📊 Statistiky
+      </button>
+    </div>
+  );
+
+  if (view === "dashboard") {
+    return (
+      <div>
+        <Dashboard onNavigateToCheckIn={navigateToCheckIn} onNavigateToStats={() => setView("stats")} />
+        <TabBar />
+      </div>
+    );
+  }
+
   if (view === "stats") {
     return (
       <div>
         <StatsDashboard onNavigateToDate={navigateToCheckIn} />
-        <div className="fixed bottom-0 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl">
-          <button onClick={() => { setCheckinDate(null); setView("checkin"); }} className="flex-1 py-3 text-center text-sm text-white/30">✏️ Check-in</button>
-          <button onClick={() => setView("stats")} className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400">📊 Statistiky</button>
-        </div>
+        <TabBar />
       </div>
     );
   }
@@ -130,14 +173,7 @@ export default function Home() {
         }}
       />
 
-      <div className="fixed bottom-16 left-0 right-0 flex border-t border-white/5 bg-black/80 backdrop-blur-xl">
-        <button onClick={() => setView("checkin")} className="flex-1 py-3 text-center text-sm text-white border-t-2 border-indigo-400">
-          ✏️ Check-in
-        </button>
-        <button onClick={() => setView("stats")} className="flex-1 py-3 text-center text-sm text-white/30 hover:text-white/50 transition-colors">
-          📊 Statistiky
-        </button>
-      </div>
+      <TabBar />
     </div>
   );
 }

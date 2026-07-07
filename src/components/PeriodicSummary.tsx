@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Markdown } from "@/components/Markdown";
 
 interface Props {
   userId: string;
@@ -72,9 +73,7 @@ export function PeriodicSummary({ userId }: Props) {
 
       {analysis && (
         <div className="p-4 bg-indigo-500/5 border border-indigo-400/10 rounded-xl">
-          <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">
-            {analysis}
-          </div>
+          <Markdown content={analysis} />
         </div>
       )}
     </div>

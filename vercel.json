@@ -5,16 +5,12 @@
       "schedule": "0 19 * * *"
     },
     {
-      "path": "/api/ai/periodic?type=weekly",
+      "path": "/api/cron/ai-report?type=weekly",
       "schedule": "0 20 * * 0"
     },
     {
-      "path": "/api/ai/periodic?type=monthly",
-      "schedule": "0 20 1 * *"
-    },
-    {
-      "path": "/api/ai/periodic?type=yearly",
-      "schedule": "0 20 1 1 *"
+      "path": "/api/cron/ai-report?type=monthly",
+      "schedule": "0 8 1 * *"
     }
   ]
 }

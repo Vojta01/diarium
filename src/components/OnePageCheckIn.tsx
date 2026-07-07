@@ -5,6 +5,7 @@ import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getH
 import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
+import { Markdown } from "@/components/Markdown";
 
 // ── Mood ──
 const MOODS = [
@@ -314,9 +315,7 @@ function CompletedCard({
             <span className="text-sm">🤖</span>
             <h3 className="text-xs font-medium text-indigo-300/60 uppercase tracking-wider">AI reflexe</h3>
           </div>
-          <p className="text-white/70 text-sm leading-relaxed italic">
-            &ldquo;{aiReflection}&rdquo;
-          </p>
+          <Markdown content={aiReflection} />
         </div>
       )}
 
@@ -423,13 +422,28 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           habits: entry.habits ?? {},
           gratitude: entry.gratitude ?? [],
           note: entry.note ?? "",
-          photoDataUrl: null,
+          photoDataUrl: entry.photo_path || null,
         });
+        if (entry.ai_reflection) {
+          setAiReflection(entry.ai_reflection);
+        }
         if (entry.mood > 0) {
           setSaved(true);
         }
       } else {
-        setData({ ...EMPTY_DATA });
+        // No DB entry — try to restore draft from localStorage
+        const draftKey = `diarium_draft_${currentDate}`;
+        try {
+          const draft = localStorage.getItem(draftKey);
+          if (draft) {
+            const parsed = JSON.parse(draft);
+            setData({ ...EMPTY_DATA, ...parsed });
+          } else {
+            setData({ ...EMPTY_DATA });
+          }
+        } catch {
+          setData({ ...EMPTY_DATA });
+        }
       }
       setGoals(loadGoals());
       setLoading(false);
@@ -582,13 +596,34 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       note: currentData.note,
       weather: [],
       date: dateRef.current,
+      photoDataUrl: currentData.photoDataUrl,
     };
     saveEntry(payload as any).catch(() => {});
   }, []);
 
-  // REMOVED aggressive autosave — was overwriting partial entries during form filling.
-  // Now saves only on explicit "Uložit" button click, with page-close as safety net.
-  //   (The old 2s debounce autosave is removed — see git history if needed)
+  // Autosave draft to localStorage — allows incremental check-in throughout the day.
+  // Saves form state locally after 1.5s of inactivity. Restored on next visit.
+  useEffect(() => {
+    if (saved || loading) return;
+    const draftKey = `diarium_draft_${currentDate}`;
+    const hasContent =
+      data.mood > 0 ||
+      data.activities.length > 0 ||
+      data.gratitude.some((g: string) => g.trim()) ||
+      data.note.trim() ||
+      data.sleepQuality > 0 ||
+      data.stress > 0;
+
+    if (!hasContent) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      localStorage.setItem(draftKey, JSON.stringify(data));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [data, saved, loading, currentDate]);
 
   // Safety net: save on page close / background
   useEffect(() => {
@@ -624,7 +659,21 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       });
       if (resp.ok) {
         const json = await resp.json();
-        if (json.reflection) setAiReflection(json.reflection);
+        if (json.reflection) {
+          setAiReflection(json.reflection);
+          // Save reflection to DB
+          try {
+            await fetch("/api/save-entry", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                user_id: userId,
+                date: dateRef.current,
+                ai_reflection: json.reflection,
+              }),
+            });
+          } catch {}
+        }
       }
     } catch {}
     setAiLoading(false);
@@ -644,9 +693,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         note: data.note,
         weather: [],
         date: currentDate,
+        photoDataUrl: data.photoDataUrl,
       } as any);
       setSaved(true);
       setEditing(false);
+      // Clear the draft since it's now persisted to DB
+      localStorage.removeItem(`diarium_draft_${currentDate}`);
       // Fetch AI reflection in background
       fetchAIReflection(data);
     } catch {}
@@ -1066,7 +1118,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       </div>
 
       {/* Bottom save bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-white/5">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-white/5 z-40">
         <button
           onClick={handleSave}
           disabled={saving}

@@ -3,8 +3,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { fetchDailyEntries, MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
 
-const MONTHS_SHORT = ["Led","Úno","Bře","Dub","Kvě","Čvn","Čvc","Srp","Zář","Říj","Lis","Pro"];
-const WEEKDAYS = ["Po","Út","St","Čt","Pá","So","Ne"];
+const MONTHS = [
+  "Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
+  "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
+];
+const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
+
+interface DayCell {
+  date: string;
+  day: number;     // 1–31, 0 = padding
+  mood: number;    // 0 = no entry
+  note?: string;
+}
 
 export function YearInPixels() {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
@@ -31,50 +41,51 @@ export function YearInPixels() {
     return map;
   }, [entries]);
 
-  // Build the classic year grid: 7 rows (weekdays) × columns (days/weeks)
-  const { grid, monthMarkers } = useMemo(() => {
-    const year = selectedYear;
-    // Find the first day of year
-    const jan1 = new Date(year, 0, 1);
-    // Align to Monday (ISO week): if Jan 1 is not Monday, start from previous Monday
-    const startDow = jan1.getDay() || 7; // Mon=1..Sun=7
-    const startDate = new Date(jan1);
-    startDate.setDate(startDate.getDate() - (startDow - 1));
+  // Build each month as a matrix: rows × 7 columns
+  const months = useMemo(() => {
+    const result: { name: string; index: number; weeks: DayCell[][] }[] = [];
 
-    // Find last day of year
-    const dec31 = new Date(year, 11, 31);
-    const endDow = dec31.getDay() || 7;
-    const endDate = new Date(dec31);
-    endDate.setDate(endDate.getDate() + (7 - endDow));
+    for (let m = 0; m < 12; m++) {
+      const firstDay = new Date(selectedYear, m, 1);
+      const daysInMonth = new Date(selectedYear, m + 1, 0).getDate();
+      // Monday = 1, Sunday = 7
+      const startDow = firstDay.getDay() || 7; // 1=Mon..7=Sun
 
-    const grid: { date: string; mood: number; note?: string }[][] = [[],[],[],[],[],[],[]];
-    const markers: { label: string; col: number }[] = [];
-    let col = 0;
-    let lastMonth = -1;
+      const weeks: DayCell[][] = [];
+      let currentWeek: DayCell[] = [];
 
-    const d = new Date(startDate);
-    while (d <= endDate) {
-      const dateStr = d.toISOString().split("T")[0];
-      const dayOfWeek = (d.getDay() || 7) - 1; // 0=Mon..6=Sun
-      const month = d.getMonth();
-
-      // Track month start columns
-      if (month !== lastMonth && d.getFullYear() === year) {
-        markers.push({ label: MONTHS_SHORT[month], col });
-        lastMonth = month;
+      // Padding before the 1st
+      for (let p = 1; p < startDow; p++) {
+        currentWeek.push({ date: "", day: 0, mood: 0 });
       }
 
-      grid[dayOfWeek].push({
-        date: dateStr,
-        mood: moodMap[dateStr] || 0,
-        note: noteMap[dateStr],
-      });
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${selectedYear}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        currentWeek.push({
+          date: dateStr,
+          day: d,
+          mood: moodMap[dateStr] || 0,
+          note: noteMap[dateStr],
+        });
 
-      if (dayOfWeek === 6) col++;
-      d.setDate(d.getDate() + 1);
+        if (currentWeek.length === 7) {
+          weeks.push(currentWeek);
+          currentWeek = [];
+        }
+      }
+
+      // Padding after the last day
+      if (currentWeek.length > 0) {
+        while (currentWeek.length < 7) {
+          currentWeek.push({ date: "", day: 0, mood: 0 });
+        }
+        weeks.push(currentWeek);
+      }
+
+      result.push({ name: MONTHS[m], index: m, weeks });
     }
 
-    return { grid, monthMarkers: markers };
+    return result;
   }, [selectedYear, moodMap, noteMap]);
 
   const stats = useMemo(() => {
@@ -84,104 +95,168 @@ export function YearInPixels() {
     return { avg: avg.toFixed(1), total: yearEntries.length };
   }, [entries, selectedYear]);
 
+  const today = new Date().toISOString().split("T")[0];
+
   if (loading) {
     return <div className="glass-card"><div className="text-center py-8 text-white/40">Načítám...</div></div>;
   }
 
-  const cols = grid[0].length;
-  const cellSize = cols > 40 ? "calc((100% - 2px) / " + cols + ")" : "14px";
+  const cellSize = "15px";
+  const gapSize = "2px";
+
+  // Calculate counts per month for a mini summary
+  const monthEntryCounts = months.map(m => {
+    let count = 0;
+    for (const week of m.weeks) {
+      for (const cell of week) {
+        if (cell.mood > 0) count++;
+      }
+    }
+    return count;
+  });
 
   return (
-    <div className="glass-card">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-white">Year in Pixels</h2>
-        <select
-          value={selectedYear}
-          onChange={e => setSelectedYear(Number(e.target.value))}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-        >
-          {[2026, 2025, 2024].map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+    <div className="space-y-4">
+      {/* ── Title & Year Selector ── */}
+      <div className="glass-card">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-white">
+            🗓️ Rok {selectedYear} v pixelech
+          </h2>
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(Number(e.target.value))}
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 cursor-pointer"
+          >
+            {[2026, 2025, 2024].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <p className="text-white/30 text-xs mb-2">
+          Každý čtvereček = jeden den. Čím zelenější, tím lepší nálada.
+        </p>
+        {stats && (
+          <div className="flex gap-4 text-xs">
+            <span className="text-white/40">
+              Průměrná nálada{" "}
+              <span className="text-white font-semibold">{stats.avg}</span>
+            </span>
+            <span className="text-white/40">
+              Sledovaných dní{" "}
+              <span className="text-white font-semibold">{stats.total}</span>
+            </span>
+          </div>
+        )}
       </div>
 
-      {stats && (
-        <div className="flex gap-4 text-xs mb-3">
-          <span className="text-white/60">Průměr <span className="text-white font-semibold">{stats.avg}</span></span>
-          <span className="text-white/60">Dní <span className="text-white font-semibold">{stats.total}</span></span>
-        </div>
-      )}
+      {/* ── Months Grid ── */}
+      {months.map((month, mi) => (
+        <div key={month.name} className="glass-card">
+          {/* Month header */}
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-white/80">
+              {month.name}
+            </h3>
+            <span className="text-[10px] text-white/25">
+              {monthEntryCounts[mi]}/{month.weeks.reduce((s, w) => s + w.filter(c => c.day > 0).length, 0)} dní
+            </span>
+          </div>
 
-      {/* Month labels */}
-      <div className="flex mb-0.5 text-[8px] text-white/20 overflow-hidden" style={{ paddingLeft: "24px" }}>
-        {monthMarkers.map((m, i) => {
-          const nextCol = i < monthMarkers.length - 1 ? monthMarkers[i + 1].col : cols;
-          const width = nextCol - m.col;
-          return (
-            <div key={m.label} className="text-left overflow-hidden whitespace-nowrap" style={{ width: `calc(${width} * ${cellSize})`, maxWidth: "none", flex: "none" }}>
-              {m.label}
-            </div>
-          );
-        })}
-      </div>
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 gap-[2px] mb-1">
+            {WEEKDAYS.map((d, i) => (
+              <div
+                key={d}
+                className="text-[9px] text-white/20 text-center"
+                style={{ width: cellSize, justifySelf: "center" }}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
 
-      {/* Grid */}
-      <div className="flex">
-        {/* Weekday labels */}
-        <div className="flex flex-col gap-[1px] mr-1.5">
-          {WEEKDAYS.map((d, i) => (
-            <div key={d} className="text-[8px] text-white/15 flex items-center justify-end" style={{ height: cellSize, width: "20px" }}>
-              {i % 2 === 0 ? d[0] : ""}
-            </div>
-          ))}
-        </div>
+          {/* Day cells */}
+          <div className="flex flex-col" style={{ gap: gapSize }}>
+            {month.weeks.map((week, wi) => (
+              <div key={wi} className="flex justify-center" style={{ gap: gapSize }}>
+                {week.map((cell, ci) => {
+                  if (cell.day === 0) {
+                    // Padding cell
+                    return (
+                      <div
+                        key={`pad-${wi}-${ci}`}
+                        style={{ width: cellSize, height: cellSize }}
+                        className="shrink-0"
+                      />
+                    );
+                  }
 
-        {/* Day cells */}
-        <div className="flex-1 overflow-hidden">
-          {grid.map((row, ri) => (
-            <div key={ri} className="flex gap-[1px]" style={{ marginBottom: "1px" }}>
-              {row.map(cell => (
-                <div
-                  key={cell.date}
-                  className="rounded-[1px] transition-all hover:scale-[2.5] hover:z-10 hover:shadow-lg relative"
-                  style={{
-                    width: cellSize,
-                    height: cellSize,
-                    background: cell.mood ? MOOD_COLORS[cell.mood] : "rgba(255,255,255,0.03)",
-                    flex: "1 1 auto",
-                    minWidth: "6px",
-                    minHeight: "6px",
-                    maxWidth: "14px",
-                    maxHeight: "14px",
-                  }}
-                  title={cell.mood ? `${cell.date}: nálada ${cell.mood}/5` : cell.date}
-                  onMouseEnter={() => setHoveredDay(cell.date)}
-                  onMouseLeave={() => setHoveredDay(null)}
-                >
-                  {hoveredDay === cell.date && cell.mood > 0 && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 border border-white/20 rounded-lg px-2 py-1 shadow-xl z-20 whitespace-nowrap animate-fade-in">
-                      <span className="text-xs text-white">
-                        {MOOD_EMOJIS[cell.mood]} {new Date(cell.date).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" })}
-                      </span>
-                      {cell.note && (
-                        <span className="text-[9px] text-white/30 ml-1">— {cell.note.slice(0, 30)}</span>
+                  const isToday = cell.date === today;
+
+                  return (
+                    <div
+                      key={cell.date}
+                      className="rounded-[2px] transition-all hover:scale-[2.2] hover:z-10 hover:shadow-lg relative cursor-default shrink-0"
+                      style={{
+                        width: cellSize,
+                        height: cellSize,
+                        background: cell.mood
+                          ? MOOD_COLORS[cell.mood]
+                          : "rgba(255,255,255,0.04)",
+                        outline: isToday
+                          ? "2px solid rgba(99,102,241,0.6)"
+                          : "none",
+                        outlineOffset: "1px",
+                      }}
+                      title={
+                        cell.mood
+                          ? `${cell.date}: nálada ${cell.mood}/5${cell.note ? " — " + cell.note : ""}`
+                          : cell.date
+                      }
+                      onMouseEnter={() => cell.mood > 0 && setHoveredDay(cell.date)}
+                      onMouseLeave={() => setHoveredDay(null)}
+                    >
+                      {hoveredDay === cell.date && cell.mood > 0 && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-gray-900 border border-white/20 rounded-lg px-2.5 py-1.5 shadow-xl z-20 whitespace-nowrap pointer-events-none">
+                          <span className="text-xs text-white font-medium">
+                            {MOOD_EMOJIS[cell.mood]}{" "}
+                            {new Date(cell.date).toLocaleDateString("cs-CZ", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                          {cell.note && (
+                            <span className="text-[10px] text-white/30 ml-1.5">
+                              — {cell.note.slice(0, 40)}{cell.note.length > 40 ? "…" : ""}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ))}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-3 mt-3 text-[10px]">
-        {[5,4,3,2,1].map(m => (
-          <span key={m} className="flex items-center gap-1 text-white/30">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: MOOD_COLORS[m] }} />
-            {MOOD_EMOJIS[m]}
+      <div className="glass-card">
+        <div className="flex items-center justify-center gap-3 text-[10px]">
+          {[5,4,3,2,1].map(m => (
+            <span key={m} className="flex items-center gap-1 text-white/30">
+              <span
+                className="w-2.5 h-2.5 rounded-sm inline-block"
+                style={{ background: MOOD_COLORS[m] }}
+              />
+              {MOOD_EMOJIS[m]}
+            </span>
+          ))}
+          <span className="flex items-center gap-1 text-white/30">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block border border-indigo-400/40" />
+            dnes
           </span>
-        ))}
+        </div>
       </div>
     </div>
   );
