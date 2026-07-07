@@ -123,6 +123,46 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm" style={{ background: "#ef4444" }} />6h+</span>
         <span className="ml-auto text-white/15">HA</span>
       </div>
+
+      {/* Phone Unlocks */}
+      {last7Days.some((d: any) => d.phone_unlocks && d.phone_unlocks > 0) && (
+        <div className="mt-4 pt-3 border-t border-white/5">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">🔓</span>
+            <h3 className="text-xs font-medium text-white/30 uppercase tracking-wider">Odemčení telefonu</h3>
+          </div>
+          <div className="flex items-end gap-1.5 h-20">
+            {last7Days.map((d: any) => {
+              const unlocks = d.phone_unlocks || 0;
+              const maxUnlocks = Math.max(...last7Days.map((x: any) => x.phone_unlocks || 0), 1);
+              const height = (unlocks / maxUnlocks) * 100;
+              const date = new Date(d.date);
+              const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
+              const isToday = d.date === new Date().toISOString().split("T")[0];
+
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
+                  <span className="text-[9px] text-white/40 font-medium">{unlocks || "—"}</span>
+                  <div className="w-full relative" style={{ height: height + "%", minHeight: unlocks > 0 ? "3px" : "0" }}>
+                    <div
+                      className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all opacity-70 hover:opacity-100"
+                      style={{
+                        height: "100%",
+                        background: isToday
+                          ? "linear-gradient(180deg, #c084fc, #a855f7)"
+                          : "#a855f7",
+                      }}
+                    />
+                  </div>
+                  <span className={`text-[10px] ${isToday ? "text-purple-400 font-semibold" : "text-white/25"}`}>
+                    {dayName}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

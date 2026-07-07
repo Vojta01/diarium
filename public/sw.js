@@ -1,4 +1,4 @@
-const CACHE = "diarium-v3";
+const CACHE = "diarium-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -11,6 +11,12 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

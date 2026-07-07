@@ -26,6 +26,7 @@ export interface Entry {
   phone_unlocks?: number;
   phone_top_apps?: { app: string; minutes: number }[];
   photo_path?: string;
+  ai_reflection?: string;
   created_at: string;
 }
 
@@ -40,6 +41,8 @@ export interface CheckInPayload {
   note: string;
   weather: string[];
   date?: string; // ISO date string — defaults to today if not set
+  photoDataUrl?: string | null; // base64 data URL or Google Photos URL
+  photo_path?: string | null;   // already-uploaded URL (set internally)
 }
 
 // ── Helpers ──
@@ -125,7 +128,67 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
 
   const entryDate = payload.date || new Date().toISOString().split("T")[0];
 
-  const row = {
+  // ── Upload fotky do Storage ──
+  let photoPath: string | null = payload.photo_path || null;
+
+  if (payload.photoDataUrl && !photoPath) {
+    try {
+      const sb = getSupabase();
+      let imageBlob: Blob;
+
+      if (payload.photoDataUrl.startsWith("data:")) {
+        // Base64 data URL from device upload
+        const [header, base64] = payload.photoDataUrl.split(",");
+        const mimeMatch = header.match(/data:(.*?);/);
+        const mimeType = mimeMatch?.[1] || "image/jpeg";
+        const byteChars = atob(base64);
+        const byteNums = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNums[i] = byteChars.charCodeAt(i);
+        }
+        imageBlob = new Blob([byteNums], { type: mimeType });
+      } else if (payload.photoDataUrl.startsWith("https://")) {
+        // Google Photos URL — download and re-upload to our Storage
+        const resp = await fetch(payload.photoDataUrl);
+        if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+        imageBlob = await resp.blob();
+      } else {
+        throw new Error("Neznámý formát fotky");
+      }
+
+      // Upload to Supabase Storage: diary-photos/{user_id}/{date}.jpg
+      const filePath = `${user.id}/${entryDate}.jpg`;
+      const { error: uploadErr } = await sb.storage
+        .from("diary-photos")
+        .upload(filePath, imageBlob, {
+          contentType: imageBlob.type || "image/jpeg",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error("Storage upload failed:", uploadErr);
+        // Fallback: try to store the data URL directly as base64 in photo_path
+        if (payload.photoDataUrl.length < 500_000) {
+          photoPath = payload.photoDataUrl;
+        }
+      } else {
+        // Construct the public URL
+        const { data: urlData } = sb.storage
+          .from("diary-photos")
+          .getPublicUrl(filePath);
+        photoPath = urlData.publicUrl;
+      }
+    } catch (err) {
+      console.error("Photo upload error:", err);
+      // Fallback: store as base64 if small enough
+      if (payload.photoDataUrl.length < 500_000) {
+        photoPath = payload.photoDataUrl;
+      }
+    }
+  }
+
+  // ── Uložit záznam ──
+  const row: Record<string, any> = {
     user_id: user.id,
     date: entryDate,
     mood: payload.mood,
@@ -138,6 +201,8 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
     note: payload.note,
     weather: payload.weather,
   };
+  if (photoPath) row.photo_path = photoPath;
+  if ((payload as any).ai_reflection) row.ai_reflection = (payload as any).ai_reflection;
 
   // Use our API endpoint which has the service_role key
   const res = await fetch("/api/save-entry", {
