@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import webpush from "web-push";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
