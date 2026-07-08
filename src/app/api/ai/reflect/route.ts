@@ -19,7 +19,8 @@ Tvůj úkol: napiš krátkou, osobní reflexi (3-5 vět v češtině):
    - Zhoršení: "všiml jsem si, že když špatně spíš, druhý den máš vyšší stres"
    - Splněných cílů: "tenhle týden jsi meditoval 5 ze 7 dní!"
    - Screen time patternů: "screen time ti klesá — super trend!"
-3. Povzbuzení — krátké, osobní. Když je co chválit, chval. Když je zle, podpoř.
+3. Návaznost na předchozí reflexe — pokud historie obsahuje 🤖 Včerejší reflexe, můžeš na ni navázat: "včera jsem ti psal, že... a dneska..."
+4. Povzbuzení — krátké, osobní. Když je co chválit, chval. Když je zle, podpoř.
 
 ⚠️ DŮLEŽITÁ PRAVIDLA:
 - Mluv přímo k uživateli. Pokud znáš jeho jméno, oslov ho jménem.
@@ -82,6 +83,11 @@ function formatDay(entry: any, isToday: boolean): string {
   if (entry.phone_screen_time) {
     const mins = Math.round(entry.phone_screen_time / 60);
     parts.push(`  Screen time: ${mins} min`);
+  }
+
+  // Previous AI reflection — for continuity
+  if (!isToday && entry.ai_reflection?.trim()) {
+    parts.push(`  🤖 Včerejší reflexe: "${entry.ai_reflection}"`);
   }
 
   return parts.join("\n");
