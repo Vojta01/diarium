@@ -340,6 +340,8 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         const overallStd = stddev(allMoods, overallMean);
         const se = overallStd / Math.sqrt(Math.max(b.moods.length, 1));
         const ciMargin = 1.96 * Math.max(se, 0.1);
+        const ciLower = parseFloat((m - ciMargin).toFixed(1));
+        const ciUpper = parseFloat((m + ciMargin).toFixed(1));
         
         return {
           label: b.label,
@@ -347,10 +349,10 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
           count: b.moods.length,
           avgMood: parseFloat(m.toFixed(1)),
           stdMood: parseFloat(s.toFixed(1)),
-          cohensD: 0,
-          ci: [parseFloat((m - ciMargin).toFixed(1)), parseFloat((m + ciMargin).toFixed(1))],
-          significance: b.moods.length >= 3 ? (s < 0.3 ? "***" : s < 0.6 ? "**" : "*") : "",
-        };
+          cohensD: 0 as number,
+          ci: [ciLower, ciUpper] as [number, number],
+          significance: b.moods.length >= 3 ? (s < 0.3 ? "***" as const : s < 0.6 ? "**" as const : "*" as const) : "" as const,
+        } as BucketStats;
       })
       .filter(b => b.count >= 1);
   }, [entries, overallMean]);
