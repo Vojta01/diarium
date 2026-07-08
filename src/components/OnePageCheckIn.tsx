@@ -655,7 +655,19 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...entryData, userName }),
+        body: JSON.stringify({
+          user_id: userId,
+          date: dateRef.current,
+          userName,
+          // Still send today's data as fallback (in case Supabase fetch fails)
+          mood: entryData.mood,
+          note: entryData.note,
+          gratitude: entryData.gratitude,
+          activities: entryData.activities,
+          sleep_quality: entryData.sleepQuality,
+          stress: entryData.stress,
+          habits: entryData.habits,
+        }),
       });
       if (resp.ok) {
         const json = await resp.json();
