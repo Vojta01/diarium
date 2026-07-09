@@ -766,13 +766,28 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {aiLoading && (
           <div className="text-center text-white/20 text-sm py-4 animate-pulse">🤖 AI přemýšlí...</div>
         )}
+      
+        {/* Bottom navigation */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
+          <div className="flex">
+            <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
+              📝 Check-in
+            </button>
+            <button
+              onClick={() => window.location.href = "/stats"}
+              className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
+            >
+              📊 Statistiky
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   // ── FORM VIEW ──
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-36">
       {/* Header with date nav */}
       <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
         <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
@@ -1129,15 +1144,34 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         </div>
       </div>
 
-      {/* Bottom save bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-xl border-t border-white/5 z-40">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
-        >
-          {saving ? "⏳ Ukládám..." : "✓ Uložit do vaultu"}
-        </button>
+      {/* Bottom area: Save button + Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
+        {/* Save button */}
+        <div className="p-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
+          >
+            {saving ? "⏳ Ukládám..." : "✓ Uložit do vaultu"}
+          </button>
+        </div>
+        
+        {/* Navigation tabs */}
+        <div className="flex border-t border-white/5">
+          <button
+            onClick={() => {}}
+            className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5"
+          >
+            📝 Check-in
+          </button>
+          <button
+            onClick={() => window.location.href = "/stats"}
+            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            📊 Statistiky
+          </button>
+        </div>
       </div>
     </div>
   );
