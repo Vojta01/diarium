@@ -250,8 +250,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                 );
               }
 
-              // Fallback: solid bar (no app data)
-              const color = getBarColor(seconds);
+              // Fallback: solid bar in neutral style (no per-app data for this day)
               return (
                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
                   <div
@@ -259,15 +258,14 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     style={{
                       height: barH,
                       background: isToday
-                        ? `linear-gradient(180deg, ${color.bg}, ${color.bg}88)`
-                        : color.bg,
-                      opacity: isToday ? 1 : 0.75,
-                      boxShadow: isToday ? `0 0 8px ${color.bg}44` : "none",
+                        ? `linear-gradient(180deg, #6366f1, #6366f188)`
+                        : "#6366f1",
+                      opacity: isToday ? 1 : 0.6,
+                      boxShadow: isToday ? "0 0 8px rgba(99,102,241,0.2)" : "none",
                     }}
                   >
                     <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10">
                       {formatTime(seconds)}
-                      <span className="text-white/40 ml-1">{color.label.split(" ")[0]}</span>
                     </div>
                   </div>
                   <span className={`text-[9px] leading-none ${isToday ? "text-white font-semibold" : "text-white/40"}`}>
