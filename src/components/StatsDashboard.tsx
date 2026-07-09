@@ -117,20 +117,6 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         {tab === "year" && <YearInPixels />}
       </div>
 
-      {/* Bottom navigation */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
-        <div className="flex">
-          <button
-            onClick={() => window.location.href = "/"}
-            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
-          >
-            📝 Check-in
-          </button>
-          <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
-            📊 Statistiky
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
