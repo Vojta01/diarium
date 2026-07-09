@@ -250,7 +250,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                 );
               }
 
-              // Fallback: solid bar in neutral style (no per-app data for this day)
+              // Fallback: solid bar (no per-app data) — bright enough to be visible
               return (
                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
                   <div
@@ -258,10 +258,10 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     style={{
                       height: barH,
                       background: isToday
-                        ? `linear-gradient(180deg, #6366f1, #6366f188)`
-                        : "#6366f1",
-                      opacity: isToday ? 1 : 0.6,
-                      boxShadow: isToday ? "0 0 8px rgba(99,102,241,0.2)" : "none",
+                        ? `linear-gradient(180deg, #818cf8, #6366f1)`
+                        : "#818cf8",
+                      opacity: 0.85,
+                      boxShadow: "0 0 6px rgba(129,140,248,0.15)",
                     }}
                   >
                     <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10">
