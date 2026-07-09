@@ -12,7 +12,8 @@ export interface DailyEntry {
   note: string;
   phone_screen_time?: number;
   phone_unlocks?: number;
-  phone_top_apps?: string;
+  /** Array of {app: string, time_sec: number} from HA phone_usage.py */
+  phone_top_apps?: { app: string; time_sec: number }[];
 }
 
 /** Načte všechny daily entries pro aktuálního uživatele */
@@ -65,7 +66,7 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
     note: e.note ?? "",
     phone_screen_time: e.phone_screen_time,
     phone_unlocks: e.phone_unlocks,
-    phone_top_apps: e.phone_top_apps ? JSON.stringify(e.phone_top_apps) : undefined,
+    phone_top_apps: e.phone_top_apps ?? undefined,
   }));
 }
 

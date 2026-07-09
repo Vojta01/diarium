@@ -40,6 +40,18 @@ const WEEKDAYS_CZ = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 /** Max height of bar area in pixels (Tailwind h-36 = 9rem = 144px) */
 const BAR_AREA_H = 144;
 
+/** App color palette for stacked bar segments */
+const APP_COLORS = [
+  "#6366f1", // indigo
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#f97316", // orange
+  "#22c55e", // green
+  "#3b82f6", // blue
+  "#eab308", // yellow
+  "#ef4444", // red
+];
+
 export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const last7Days = useMemo(() => {
     const typed = entries as ScreenTimeEntry[];
@@ -55,6 +67,32 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     const hasData = last7Days.some(d => (d as any).phone_unlocks && (d as any).phone_unlocks > 0);
     if (!hasData) return null;
     return last7Days;
+  }, [last7Days]);
+
+  // Data for per-app breakdown
+  const appData = useMemo(() => {
+    if (!last7Days) return null;
+    // Get unique apps across all days for consistent colors
+    const allApps = new Map<string, number>();
+    for (const d of last7Days) {
+      if (d.phone_top_apps) {
+        for (const a of d.phone_top_apps) {
+          allApps.set(a.app, (allApps.get(a.app) || 0) + a.time_sec);
+        }
+      }
+    }
+    const hasData = allApps.size > 0;
+    if (!hasData) return null;
+
+    // Sort apps by total time, assign colors
+    const sortedApps = [...allApps.entries()]
+      .sort((a, b) => b[1] - a[1]);
+    const appColorMap = new Map<string, string>();
+    sortedApps.forEach(([app], i) => {
+      appColorMap.set(app, APP_COLORS[i % APP_COLORS.length]);
+    });
+
+    return { appColorMap, days: last7Days };
   }, [last7Days]);
 
   if (!last7Days || last7Days.length === 0) {
@@ -239,7 +277,6 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                 const unlocks = d.phone_unlocks || 0;
                 const barH = unlocks > 0 ? Math.max(3, (unlocks / maxUnlocks) * 100) : 0;
                 const date = new Date(d.date);
-                const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
                 const isToday = d.date === new Date().toISOString().split("T")[0];
                 const color = getUnlockColor(unlocks);
 
@@ -296,6 +333,141 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
               </span>
             ))}
             <span className="text-white/15 ml-auto">HA</span>
+          </div>
+        </div>
+      )}
+
+      {/* 📱 Per-App Breakdown — stacked bar chart */}
+      {appData && (
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <h3 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-3">
+            📱 Nejpoužívanější aplikace
+          </h3>
+
+          <div className="relative" style={{ height: BAR_AREA_H + 48 }}>
+            {/* Grid lines */}
+            {[0.25, 0.5, 0.75].map(fraction => (
+              <div
+                key={fraction}
+                className="absolute left-0 right-0 border-t border-white/5"
+                style={{ bottom: fraction * BAR_AREA_H + 32 }}
+              />
+            ))}
+
+            {/* Bars */}
+            <div className="absolute bottom-8 left-0 right-0 flex items-end gap-1.5" style={{ height: BAR_AREA_H }}>
+              {appData.days.map((d) => {
+                const apps = d.phone_top_apps || [];
+                const totalSec = d.phone_screen_time || 0;
+                const isToday = d.date === new Date().toISOString().split("T")[0];
+
+                // Top 3 + other
+                const sorted = [...apps].sort((a, b) => b.time_sec - a.time_sec);
+                const top3 = sorted.slice(0, 3);
+                const otherSec = sorted.slice(3).reduce((s, a) => s + a.time_sec, 0);
+
+                if (totalSec === 0) {
+                  return (
+                    <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1">
+                      <div className="w-full max-w-[48px] mx-auto h-0" />
+                      <span className="text-[9px] leading-none text-white/20">—</span>
+                    </div>
+                  );
+                }
+
+                // Build segments from bottom to top
+                const segments = [
+                  ...top3.map((a, i) => ({
+                    name: a.app,
+                    seconds: a.time_sec,
+                    color: appData.appColorMap.get(a.app) || "#6b7280",
+                    isTop: true,
+                  })),
+                  ...(otherSec > 0 ? [{
+                    name: "Ostatní",
+                    seconds: otherSec,
+                    color: "#374151",
+                    isTop: false,
+                  }] : []),
+                ];
+
+                // Reverse so first segment is at bottom
+                segments.reverse();
+
+                let cumH = 0;
+                return (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
+                    <div
+                      className="w-full max-w-[48px] mx-auto rounded-t-md relative group"
+                      style={{
+                        height: (totalSec / maxTime) * BAR_AREA_H,
+                        opacity: isToday ? 1 : 0.7,
+                        boxShadow: isToday ? "0 0 8px rgba(99,102,241,0.2)" : "none",
+                      }}
+                    >
+                      {/* Tooltip */}
+                      <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[9px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10 flex flex-col gap-0.5">
+                        {[...top3, ...(otherSec > 0 ? [{ app: "Ostatní", time_sec: otherSec }] : [])].map((a) => (
+                          <div key={a.app} className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: a.app === "Ostatní" ? "#374151" : appData.appColorMap.get(a.app) }} />
+                            <span className="text-white/60 max-w-[80px] truncate">{a.app}</span>
+                            <span className="text-white/80 ml-auto">{formatTime(a.time_sec)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Stacked segments */}
+                      {segments.map((seg, i) => {
+                        const segH = totalSec > 0 ? (seg.seconds / totalSec) * (totalSec / maxTime) * BAR_AREA_H : 0;
+                        const prevCum = cumH;
+                        cumH += segH;
+                        return (
+                          <div
+                            key={i}
+                            className="absolute left-0 right-0"
+                            style={{
+                              bottom: prevCum,
+                              height: Math.max(1, segH),
+                              background: seg.color,
+                              ...(i === segments.length - 1 ? { borderTopLeftRadius: 4, borderTopRightRadius: 4 } : {}),
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className={`text-[9px] leading-none ${isToday ? "text-white font-semibold" : "text-white/40"}`}>
+                      {formatTime(totalSec)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Day labels */}
+            <div className="absolute bottom-0 left-0 right-0 flex gap-1.5">
+              {appData.days.map((d) => {
+                const date = new Date(d.date);
+                const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
+                const isToday = d.date === new Date().toISOString().split("T")[0];
+                return (
+                  <div key={d.date} className={`flex-1 text-center text-[10px] ${isToday ? "text-white font-semibold" : "text-white/25"}`}>
+                    {dayName}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* App color legend */}
+          <div className="flex items-center gap-2 mt-3 text-[9px] text-white/30 flex-wrap">
+            <span className="text-white/40 mr-1">Appky:</span>
+            {[...appData.appColorMap.entries()].slice(0, 6).map(([app, color]) => (
+              <span key={app} className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+                <span className="max-w-[60px] truncate">{app}</span>
+              </span>
+            ))}
+            <span className="ml-auto text-white/15">HA</span>
           </div>
         </div>
       )}
