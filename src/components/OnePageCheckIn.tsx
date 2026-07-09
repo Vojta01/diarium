@@ -770,6 +770,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {/* Bottom navigation */}
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
           <div className="flex">
+            <button
+              onClick={() => window.location.href = "/"}
+              className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
+            >
+              🏠 Dashboard
+            </button>
             <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
               📝 Check-in
             </button>
@@ -777,7 +783,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               onClick={() => window.location.href = "/stats"}
               className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
             >
-              📊 Statistiky
+              📊 Stats
             </button>
           </div>
         </div>
@@ -1160,6 +1166,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {/* Navigation tabs */}
         <div className="flex border-t border-white/5">
           <button
+            onClick={() => window.location.href = "/"}
+            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            🏠 Dashboard
+          </button>
+          <button
             onClick={() => {}}
             className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5"
           >
@@ -1169,7 +1181,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             onClick={() => window.location.href = "/stats"}
             className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
           >
-            📊 Statistiky
+            📊 Stats
           </button>
         </div>
       </div>
