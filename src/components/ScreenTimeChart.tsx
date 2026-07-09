@@ -19,7 +19,13 @@ function formatHours(seconds: number): string {
   return (seconds / 3600).toFixed(1) + "h";
 }
 
-/** Barva podle času — jasná škála od zelené (málo) po červenou (hodně) */
+/** Barva podle počtu odemknutí — stejný princip jako screen time */
+function getUnlockColor(unlocks: number): string {
+  if (unlocks < 30) return "#22c55e";    // zelená — málo
+  if (unlocks < 60) return "#3b82f6";    // modrá — střed
+  if (unlocks < 100) return "#eab308";   // žlutá — hodně
+  return "#ef4444";                        // červená — extrém
+}
 function getBarColor(seconds: number): { bg: string; label: string } {
   if (seconds < 1800) return { bg: "#22c55e", label: "🟢 <30m" };       // <30 min
   if (seconds < 3600) return { bg: "#4ade80", label: "🟢 30m–1h" };      // 30m-1h
@@ -235,6 +241,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                 const date = new Date(d.date);
                 const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
                 const isToday = d.date === new Date().toISOString().split("T")[0];
+                const color = getUnlockColor(unlocks);
 
                 return (
                   <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
@@ -243,10 +250,10 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                       style={{
                         height: barH,
                         background: isToday
-                          ? "linear-gradient(180deg, #c084fc, #a855f7)"
-                          : "#a855f7",
+                          ? `linear-gradient(180deg, ${color}, ${color}88)`
+                          : color,
                         opacity: isToday ? 1 : 0.6,
-                        boxShadow: isToday ? "0 0 8px #a855f744" : "none",
+                        boxShadow: isToday ? `0 0 8px ${color}44` : "none",
                       }}
                     >
                       <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10">
@@ -276,10 +283,18 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           </div>
 
           <div className="flex items-center gap-2 mt-3 text-[9px] text-white/30">
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#a855f7" }} />
-              počet odemknutí
-            </span>
+            <span className="text-white/40 mr-1">Legenda:</span>
+            {[
+              { val: 15, label: "<30×", color: "#22c55e" },
+              { val: 45, label: "30–60×", color: "#3b82f6" },
+              { val: 80, label: "60–100×", color: "#eab308" },
+              { val: 120, label: "100×+", color: "#ef4444" },
+            ].map(({ label, color }) => (
+              <span key={label} className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+                {label}
+              </span>
+            ))}
             <span className="text-white/15 ml-auto">HA</span>
           </div>
         </div>

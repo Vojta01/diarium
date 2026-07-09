@@ -360,47 +360,52 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
   }, [entries, overallMean]);
 
   // ── 6. Trends: 7-day rolling average mood ──
-  const trendStats = useMemo((): TrendItem[] => {
-    // Overall mood trend
+  // ── 6. Rolling average mood trend ──
+  const trendData = useMemo(() => {
     const sortedEntries = [...entries].filter(e => e.mood > 0).sort((a, b) => a.date.localeCompare(b.date));
-    if (sortedEntries.length < 7) return [];
+    if (sortedEntries.length < 10) return null;
 
-    // Split into halves
-    const mid = Math.floor(sortedEntries.length / 2);
-    const firstHalf = sortedEntries.slice(0, mid);
-    const secondHalf = sortedEntries.slice(mid);
+    const window = 7;
+    const rolling: { date: string; avgMood: number }[] = [];
     
-    const firstMood = firstHalf.reduce((s, e) => s + e.mood, 0) / firstHalf.length;
-    const secondMood = secondHalf.reduce((s, e) => s + e.mood, 0) / secondHalf.length;
-    const slope = secondMood - firstMood;
-    
-    const result: TrendItem[] = [{
-      name: "Celková nálada",
-      slope: parseFloat(slope.toFixed(2)),
-      firstHalfMood: parseFloat(firstMood.toFixed(1)),
-      secondHalfMood: parseFloat(secondMood.toFixed(1)),
-      count: sortedEntries.length,
-      direction: slope > 0.25 ? "📈" : slope < -0.25 ? "📉" : "➡️",
-    }];
-
-    // Screen time trend
-    const stEntries = sortedEntries.filter(e => e.phone_screen_time != null && e.phone_screen_time > 0);
-    if (stEntries.length >= 7) {
-      const stMid = Math.floor(stEntries.length / 2);
-      const stFirst = stEntries.slice(0, stMid).reduce((s, e) => s + (e.phone_screen_time || 0), 0) / stEntries.slice(0, stMid).length;
-      const stSecond = stEntries.slice(stMid).reduce((s, e) => s + (e.phone_screen_time || 0), 0) / stEntries.slice(stMid).length;
-      const diffMin = (stSecond - stFirst) / 60;
-      result.push({
-        name: "Screen time",
-        slope: parseFloat(diffMin.toFixed(0)),
-        firstHalfMood: parseFloat((stFirst / 3600).toFixed(1)),
-        secondHalfMood: parseFloat((stSecond / 3600).toFixed(1)),
-        count: stEntries.length,
-        direction: diffMin > 15 ? "📈" : diffMin < -15 ? "📉" : "➡️",
+    for (let i = window - 1; i < sortedEntries.length; i++) {
+      const slice = sortedEntries.slice(i - window + 1, i + 1);
+      const avg = slice.reduce((s, e) => s + e.mood, 0) / slice.length;
+      rolling.push({
+        date: sortedEntries[i].date,
+        avgMood: parseFloat(avg.toFixed(1)),
       });
     }
 
-    return result;
+    // Overall trend direction
+    const firstQuarter = rolling.slice(0, Math.floor(rolling.length / 4));
+    const lastQuarter = rolling.slice(-Math.floor(rolling.length / 4));
+    const firstAvg = firstQuarter.reduce((s, p) => s + p.avgMood, 0) / firstQuarter.length;
+    const lastAvg = lastQuarter.reduce((s, p) => s + p.avgMood, 0) / lastQuarter.length;
+    const slope = lastAvg - firstAvg;
+    
+    // Simple linear regression for trend line
+    const n = rolling.length;
+    const xMean = (n - 1) / 2;
+    const yMean = rolling.reduce((s, p) => s + p.avgMood, 0) / n;
+    let num = 0, den = 0;
+    rolling.forEach((p, i) => {
+      num += (i - xMean) * (p.avgMood - yMean);
+      den += (i - xMean) ** 2;
+    });
+    const trendSlope = den !== 0 ? num / den : 0;
+
+    return {
+      rolling,
+      firstAvg: parseFloat(firstAvg.toFixed(1)),
+      lastAvg: parseFloat(lastAvg.toFixed(1)),
+      slope: parseFloat(slope.toFixed(2)),
+      trendSlope: parseFloat(trendSlope.toFixed(4)),
+      direction: slope > 0.3 ? "📈" : slope < -0.3 ? "📉" : "➡️",
+      days: sortedEntries.length,
+      minMood: Math.min(...rolling.map(p => p.avgMood)),
+      maxMood: Math.max(...rolling.map(p => p.avgMood)),
+    };
   }, [entries]);
 
   // ── Mood color helper ──
@@ -419,7 +424,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
     return "velký";
   };
 
-  const hasAnyData = activityStats.length > 0 || habitStats.length > 0 || screenTimeStats.length > 0 || unlocksStats.length > 0;
+  const hasAnyData = activityStats.length > 0 || habitStats.length > 0 || screenTimeStats.length > 0 || unlocksStats.length > 0 || trendData !== null;
 
   if (!hasAnyData) {
     return (
@@ -445,7 +450,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             key === "habits" ? habitStats.length > 0 :
             key === "screentime" ? screenTimeStats.length > 0 :
             key === "unlocks" ? unlocksStats.length > 0 :
-            key === "trends" ? trendStats.length > 0 :
+            key === "trends" ? trendData !== null :
             false;
           if (!hasData) return null;
           return (
@@ -540,8 +545,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {/* ── Habits Tab ── */}
         {tab === "habits" && (
           <div>
-            <p className="text-white/40 text-xs mb-2">
-              Cohenovo d porovnává dny s návykem a bez. Kladné d = s návykem lepší nálada.
+            <p className="text-white/40 text-xs mb-1">
+              Cohenovo d porovnává dny s návykem vs bez. <span className="text-emerald-400">Kladné d</span> = lepší nálada, když je hodnota <b>ano</b>.
+            </p>
+            <p className="text-white/20 text-[10px] mb-3">
+              U negativních návyků (🍺{" "}alkohol, 🔞{" "}porno apod.) znamená "ano" = narušení. U pozitivních (🧘{" "}meditace, 🏋️{" "}cvičení) "ano" = splněno.
             </p>
             <div className="space-y-2">
               {habitStats.map(s => {
@@ -551,10 +559,23 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                   s.name === "meditace" ? "🧘" :
                   s.name === "spanek_7h" ? "😴" :
                   s.name === "venku" ? "🌿" :
-                  s.name === "socializace" ? "👥" : "✅";
+                  s.name === "socializace" ? "👥" :
+                  s.name === "porno" ? "🔞" :
+                  s.name === "masturbace" ? "💦" : "✅";
+                const isNegative = ["alkohol", "porno", "masturbace"].includes(s.name);
                 const hasEffect = Math.abs(s.cohensD) > 0.3;
                 const positive = s.cohensD > 0.1;
                 const negative = s.cohensD < -0.1;
+                
+                // For negative habits, "Ano" means bad (abstinence failed).
+                // For positive habits, "Ano" means good (task done).
+                const withLabel = isNegative ? "⚠️ Narušeno" : "✅ Ano";
+                const withoutLabel = isNegative ? "✅ V pořádku" : "❌ Ne";
+
+                // Flip interpretation for negative habits
+                const moodWithColor = isNegative
+                  ? (s.moodWith < s.moodWithout ? "text-emerald-400" : "text-red-400")
+                  : (s.moodWith > s.moodWithout ? "text-emerald-400" : "text-red-400");
                 
                 return (
                   <div key={s.name} className={`p-3 rounded-lg ${hasEffect ? "bg-white/5 border border-white/5" : "bg-white/2"}`}>
@@ -572,7 +593,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
                     {/* With habit */}
                     <div className="flex items-center gap-2 text-[10px] mb-1">
-                      <span className="text-white/30 w-8 text-right shrink-0">Ano</span>
+                      <span className={`w-16 text-right shrink-0 ${isNegative ? "text-red-400/60" : "text-emerald-400/60"}`}>{withLabel}</span>
                       <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
                         {s.countWith > 0 && (
                           <div className="h-full rounded-full" style={{
@@ -592,7 +613,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
                     {/* Without habit */}
                     <div className="flex items-center gap-2 text-[10px]">
-                      <span className="text-white/30 w-8 text-right shrink-0">Ne</span>
+                      <span className={`w-16 text-right shrink-0 ${isNegative ? "text-emerald-400/60" : "text-red-400/60"}`}>{withoutLabel}</span>
                       <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
                         {s.countWithout > 0 && (
                           <div className="h-full rounded-full" style={{
@@ -628,16 +649,25 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             {spearmanScreenTime && (
               <div className={`p-3 rounded-lg mb-4 ${spearmanScreenTime.significant ? "bg-white/5 border border-white/10" : "bg-white/2"}`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/60">Spearmanova korelace (screen time vs nálada)</span>
+                  <span className="text-sm text-white/60">📱 Screen time vs nálada</span>
                   <span className={`text-sm font-mono ${spearmanScreenTime.significant ? "text-white font-bold" : "text-white/40"}`}>
                     ρ = {spearmanScreenTime.r}
                   </span>
                 </div>
                 <div className="text-xs text-white/30 mt-1">
-                  {spearmanScreenTime.direction} · {spearmanScreenTime.interpretation} korelace · n = {spearmanScreenTime.n}
+                  {spearmanScreenTime.interpretation === "silná" 
+                    ? `Čím víc času na telefonu, tím ${spearmanScreenTime.direction === "negativní" ? "horší" : "lepší"} nálada (${spearmanScreenTime.interpretation} korelace, ${spearmanScreenTime.n} dní).`
+                    : spearmanScreenTime.interpretation === "střední"
+                    ? `Mírná souvislost: víc screen timu → ${spearmanScreenTime.direction === "negativní" ? "trochu horší" : "trochu lepší"} nálada (${spearmanScreenTime.n} dní).`
+                    : `Slabá nebo žádná souvislost mezi screen timem a náladou (${spearmanScreenTime.n} dní).`
+                  }
                 </div>
               </div>
             )}
+
+            <p className="text-white/25 text-[10px] mb-3">
+              Průměrná nálada v jednotlivých pásmech screen timu. Sloupec ukazuje Ø náladu, pod ním je rozdíl proti celkovému průměru ({overallMean.toFixed(1)}).
+            </p>
 
             <div className="space-y-2">
               {screenTimeStats.map(s => {
@@ -714,58 +744,85 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         )}
 
         {/* ── Trends Tab ── */}
-        {tab === "trends" && (
+        {tab === "trends" && trendData && (
           <div>
-            <p className="text-white/40 text-xs mb-2">
-              Porovnání první a druhé poloviny sledovaného období — trendy v čase.
-            </p>
-            <div className="space-y-3">
-              {trendStats.map(t => {
-                const isScreenTime = t.name === "Screen time";
-                return (
-                  <div key={t.name} className="p-3 rounded-lg bg-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-white/60">{t.name}</span>
-                      <span className="text-lg">{t.direction}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs">
-                      <div className="text-center">
-                        <div className="text-white/30">1. polovina</div>
-                        <div className="text-white font-mono">
-                          {isScreenTime ? t.firstHalfMood + "h" : t.firstHalfMood.toFixed(1)}
-                        </div>
-                      </div>
-                      <div className="flex-1 h-0.5 bg-white/10 rounded-full relative">
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full"
-                          style={{
-                            left: "0%",
-                            width: "100%",
-                            background: t.direction === "📈"
-                              ? `linear-gradient(90deg, ${moodColor(t.firstHalfMood)}, ${moodColor(t.secondHalfMood)})`
-                              : t.direction === "📉"
-                              ? `linear-gradient(90deg, ${moodColor(t.firstHalfMood)}, ${moodColor(t.secondHalfMood)})`
-                              : "#ffffff22",
-                          }}
-                        />
-                      </div>
-                      <div className="text-center">
-                        <div className="text-white/30">2. polovina</div>
-                        <div className="text-white font-mono">
-                          {isScreenTime ? t.secondHalfMood + "h" : t.secondHalfMood.toFixed(1)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-[9px] text-white/25 mt-2">
-                      {t.count} dní · změna: {t.slope > 0 ? "+" : ""}{t.slope.toFixed(1)}{isScreenTime ? " min" : ""}
-                    </div>
-                  </div>
-                );
-              })}
-              {trendStats.length === 0 && (
-                <p className="text-white/20 text-xs text-center py-4">Potřebuju alespoň 7 dní dat pro trendy.</p>
-              )}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-white/60 text-sm font-medium">Vývoj nálady</p>
+                <p className="text-white/25 text-[10px]">7denní klouzavý průměr — {trendData.days} dní</p>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl">{trendData.direction}</span>
+                <p className={`text-xs font-mono ${trendData.slope > 0.2 ? "text-emerald-400" : trendData.slope < -0.2 ? "text-red-400" : "text-white/40"}`}>
+                  {trendData.slope > 0 ? "+" : ""}{trendData.slope}
+                </p>
+              </div>
             </div>
+
+            {/* Mini line chart */}
+            <div className="relative h-24 mb-3">
+              {/* Grid lines */}
+              {[1, 2, 3, 4, 5].map(mood => (
+                <div
+                  key={mood}
+                  className="absolute left-0 right-0 border-t border-white/5"
+                  style={{ bottom: `${((mood - 1) / 4) * 100}%` }}
+                />
+              ))}
+              
+              {/* Mood labels */}
+              <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] text-white/20">
+                <span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+              </div>
+
+              {/* Rolling average line */}
+              <svg className="absolute inset-0 ml-4" viewBox={`0 0 ${trendData.rolling.length - 1} 4`} preserveAspectRatio="none">
+                <polyline
+                  points={trendData.rolling.map((p, i) => {
+                    const x = i;
+                    const y = 4 - ((p.avgMood - 1) / 4) * 4;
+                    return `${x},${y.toFixed(1)}`;
+                  }).join(" ")}
+                  fill="none"
+                  stroke="url(#trendGradient)"
+                  strokeWidth="0.15"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <defs>
+                  <linearGradient id="trendGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={moodColor(trendData.firstAvg)} />
+                    <stop offset="100%" stopColor={moodColor(trendData.lastAvg)} />
+                  </linearGradient>
+                </defs>
+              </svg>
+
+              {/* Trend arrow annotation */}
+              <div className="absolute bottom-0 right-0 text-[9px] text-white/30">
+                {trendData.slope > 0.3 ? "↑ zlepšuje se" : trendData.slope < -0.3 ? "↓ zhoršuje se" : "→ stabilní"}
+              </div>
+            </div>
+
+            <div className="flex gap-3 text-[10px]">
+              <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
+                <div className="text-white/30">Začátek období</div>
+                <div className="text-white font-mono">{trendData.firstAvg}</div>
+              </div>
+              <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
+                <div className="text-white/30">Konec období</div>
+                <div className="text-white font-mono">{trendData.lastAvg}</div>
+              </div>
+              <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
+                <div className="text-white/30">Změna</div>
+                <div className={`font-mono ${trendData.slope > 0.2 ? "text-emerald-400" : trendData.slope < -0.2 ? "text-red-400" : "text-white/40"}`}>
+                  {trendData.slope > 0 ? "+" : ""}{trendData.slope}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-white/20 text-[9px] mt-3 text-center">
+              Čára ukazuje 7denní klouzavý průměr nálady. Barva přechází od začátku (vlevo) ke konci (vpravo) období.
+            </p>
           </div>
         )}
       </div>

@@ -11,7 +11,7 @@ import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"year" | "calendar" | "screentime" | "correlation" | "ai">("year");
+  const [tab, setTab] = useState<"calendar" | "correlation" | "screentime" | "ai" | "year">("calendar");
   const [userId, setUserId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const isVojta = userEmail === "vojta1@gmail.com" || userEmail === "vojtech.marvan@gmail.com";
@@ -24,7 +24,6 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
       })
       .catch(() => setLoading(false));
 
-    // Get userId and email from localStorage
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
@@ -54,18 +53,8 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         <p className="text-white/40 text-sm mt-1">Statistiky</p>
       </header>
 
-      {/* Tab bar */}
+      {/* Tab bar — reordered: Calendar → Correlations → Screen → AI → Pixels */}
       <div className="flex gap-1 mb-6 max-w-md mx-auto">
-        <button
-          onClick={() => setTab("year")}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
-            tab === "year"
-              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
-              : "text-white/30 hover:text-white/50"
-          }`}
-        >
-          📅 Pixels
-        </button>
         <button
           onClick={() => setTab("calendar")}
           className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
@@ -75,6 +64,16 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
           }`}
         >
           🗓️ Kalendář
+        </button>
+        <button
+          onClick={() => setTab("correlation")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "correlation"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          🔗 Korelace
         </button>
         {isVojta && (
           <button
@@ -89,16 +88,6 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
           </button>
         )}
         <button
-          onClick={() => setTab("correlation")}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
-            tab === "correlation"
-              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
-              : "text-white/30 hover:text-white/50"
-          }`}
-        >
-          🔗 Korelace
-        </button>
-        <button
           onClick={() => setTab("ai")}
           className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
             tab === "ai"
@@ -108,14 +97,39 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         >
           🤖 AI
         </button>
+        <button
+          onClick={() => setTab("year")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "year"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          📅 Pixels
+        </button>
       </div>
 
-      <div className="max-w-2xl mx-auto">
-        {tab === "year" && <YearInPixels />}
+      <div className="max-w-2xl mx-auto pb-16">
         {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
-        {tab === "screentime" && isVojta && <ScreenTimeChart entries={entries} />}
         {tab === "correlation" && <ActivityMoodChart entries={entries} />}
+        {tab === "screentime" && isVojta && <ScreenTimeChart entries={entries} />}
         {tab === "ai" && <PeriodicSummary userId={userId} />}
+        {tab === "year" && <YearInPixels />}
+      </div>
+
+      {/* Bottom navigation */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
+        <div className="flex">
+          <button
+            onClick={() => window.location.href = "/"}
+            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            📝 Check-in
+          </button>
+          <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
+            📊 Statistiky
+          </button>
+        </div>
       </div>
     </div>
   );
