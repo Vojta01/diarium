@@ -199,7 +199,7 @@ async function sendPushNotification(userId: string, title: string, body: string)
     const webpush = await import("web-push");
     webpush.setVapidDetails(
       "mailto:vojta1@gmail.com",
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
+      "BOTRxmOOG-mT7D59Gs8Em2i4B9mjxPgAcnl9Hf7kyZ99-P8RMetAFvx5mxf9TM6xfG1kDgb6G26c6DJo9fTWgDM",
       process.env.VAPID_PRIVATE_KEY || ""
     );
 

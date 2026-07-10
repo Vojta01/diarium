@@ -21,10 +21,10 @@ function getRedis() {
 
 let _vapidReady = false;
 function ensureVapid() {
-  if (!_vapidReady && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  if (!_vapidReady && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(
-      "mailto:diarium@nousresearch.com",
-      process.env.VAPID_PUBLIC_KEY,
+      "mailto:vojta1@gmail.com",
+      "BOTRxmOOG-mT7D59Gs8Em2i4B9mjxPgAcnl9Hf7kyZ99-P8RMetAFvx5mxf9TM6xfG1kDgb6G26c6DJo9fTWgDM",
       process.env.VAPID_PRIVATE_KEY
     );
     _vapidReady = true;
