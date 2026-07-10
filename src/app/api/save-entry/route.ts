@@ -30,7 +30,18 @@ export async function POST(req: NextRequest) {
     if (photo_path !== undefined && photo_path) row.photo_path = photo_path;
     if (phone_screen_time !== undefined) row.phone_screen_time = phone_screen_time;
     if (phone_unlocks !== undefined) row.phone_unlocks = phone_unlocks;
-    if (phone_top_apps !== undefined) row.phone_top_apps = phone_top_apps;
+    if (phone_top_apps !== undefined) {
+      // Normalize: accept both array and string formats
+      if (Array.isArray(phone_top_apps)) {
+        row.phone_top_apps = phone_top_apps;
+      } else if (typeof phone_top_apps === 'string' && phone_top_apps.trim()) {
+        // Old format: "App:minutes, App:minutes" → convert to [{app, time_sec}]
+        row.phone_top_apps = phone_top_apps.split(',').map((item: string) => {
+          const [app, min] = item.trim().split(':');
+          return { app: app?.trim() || '', time_sec: parseInt(min || '0') * 60 };
+        }).filter((a: any) => a.app && a.time_sec > 0);
+      }
+    }
     if (ai_reflection !== undefined && ai_reflection) row.ai_reflection = ai_reflection;
 
     const { data, error } = await supabase

@@ -75,8 +75,16 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     // Get unique apps across all days for consistent colors
     const allApps = new Map<string, number>();
     for (const d of last7Days) {
-      if (d.phone_top_apps) {
-        for (const a of d.phone_top_apps) {
+      let apps = d.phone_top_apps;
+      if (!apps) continue;
+      // Normalize: handle both array and legacy string format
+      if (typeof apps === 'string') {
+        // Old format: "App:minutes, App:minutes" — skip, already handled by API
+        continue;
+      }
+      if (!Array.isArray(apps)) continue;
+      for (const a of apps) {
+        if (a && typeof a === 'object' && a.app && typeof a.time_sec === 'number') {
           allApps.set(a.app, (allApps.get(a.app) || 0) + a.time_sec);
         }
       }
@@ -174,7 +182,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
               const barH = seconds > 0 ? Math.max(4, (seconds / maxTime) * BAR_AREA_H) : 0;
               const date = new Date(d.date);
               const isToday = d.date === new Date().toISOString().split("T")[0];
-              const hasApps = appData && d.phone_top_apps && d.phone_top_apps.length > 0;
+              const hasApps = appData && d.phone_top_apps && Array.isArray(d.phone_top_apps) && d.phone_top_apps.length > 0;
 
               if (seconds === 0) {
                 return (
