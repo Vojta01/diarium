@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     }
 
     await redis.sadd(SUBSCRIPTIONS_KEY, JSON.stringify(subscription));
+    console.log("[subscribe] Stored subscription, endpoint:", subscription.endpoint?.slice(0, 50));
 
     return Response.json({ ok: true });
   } catch (err) {
