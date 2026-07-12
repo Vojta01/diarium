@@ -216,15 +216,21 @@ async function sendPushNotification(userId: string, title: string, body: string)
 
 export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url);
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Cron jobs can't send custom headers — allow ?secret= query param
+    const querySecret = url.searchParams.get("secret");
+    const isAuthorized = !cronSecret
+      || authHeader === `Bearer ${cronSecret}`
+      || querySecret === cronSecret;
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Determine report type from query params or time
-    const url = new URL(request.url);
     const type = url.searchParams.get("type") || "weekly";
 
     if (!["weekly", "monthly"].includes(type)) {
