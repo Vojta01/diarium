@@ -26,17 +26,12 @@ export async function GET() {
     if (typeof s === "string") {
       try {
         const parsed = JSON.parse(s);
-        return {
-          endpoint: (parsed.endpoint || "").slice(0, 80),
-          hasKeys: !!parsed.keys,
-          p256dhLen: parsed.keys?.p256dh?.length,
-          authLen: parsed.keys?.auth?.length,
-        };
+        return parsed; // Return full subscription for debugging
       } catch {
-        return { raw: s.slice(0, 30) };
+        return { raw: s };
       }
     }
-    return { endpoint: (s.endpoint || "").slice(0, 80) };
+    return s;
   });
 
   return Response.json({ count: subs.length, subscriptions: subs });
