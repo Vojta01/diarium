@@ -66,7 +66,8 @@ export async function GET(_request: NextRequest) {
     const results = await Promise.allSettled(
       subscriptions.map((sub: any) =>
         webpush.sendNotification(sub, payload).then(() => { sent++; }).catch((err: any) => {
-          errors.push(`${err?.statusCode || '?'}: ${err?.message || err}`);
+          const detail = err?.body || err?.message || err?.statusCode || String(err);
+          errors.push(`${err?.statusCode || '?'}: ${detail}`.slice(0, 200));
           throw err;
         })
       )
