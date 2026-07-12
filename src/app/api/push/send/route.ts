@@ -62,9 +62,13 @@ export async function GET(_request: NextRequest) {
     });
 
     let sent = 0;
+    let errors: string[] = [];
     const results = await Promise.allSettled(
       subscriptions.map((sub: any) =>
-        webpush.sendNotification(sub, payload).then(() => { sent++; })
+        webpush.sendNotification(sub, payload).then(() => { sent++; }).catch((err: any) => {
+          errors.push(`${err?.statusCode || '?'}: ${err?.message || err}`);
+          throw err;
+        })
       )
     );
 
@@ -79,7 +83,7 @@ export async function GET(_request: NextRequest) {
       }
     }
 
-    return Response.json({ sent });
+    return Response.json({ sent, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
     console.error("Send error:", err);
     return Response.json({ error: "Internal error" }, { status: 500 });
