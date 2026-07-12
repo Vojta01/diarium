@@ -184,17 +184,36 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
   return { analysis, fromDate, periodEnd };
 }
 
+const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
+
+let _redis: any = null;
+function getRedis() {
+  if (!_redis && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    const { Redis } = require("@upstash/redis") as typeof import("@upstash/redis");
+    _redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+  }
+  return _redis;
+}
+
 async function sendPushNotification(userId: string, title: string, body: string) {
   try {
-    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-    
-    // Get push subscriptions for user
-    const { data: subs } = await supabase
-      .from("push_subscriptions")
-      .select("subscription")
-      .eq("user_id", userId);
+    const redis = getRedis();
+    if (!redis) return;
 
-    if (!subs?.length) return;
+    const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
+    if (!rawSubs?.length) return;
+
+    const subscriptions = rawSubs.map((s: any) => {
+      if (typeof s === "string") {
+        try { return JSON.parse(s); } catch { return null; }
+      }
+      return s;
+    }).filter(Boolean);
+
+    if (!subscriptions.length) return;
 
     const webpush = await import("web-push");
     webpush.setVapidDetails(
@@ -203,13 +222,23 @@ async function sendPushNotification(userId: string, title: string, body: string)
       process.env.VAPID_PRIVATE_KEY || ""
     );
 
-    for (const sub of subs) {
-      try {
-        await webpush.sendNotification(
-          typeof sub.subscription === "string" ? JSON.parse(sub.subscription) : sub.subscription,
-          JSON.stringify({ title, body, icon: "/icon-192.png" })
-        );
-      } catch {}
+    const payload = JSON.stringify({ title, body, icon: "/icon-192.png" });
+
+    const results = await Promise.allSettled(
+      subscriptions.map((sub: any) =>
+        webpush.sendNotification(sub, payload)
+      )
+    );
+
+    // Clean up expired subscriptions
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "rejected") {
+        const err = (r as PromiseRejectedResult).reason;
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          await redis.srem(SUBSCRIPTIONS_KEY, rawSubs[i]);
+        }
+      }
     }
   } catch {}
 }
