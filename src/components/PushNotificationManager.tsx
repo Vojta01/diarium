@@ -74,12 +74,16 @@ export function PushNotificationManager() {
 
       // Always send the subscription to server (may have been lost due to middleware/auth issues)
       try {
-        await fetch("/api/push/subscribe", {
+        const res = await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ subscription: sub }),
         });
-      } catch {}
+        if (!res.ok) console.error("[Push] Subscribe failed:", res.status, await res.text());
+        else console.log("[Push] Subscription stored OK");
+      } catch (e) {
+        console.error("[Push] Subscribe network error:", e);
+      }
       
       setStatus("granted");
     } else if (Notification.permission === "denied") {
