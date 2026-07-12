@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         const fromDate = sevenDaysAgo.toISOString().split("T")[0];
 
         const { data: rows } = await supabase
-          .from("diary_entries")
+          .from("entries")
           .select("*")
           .eq("user_id", user_id)
           .gte("date", fromDate)
