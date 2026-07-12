@@ -55,21 +55,24 @@ export function PushNotificationManager() {
     }
 
     if (Notification.permission === "granted") {
-      // Already granted — verify subscription is valid and send to server
+      // Always re-subscribe with current VAPID key to avoid mismatch after rotation
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
 
-      if (!sub) {
-        // Subscription lost (SW update, cache clear) — re-subscribe
-        try {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
-          });
-        } catch {
-          setStatus("denied");
-          return;
-        }
+      // Unsubscribe old subscription (wrong VAPID key)
+      if (sub) {
+        try { await sub.unsubscribe(); } catch {}
+      }
+
+      // Subscribe fresh with current key
+      try {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
+        });
+      } catch {
+        setStatus("denied");
+        return;
       }
 
       // Always send the subscription to server (may have been lost due to middleware/auth issues)
