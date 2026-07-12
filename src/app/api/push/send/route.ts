@@ -24,7 +24,7 @@ function ensureVapid() {
   if (!_vapidReady && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(
       "mailto:vojta1@gmail.com",
-      "BOTRxmOOG-mT7D59Gs8Em2i4B9mjxPgAcnl9Hf7kyZ99-P8RMetAFvx5mxf9TM6xfG1kDgb6G26c6DJo9fTWgDM",
+      "BDQqhS8ckDCRGmoE6gfdRsoM9rGTbP9188B_Ue-XpHV3oNG9bbkG3rpLLONLwVT3D_mJFEhAjzhE2inp_hc0POY",
       process.env.VAPID_PRIVATE_KEY
     );
     _vapidReady = true;
