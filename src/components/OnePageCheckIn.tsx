@@ -784,7 +784,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   // ── COMPLETED CARD VIEW ──
   if (saved && !editing) {
     return (
-      <div>
+      <div className="pb-24">
         {/* Date nav */}
         <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
           <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
@@ -813,27 +813,6 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {aiLoading && (
           <div className="text-center text-white/20 text-sm py-4 animate-pulse">{t("checkin.ai_thinking")}</div>
         )}
-      
-        {/* Bottom navigation */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
-          <div className="flex">
-            <button
-              onClick={() => window.location.href = "/"}
-              className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
-            >
-              {t("checkin.nav_dashboard")}
-            </button>
-            <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
-              {t("checkin.nav_checkin")}
-            </button>
-            <button
-              onClick={() => window.location.href = "/stats"}
-              className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
-            >
-              {t("checkin.nav_stats")}
-            </button>
-          </div>
-        </div>
       </div>
     );
   }
@@ -1299,28 +1278,6 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
           >
             {saving ? t("checkin.saving") : t("checkin.save_to_vault")}
-          </button>
-        </div>
-        
-        {/* Navigation tabs */}
-        <div className="flex border-t border-white/5">
-          <button
-            onClick={() => window.location.href = "/"}
-            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
-          >
-            {t("checkin.nav_dashboard")}
-          </button>
-          <button
-            onClick={() => {}}
-            className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5"
-          >
-            {t("checkin.nav_checkin")}
-          </button>
-          <button
-            onClick={() => window.location.href = "/stats"}
-            className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
-          >
-            {t("checkin.nav_stats")}
           </button>
         </div>
       </div>
