@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ Tvůj úkol: napiš shrnutí uplynulého týdne (3-5 krátkých odstavců v če�
 
 1. Přehled — shrň náladu za týden (průměr, trend, nejlepší/nejhorší den)
 2. Vzorce — co ovlivňovalo náladu? Které aktivity pomáhaly? Všimni si souvislostí mezi spánkem, cvičením, screen timem a náladou
-3. Návyky — jak šly návyky (alkohol, kouření, studená sprcha)? Je tam progres?
+3. Návyky — jak šly návyky? Je tam progres?
 4. Vděčnost — zmiň opakující se témata vděčnosti
 5. Doporučení — jedna konkrétní věc, na kterou se zaměřit příští týden
 
@@ -158,6 +159,11 @@ function buildPeriodPrompt(entries: DayEntry[], type: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await verifyAuth(request);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       return Response.json({ error: "DEEPSEEK_API_KEY not configured" }, { status: 500 });
@@ -172,6 +178,11 @@ export async function POST(request: NextRequest) {
 
     if (!user_id) {
       return Response.json({ error: "user_id is required" }, { status: 400 });
+    }
+
+    // Verify the caller owns this user_id
+    if (user_id !== user.id) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Query entries from Supabase

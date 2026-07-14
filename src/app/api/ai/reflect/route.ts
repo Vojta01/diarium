@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,6 +96,11 @@ function formatDay(entry: any, isToday: boolean): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await verifyAuth(request);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       return Response.json({ error: "API key not configured" }, { status: 500 });
@@ -106,6 +112,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { userName, user_id, date, ...todayData } = body;
+
+    // Verify the caller owns this user_id
+    if (user_id && user_id !== user.id) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Fetch last 7 days from Supabase
     let history: any[] = [];

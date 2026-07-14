@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Markdown } from "@/components/Markdown";
+import { getAccessToken } from "@/lib/supabase/db";
 
 interface Report {
   content: string;
@@ -30,7 +31,10 @@ export function PeriodicSummary({ userId }: Props) {
       setReportMeta(null);
       setError(null);
       try {
-        const resp = await fetch(`/api/ai/reports?type=${type}&user_id=${userId}`);
+        const tok = getAccessToken();
+        const resp = await fetch(`/api/ai/reports?type=${type}&user_id=${userId}`, {
+          headers: { ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
+        });
         const json = await resp.json();
         if (json.report) {
           setAnalysis(json.report.content);
@@ -46,9 +50,10 @@ export function PeriodicSummary({ userId }: Props) {
     setLoading(true);
     setError(null);
     try {
+      const tok = getAccessToken();
       const resp = await fetch("/api/ai/periodic", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ type, user_id: userId }),
       });
       const json = await resp.json();
