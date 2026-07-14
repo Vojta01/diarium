@@ -2,25 +2,22 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { fetchDailyEntries, MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
-
-const MONTHS = [
-  "Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
-  "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
-];
-const WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
-
-interface DayCell {
-  date: string;
-  day: number;     // 1–31, 0 = padding
-  mood: number;    // 0 = no entry
-  note?: string;
-}
+import { useTranslation } from "@/lib/i18n";
 
 export function YearInPixels() {
+  const { t, lang } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+
+  const monthNames: string[] = Array.isArray(t("calendar.month_names"))
+    ? (t("calendar.month_names") as unknown as string[])
+    : ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  const weekdays: string[] = Array.isArray(t("calendar.day_names"))
+    ? (t("calendar.day_names") as unknown as string[])
+    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
   useEffect(() => {
     setLoading(true);
@@ -43,7 +40,7 @@ export function YearInPixels() {
 
   // Build each month as a matrix: rows × 7 columns
   const months = useMemo(() => {
-    const result: { name: string; index: number; weeks: DayCell[][] }[] = [];
+    const result: { name: string; index: number; weeks: { date: string; day: number; mood: number; note?: string }[][] }[] = [];
 
     for (let m = 0; m < 12; m++) {
       const firstDay = new Date(selectedYear, m, 1);
@@ -51,8 +48,8 @@ export function YearInPixels() {
       // Monday = 1, Sunday = 7
       const startDow = firstDay.getDay() || 7; // 1=Mon..7=Sun
 
-      const weeks: DayCell[][] = [];
-      let currentWeek: DayCell[] = [];
+      const weeks: { date: string; day: number; mood: number; note?: string }[][] = [];
+      let currentWeek: { date: string; day: number; mood: number; note?: string }[] = [];
 
       // Padding before the 1st
       for (let p = 1; p < startDow; p++) {
@@ -82,11 +79,11 @@ export function YearInPixels() {
         weeks.push(currentWeek);
       }
 
-      result.push({ name: MONTHS[m], index: m, weeks });
+      result.push({ name: monthNames[m], index: m, weeks });
     }
 
     return result;
-  }, [selectedYear, moodMap, noteMap]);
+  }, [selectedYear, moodMap, noteMap, monthNames]);
 
   const stats = useMemo(() => {
     const yearEntries = entries.filter(e => e.date.startsWith(String(selectedYear)));
@@ -98,7 +95,7 @@ export function YearInPixels() {
   const today = new Date().toISOString().split("T")[0];
 
   if (loading) {
-    return <div className="glass-card"><div className="text-center py-8 text-white/40">Načítám...</div></div>;
+    return <div className="glass-card"><div className="text-center py-8 text-white/40">{t("yearInPixels.loading")}</div></div>;
   }
 
   const cellSize = "15px";
@@ -121,7 +118,7 @@ export function YearInPixels() {
       <div className="glass-card">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-semibold text-white">
-            🗓️ Rok {selectedYear} v pixelech
+            {t("yearInPixels.title", { year: selectedYear })}
           </h2>
           <select
             value={selectedYear}
@@ -132,16 +129,16 @@ export function YearInPixels() {
           </select>
         </div>
         <p className="text-white/30 text-xs mb-2">
-          Každý čtvereček = jeden den. Čím zelenější, tím lepší nálada.
+          {t("yearInPixels.description")}
         </p>
         {stats && (
           <div className="flex gap-4 text-xs">
             <span className="text-white/40">
-              Průměrná nálada{" "}
+              {t("yearInPixels.avg_mood")}{" "}
               <span className="text-white font-semibold">{stats.avg}</span>
             </span>
             <span className="text-white/40">
-              Sledovaných dní{" "}
+              {t("yearInPixels.days_tracked")}{" "}
               <span className="text-white font-semibold">{stats.total}</span>
             </span>
           </div>
@@ -157,13 +154,13 @@ export function YearInPixels() {
               {month.name}
             </h3>
             <span className="text-[10px] text-white/25">
-              {monthEntryCounts[mi]}/{month.weeks.reduce((s, w) => s + w.filter(c => c.day > 0).length, 0)} dní
+              {monthEntryCounts[mi]}/{month.weeks.reduce((s, w) => s + w.filter(c => c.day > 0).length, 0)} {t("yearInPixels.days_tracked").toLowerCase()}
             </span>
           </div>
 
           {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-[2px] mb-1">
-            {WEEKDAYS.map((d, i) => (
+            {weekdays.map((d, i) => (
               <div
                 key={d}
                 className="text-[9px] text-white/20 text-center"
@@ -209,7 +206,7 @@ export function YearInPixels() {
                       }}
                       title={
                         cell.mood
-                          ? `${cell.date}: nálada ${cell.mood}/5${cell.note ? " — " + cell.note : ""}`
+                          ? `${cell.date}: ${t("yearInPixels.mood")} ${cell.mood}/5${cell.note ? " — " + cell.note : ""}`
                           : cell.date
                       }
                       onMouseEnter={() => cell.mood > 0 && setHoveredDay(cell.date)}
@@ -219,7 +216,7 @@ export function YearInPixels() {
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-gray-900 border border-white/20 rounded-lg px-2.5 py-1.5 shadow-xl z-20 whitespace-nowrap pointer-events-none">
                           <span className="text-xs text-white font-medium">
                             {MOOD_EMOJIS[cell.mood]}{" "}
-                            {new Date(cell.date).toLocaleDateString("cs-CZ", {
+                            {new Date(cell.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
                               day: "numeric",
                               month: "short",
                             })}
@@ -254,7 +251,7 @@ export function YearInPixels() {
           ))}
           <span className="flex items-center gap-1 text-white/30">
             <span className="w-2.5 h-2.5 rounded-sm inline-block border border-indigo-400/40" />
-            dnes
+            {t("yearInPixels.today")}
           </span>
         </div>
       </div>

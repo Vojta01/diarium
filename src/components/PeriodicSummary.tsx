@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Markdown } from "@/components/Markdown";
 import { getAccessToken } from "@/lib/supabase/db";
+import { useTranslation } from "@/lib/i18n";
 
 interface Report {
   content: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function PeriodicSummary({ userId }: Props) {
+  const { t, lang } = useTranslation();
   const [type, setType] = useState<"weekly" | "monthly" | "yearly">("weekly");
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [reportMeta, setReportMeta] = useState<Report | null>(null);
@@ -54,7 +56,7 @@ export function PeriodicSummary({ userId }: Props) {
       const resp = await fetch("/api/ai/periodic", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ type, user_id: userId }),
+        body: JSON.stringify({ type, user_id: userId, lang }),
       });
       const json = await resp.json();
       if (json.error) {
@@ -64,47 +66,47 @@ export function PeriodicSummary({ userId }: Props) {
         setReportMeta(null); // Live generated, no DB meta
       }
     } catch (e: any) {
-      setError(e.message || "Chyba připojení");
+      setError(e.message || t("periodicSummary.error_connection"));
     }
     setLoading(false);
   };
 
-  const periodLabel = type === "weekly" ? "Týdenní" : type === "monthly" ? "Měsíční" : "Roční";
+  const periodLabel = type === "weekly" ? t("periodicSummary.weekly") : type === "monthly" ? t("periodicSummary.monthly") : t("periodicSummary.yearly");
 
   return (
     <div className="glass-card">
-      <h2 className="text-lg font-semibold text-white mb-4">🤖 AI Přehledy</h2>
+      <h2 className="text-lg font-semibold text-white mb-4">{t("periodicSummary.title")}</h2>
 
       <div className="flex gap-2 mb-4">
-        {(["weekly", "monthly", "yearly"] as const).map((t) => (
+        {(["weekly", "monthly", "yearly"] as const).map((periodType) => (
           <button
-            key={t}
-            onClick={() => setType(t)}
+            key={periodType}
+            onClick={() => setType(periodType)}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
-              type === t
+              type === periodType
                 ? "bg-indigo-500/20 text-white border border-indigo-400/30"
                 : "text-white/30 hover:text-white/50"
             }`}
           >
-            {t === "weekly" ? "📅 Týdenní" : t === "monthly" ? "🗓️ Měsíční" : "📆 Roční"}
+            {periodType === "weekly" ? t("periodicSummary.tab_weekly") : periodType === "monthly" ? t("periodicSummary.tab_monthly") : t("periodicSummary.tab_yearly")}
           </button>
         ))}
       </div>
 
       {/* Existing report (from cron) */}
       {loadingReport && (
-        <div className="p-4 text-white/30 text-sm text-center">⏳ Načítám...</div>
+        <div className="p-4 text-white/30 text-sm text-center">{t("periodicSummary.loading")}</div>
       )}
 
       {analysis && (
         <div className="p-4 bg-indigo-500/5 border border-indigo-400/10 rounded-xl mb-4">
           {reportMeta && (
             <div className="text-xs text-white/30 mb-2">
-              Vygenerováno {new Date(reportMeta.created_at).toLocaleDateString("cs-CZ")} · období {reportMeta.period_start} až {reportMeta.period_end}
+              {t("periodicSummary.generated_at", { date: new Date(reportMeta.created_at).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US"), start: reportMeta.period_start, end: reportMeta.period_end })}
             </div>
           )}
           {!reportMeta && (
-            <div className="text-xs text-white/30 mb-2">Právě vygenerováno</div>
+            <div className="text-xs text-white/30 mb-2">{t("periodicSummary.just_generated")}</div>
           )}
           <Markdown content={analysis} />
         </div>
@@ -112,7 +114,7 @@ export function PeriodicSummary({ userId }: Props) {
 
       {!loadingReport && !analysis && (
         <div className="p-4 text-white/20 text-sm text-center mb-2">
-          Zatím žádný {periodLabel.toLowerCase()} report
+          {t("periodicSummary.no_report", { period: periodLabel.toLowerCase() })}
         </div>
       )}
 
@@ -122,14 +124,14 @@ export function PeriodicSummary({ userId }: Props) {
         disabled={loading}
         className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 text-white/50 hover:text-white/70 text-sm transition-colors"
       >
-        {loading ? "⏳ AI přemýšlí..." : `🔄 Znovu vygenerovat ${periodLabel.toLowerCase()} přehled`}
+        {loading ? t("periodicSummary.generating") : t("periodicSummary.generate", { period: periodLabel.toLowerCase() })}
       </button>
 
       {error && (
         <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
           {error === "Not enough data yet"
-            ? "Zatím není dostatek dat. Potřebuješ alespoň 2 dny záznamů."
-            : `Chyba: ${error}`}
+            ? t("periodicSummary.not_enough_data")
+            : t("periodicSummary.error_prefix", { error })}
         </div>
       )}
     </div>

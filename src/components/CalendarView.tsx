@@ -2,12 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
-
-const DAY_NAMES = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
-const MONTH_NAMES = [
-  "Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
-  "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
-];
+import { useTranslation } from "@/lib/i18n";
 
 interface CalendarViewProps {
   entries: DailyEntry[];
@@ -15,6 +10,7 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
+  const { t, lang } = useTranslation();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -71,6 +67,12 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
   };
 
   const selectedEntry = selectedDate ? moodMap[selectedDate] : null;
+  const dayNames: string[] = Array.isArray(t("calendar.day_names"))
+    ? (t("calendar.day_names") as unknown as string[])
+    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const monthNames: string[] = Array.isArray(t("calendar.month_names"))
+    ? (t("calendar.month_names") as unknown as string[])
+    : ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
   return (
     <div className="glass-card">
@@ -80,7 +82,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
           ←
         </button>
         <h2 className="text-lg font-semibold">
-          {MONTH_NAMES[viewMonth]} {viewYear}
+          {monthNames[viewMonth]} {viewYear}
         </h2>
         <button onClick={nextMonth} className="btn-glass text-sm px-3">
           →
@@ -89,7 +91,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
 
       {/* Day headers */}
       <div className="grid grid-cols-7 mb-2">
-        {DAY_NAMES.map((d) => (
+        {dayNames.map((d) => (
           <div key={d} className="text-center text-[10px] text-white/25 uppercase">
             {d}
           </div>
@@ -139,7 +141,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl">{MOOD_EMOJIS[selectedEntry.mood]}</span>
             <span className="font-medium">
-              {new Date(selectedEntry.date).toLocaleDateString("cs-CZ", {
+              {new Date(selectedEntry.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
@@ -170,7 +172,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
 
           {selectedEntry.gratitude.length > 0 && (
             <div className="text-sm text-white/40">
-              <div className="text-[10px] uppercase text-white/20 mb-1">Vděčnost</div>
+              <div className="text-[10px] uppercase text-white/20 mb-1">{t("calendar.gratitude")}</div>
               {selectedEntry.gratitude.map((g, i) => (
                 <div key={i} className="text-xs">• {g}</div>
               ))}
@@ -193,7 +195,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
             }}
             className="btn-glass text-sm w-full mt-3 py-2 text-center"
           >
-            ✏️ Upravit tento záznam
+            {t("calendar.edit_entry")}
           </button>
         </div>
       )}

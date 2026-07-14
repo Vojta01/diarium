@@ -12,37 +12,31 @@ import { useTranslation } from "@/lib/i18n";
 
 // ── Mood ──
 const MOODS = [
-  { value: 5, emoji: "😄", label: "skvěle", color: "#22c55e" },
-  { value: 4, emoji: "🙂", label: "dobře", color: "#3b82f6" },
-  { value: 3, emoji: "😐", label: "jde to", color: "#eab308" },
-  { value: 2, emoji: "😟", label: "špatně", color: "#f97316" },
-  { value: 1, emoji: "😡", label: "hrozně", color: "#ef4444" },
+  { value: 5, emoji: "😄", color: "#22c55e" },
+  { value: 4, emoji: "🙂", color: "#3b82f6" },
+  { value: 3, emoji: "😐", color: "#eab308" },
+  { value: 2, emoji: "😟", color: "#f97316" },
+  { value: 1, emoji: "😡", color: "#ef4444" },
 ];
-
-const MOOD_LABELS: Record<number, string> = {
-  5: "Skvěle 😄", 4: "Dobře 🙂", 3: "Jde to 😐", 2: "Špatně 😟", 1: "Hrozně 😡"
-};
 
 // ── Sleep quality ──
 const SLEEP_QUALITY = [
-  { value: 3, emoji: "😴", label: "Skvělý" },
-  { value: 2, emoji: "🥱", label: "Normální" },
-  { value: 1, emoji: "😪", label: "Špatný" },
+  { value: 3, emoji: "😴" },
+  { value: 2, emoji: "🥱" },
+  { value: 1, emoji: "😪" },
 ];
-
-const SLEEP_LABELS: Record<number, string> = { 3: "Skvělý 😴", 2: "Normální 🥱", 1: "Špatný 😪" };
 
 // ── Stress levels ──
 const STRESS_LEVELS = [
-  { value: 1, emoji: "😌", label: "Nízký" },
-  { value: 2, emoji: "🙂", label: "Mírný" },
-  { value: 3, emoji: "😐", label: "Střední" },
-  { value: 4, emoji: "😰", label: "Vysoký" },
-  { value: 5, emoji: "😤", label: "Extrémní" },
+  { value: 1, emoji: "😌" },
+  { value: 2, emoji: "🙂" },
+  { value: 3, emoji: "😐" },
+  { value: 4, emoji: "😰" },
+  { value: 5, emoji: "😤" },
 ];
 
 const STRESS_LABELS: Record<number, string> = {
-  1: "Nízký 😌", 2: "Mírný 🙂", 3: "Střední 😐", 4: "Vysoký 😰", 5: "Extrémní 😤"
+  1: "checkin.stress_1", 2: "checkin.stress_2", 3: "checkin.stress_3", 4: "checkin.stress_4", 5: "checkin.stress_5",
 };
 
 // ── Mood-based quotes ──
@@ -74,22 +68,10 @@ const MOOD_QUOTES: Record<number, string[]> = {
   ],
 };
 
-// ── Activity groups (category → group name) ──
-const CATEGORY_GROUPS: Record<string, string> = {
-  "sociální": "Společenské",
-  "volný čas": "Záliby", 
-  "jídlo": "Jídlo",
-  "sport": "Zdraví",
-  "zdraví": "Zdraví",
-  "wellness": "Mé lepší já",
-  "práce": "Práce",
-  "počasí": "Počasí",
-  "domácí práce": "Domácí práce",
-  "vlastní": "Vlastní",
-  "obecné": "Ostatní",
-};
+// ── Activity groups (category → group name) — uses i18n translations
+const CATEGORY_ORDER = ["sociální", "práce", "volný čas", "sport", "jídlo", "zdraví", "wellness", "domácí práce", "počasí", "vlastní", "obecné"];
 
-function groupActivities(defs: ActivityDef[]): { title: string; items: ActivityDef[] }[] {
+function groupActivities(defs: ActivityDef[], getCategoryName: (key: string) => string): { title: string; items: ActivityDef[] }[] {
   const groups: Record<string, ActivityDef[]> = {};
   for (const d of defs) {
     const cat = d.category || "obecné";
@@ -100,7 +82,7 @@ function groupActivities(defs: ActivityDef[]): { title: string; items: ActivityD
   const order = ["sociální", "práce", "volný čas", "sport", "jídlo", "zdraví", "wellness", "domácí práce", "počasí", "vlastní", "obecné"];
   return order
     .filter(cat => groups[cat]?.length > 0)
-    .map(cat => ({ title: CATEGORY_GROUPS[cat] || cat, items: groups[cat] }));
+    .map(cat => ({ title: getCategoryName(cat), items: groups[cat] }));
 }
 
 // ── Reduced habits ── (loaded dynamically below)
@@ -174,7 +156,7 @@ function CompletedCard({
   data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; dateStr: string;
   habitDefs: HabitDef[];
 }) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const mood = MOODS.find(m => m.value === data.mood);
   const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
   const stressLevel = data.stress > 0 ? STRESS_LEVELS[data.stress - 1] : null;
@@ -194,19 +176,19 @@ function CompletedCard({
   }));
 
   return (
-    <div className="min-h-screen px-4 pt-4 pb-24 space-y-4">
+    <div className="min-h-screen px-4 pt-4 pb-36 space-y-4">
       {/* Hero banner */}
       {isToday && (
         <div className="text-center animate-fade-in pb-2">
           <div className="text-5xl mb-1">{data.mood >= 4 ? "✨" : data.mood >= 2 ? "🌟" : "💪"}</div>
           <h2 className="text-xl font-bold text-white">
-            {data.mood >= 4 ? "Skvělý den!" : data.mood >= 2 ? "Den zapsán" : "I to se počítá"}
+            {data.mood >= 4 ? t("completedCard.great_day") : data.mood >= 2 ? t("completedCard.day_recorded") : t("completedCard.it_counts")}
           </h2>
         </div>
       )}
 
       <p className="text-center text-white/25 text-sm">
-        {new Date(dateStr).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long" })}
+        {new Date(dateStr).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", { weekday: "long", day: "numeric", month: "long" })}
       </p>
 
       {/* Main mood pill */}
@@ -216,7 +198,7 @@ function CompletedCard({
           borderColor: (mood?.color || "#6366f1") + "30",
         }}>
           <span className="text-3xl">{mood?.emoji}</span>
-          <span className="text-white font-medium">{mood?.label}</span>
+          <span className="text-white font-medium">{t(`mood.mood_${mood?.value}e`)}</span>
         </div>
       </div>
 
@@ -227,18 +209,18 @@ function CompletedCard({
           <div className="p-2">
             <div className="text-2xl mb-0.5">{sleep?.emoji || "—"}</div>
             <div className="text-[10px] text-white/30">{t("completedCard.sleep")}</div>
-            <div className="text-[11px] text-white/60 font-medium">{sleep?.label || t("common.no_data")}</div>
+            <div className="text-[11px] text-white/60 font-medium">{sleep ? t(`sleep.sleep_${sleep.value}e`) : t("common.no_data")}</div>
           </div>
           {/* Stress */}
           <div className="p-2">
             <div className="text-2xl mb-0.5">{stressLevel?.emoji || "—"}</div>
             <div className="text-[10px] text-white/30">{t("completedCard.stress")}</div>
-            <div className="text-[11px] text-white/60 font-medium">{stressLevel?.label || "—"}</div>
+            <div className="text-[11px] text-white/60 font-medium">{stressLevel ? t(`stress.stress_${stressLevel.value}`) : "—"}</div>
           </div>
           {/* Activities count */}
           <div className="p-2">
             <div className="text-2xl mb-0.5">{data.activities.length || "—"}</div>
-            <div className="text-[10px] text-white/30">Aktivit</div>
+            <div className="text-[10px] text-white/30">{t("completedCard.activities_short")}</div>
             <div className="text-[11px] text-white/60 font-medium">
               {data.activities.length > 0 ? data.activities.slice(0, 2).join(", ") : t("activities.none")}
             </div>
@@ -347,7 +329,7 @@ function CompletedCard({
 
 // ── MAIN COMPONENT ──
 export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => void; initialDate?: string | null }) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
   const [goals, setGoals] = useState<Goal[]>([]);
   const [saving, setSaving] = useState(false);
@@ -794,7 +776,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               currentDate === today ? "bg-indigo-500/20 text-white" : "text-white/30 hover:text-white/50"
             }`}
           >
-            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" })}
+            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", { day: "numeric", month: "short" })}
           </button>
           <button
             onClick={() => navigateDate(1)}
@@ -825,7 +807,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
         <div className="text-center">
           <span className={`text-sm font-medium ${currentDate === today ? "text-white" : "text-white/40"}`}>
-            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "long" })}
+            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", { day: "numeric", month: "long" })}
           </span>
         </div>
         <button
@@ -857,7 +839,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 }}
               >
                 <span className="text-3xl">{m.emoji}</span>
-                <span className="text-[10px] text-white/50">{m.label}</span>
+                <span className="text-[10px] text-white/50">{t(`mood.mood_${m.value}`)}</span>
               </button>
             ))}
           </div>
@@ -876,7 +858,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 }`}
               >
                 <span className="text-3xl">{s.emoji}</span>
-                <span className="text-[10px] text-white/40">{s.label}</span>
+                <span className="text-[10px] text-white/40">{t(`sleep.sleep_${s.value}`)}</span>
               </button>
             ))}
           </div>
@@ -884,7 +866,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
         {/* ── ACTIVITIES ── */}
         <div className="space-y-1">
-          {groupActivities(activityDefs).map(cat => (
+          {groupActivities(activityDefs, k => t("categoryGroups." + k)).map(cat => (
             <Section key={cat.title} title={cat.title}>
               <div className="flex flex-wrap gap-2">
                 {cat.items.map(a => {
@@ -978,12 +960,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             <div>
               <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">{t("activities.your_activities")}</p>
               <p className="text-[10px] text-white/25 mb-2">
-                {t("activities.activities_summary", { count: activityDefs.length, categories: groupActivities(activityDefs).length })}
+                {t("activities.activities_summary", { count: activityDefs.length, categories: groupActivities(activityDefs, k => "").length })}
               </p>
               
               {/* Activity list with remove buttons */}
               <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
-                {groupActivities(activityDefs).map(cat => (
+                {groupActivities(activityDefs, k => t("categoryGroups." + k)).map(cat => (
                   <div key={cat.title}>
                     <p className="text-[10px] text-white/20 uppercase tracking-wider px-1 py-1">{cat.title}</p>
                     {cat.items.map(a => (
@@ -1126,7 +1108,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 }`}
               >
                 <span className="text-lg">{s.emoji}</span>
-                <span className="text-[9px] text-white/40">{s.label}</span>
+                <span className="text-[9px] text-white/40">{t(STRESS_LABELS[s.value])}</span>
               </button>
             ))}
           </div>
@@ -1227,7 +1209,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             <div>
               <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">{t("addActivity.category_label")}</label>
               <div className="grid grid-cols-3 gap-1.5">
-                {Object.entries(CATEGORY_GROUPS).map(([key, label]) => (
+                {CATEGORY_ORDER.map((key) => (
                   <button
                     key={key}
                     onClick={() => setNewItemCategory(key)}
@@ -1237,7 +1219,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
                     }`}
                   >
-                    {label}
+                    {t("categoryGroups." + key)}
                   </button>
                 ))}
               </div>
@@ -1268,8 +1250,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       </div>
       )}
 
-      {/* Bottom area: Save button + Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
+      {/* Bottom area: Save button + Navigation — sits above the TabBar */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
         {/* Save button */}
         <div className="p-3">
           <button

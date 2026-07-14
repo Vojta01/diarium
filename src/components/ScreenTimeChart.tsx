@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { DailyEntry } from "@/lib/stats";
+import { useTranslation } from "@/lib/i18n";
 
 interface ScreenTimeEntry extends DailyEntry {
   phone_screen_time?: number;
@@ -35,8 +36,6 @@ function getBarColor(seconds: number): { bg: string; label: string } {
   return { bg: "#ef4444", label: "🔴 6h+" };                              // >6h
 }
 
-const WEEKDAYS_CZ = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
-
 /** Max height of bar area in pixels (Tailwind h-36 = 9rem = 144px) */
 const BAR_AREA_H = 144;
 
@@ -53,6 +52,7 @@ const APP_COLORS = [
 ];
 
 export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
+  const { t, lang } = useTranslation();
   const last7Days = useMemo(() => {
     const typed = entries as ScreenTimeEntry[];
     const withData = typed.filter(e => e.phone_screen_time && e.phone_screen_time > 0);
@@ -103,14 +103,18 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     return { appColorMap, days: last7Days };
   }, [last7Days]);
 
+  const weekdays: string[] = Array.isArray(t("screenTime.weekdays"))
+    ? (t("screenTime.weekdays") as unknown as string[])
+    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
   if (!last7Days || last7Days.length === 0) {
     return (
       <div className="glass-card">
-        <h2 className="text-lg font-semibold mb-2">📱 Screen Time</h2>
+        <h2 className="text-lg font-semibold mb-2">{t("screenTime.title")}</h2>
         <div className="text-center py-8 text-white/30 text-sm">
-          Zatím žádná data o screen timu.
+          {t("screenTime.no_data")}
           <br />
-          <span className="text-[11px]">Data se sbírají z Home Assistant — první data budou zítra.</span>
+          <span className="text-[11px]">{t("screenTime.no_data_hint")}</span>
         </div>
       </div>
     );
@@ -127,31 +131,31 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
 
   return (
     <div className="glass-card">
-      <h2 className="text-lg font-semibold mb-1">📱 Screen Time</h2>
-      <p className="text-white/30 text-xs mb-4">posledních 7 dní</p>
+      <h2 className="text-lg font-semibold mb-1">{t("screenTime.title")}</h2>
+      <p className="text-white/30 text-xs mb-4">{t("screenTime.last_7_days")}</p>
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold text-white">{formatTime(Math.round(avgTime))}</div>
-          <div className="text-[10px] text-white/30">průměr denně</div>
+          <div className="text-[10px] text-white/30">{t("screenTime.avg_daily")}</div>
         </div>
         <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold text-white">{Math.round(totalHours)}h</div>
-          <div className="text-[10px] text-white/30">celkem</div>
+          <div className="text-[10px] text-white/30">{t("screenTime.total")}</div>
         </div>
         <div className="text-center p-3 rounded-xl bg-white/5">
           <div className="text-xl font-bold" style={{ color: getBarColor(maxTime).bg }}>
             {formatTime(maxTime)}
           </div>
-          <div className="text-[10px] text-white/30">nejvíc</div>
+          <div className="text-[10px] text-white/30">{t("screenTime.max")}</div>
         </div>
       </div>
 
       {/* Screen time bar chart */}
       <div className="mb-6">
         <h3 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-3">
-          ⏱️ Čas na obrazovce
+          {t("screenTime.screen_time_chart")}
         </h3>
 
         {/* Chart area with explicit height */}
@@ -206,7 +210,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     seconds: a.time_sec,
                     color: appData!.appColorMap.get(a.app) || "#6b7280",
                   })),
-                  ...(otherSec > 0 ? [{ name: "Ostatní", seconds: otherSec, color: "#374151" }] : []),
+                  ...(otherSec > 0 ? [{ name: t("screenTime.other"), seconds: otherSec, color: "#374151" }] : []),
                 ].reverse(); // bottom to top
 
                 let cumH = 0;
@@ -222,14 +226,14 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     >
                       {/* Tooltip */}
                       <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[9px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10 flex flex-col gap-0.5">
-                        {[...top3, ...(otherSec > 0 ? [{ app: "Ostatní", time_sec: otherSec }] : [])].map((a: any) => (
+                        {[...top3, ...(otherSec > 0 ? [{ app: t("screenTime.other"), time_sec: otherSec }] : [])].map((a: any) => (
                           <div key={a.app} className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: a.app === "Ostatní" ? "#374151" : appData!.appColorMap.get(a.app) }} />
+                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: a.app === t("screenTime.other") ? "#374151" : appData!.appColorMap.get(a.app) }} />
                             <span className="text-white/60 max-w-[80px] truncate">{a.app}</span>
                             <span className="text-white/80 ml-auto">{formatTime(a.time_sec)}</span>
                           </div>
                         ))}
-                        <div className="border-t border-white/10 pt-0.5 mt-0.5 text-white/50">celkem {formatTime(seconds)}</div>
+                        <div className="border-t border-white/10 pt-0.5 mt-0.5 text-white/50">{t("screenTime.total")} {formatTime(seconds)}</div>
                       </div>
 
                       {/* Stacked segments */}
@@ -288,7 +292,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           <div className="absolute bottom-0 left-0 right-0 flex gap-1.5">
             {last7Days.map((d) => {
               const date = new Date(d.date);
-              const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
+              const dayName = weekdays[(date.getDay() || 7) - 1];
               const isToday = d.date === new Date().toISOString().split("T")[0];
               return (
                 <div key={d.date} className={`flex-1 text-center text-[10px] ${isToday ? "text-white font-semibold" : "text-white/25"}`}>
@@ -303,7 +307,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
       {/* Legend — app colors when available, time-based otherwise */}
       {appData ? (
         <div className="flex items-center gap-2 mb-4 text-[9px] text-white/30 flex-wrap">
-          <span className="text-white/40 mr-1">Appky:</span>
+          <span className="text-white/40 mr-1">{t("screenTime.apps")}</span>
           {[...appData.appColorMap.entries()].slice(0, 6).map(([app, color]) => (
             <span key={app} className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
@@ -313,13 +317,13 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           <span className="mx-1 text-white/10">|</span>
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#374151" }} />
-            Ostatní
+            {t("screenTime.other")}
           </span>
           <span className="ml-auto text-white/15">HA</span>
         </div>
       ) : (
         <div className="flex items-center gap-2 mb-4 text-[9px] text-white/30 flex-wrap">
-          <span className="text-white/40 mr-1">Legenda:</span>
+          <span className="text-white/40 mr-1">{t("screenTime.legend")}</span>
           {[
             { sec: 900, label: "<30m", color: "#22c55e" },
             { sec: 2700, label: "30m–1h", color: "#4ade80" },
@@ -341,7 +345,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
       {unlocksData && (
         <div className="mt-4 pt-4 border-t border-white/5">
           <h3 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-3">
-            🔓 Odemknutí telefonu
+            {t("screenTime.unlocks_chart")}
           </h3>
 
           <div className="relative" style={{ height: 100 + 48 }}>
@@ -403,7 +407,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
             <div className="absolute bottom-0 left-0 right-0 flex gap-1.5">
               {unlocksData.map((d: any) => {
                 const date = new Date(d.date);
-                const dayName = WEEKDAYS_CZ[(date.getDay() || 7) - 1];
+                const dayName = weekdays[(date.getDay() || 7) - 1];
                 const isToday = d.date === new Date().toISOString().split("T")[0];
                 return (
                   <div key={d.date} className={`flex-1 text-center text-[10px] ${isToday ? "text-purple-300 font-semibold" : "text-white/25"}`}>
@@ -415,7 +419,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           </div>
 
           <div className="flex items-center gap-2 mt-3 text-[9px] text-white/30">
-            <span className="text-white/40 mr-1">Legenda:</span>
+            <span className="text-white/40 mr-1">{t("screenTime.legend")}</span>
             {[
               { val: 15, label: "<30×", color: "#22c55e" },
               { val: 45, label: "30–60×", color: "#3b82f6" },
