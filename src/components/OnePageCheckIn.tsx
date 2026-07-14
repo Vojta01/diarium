@@ -367,6 +367,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [newItemName, setNewItemName] = useState("");
   const [newItemIcon, setNewItemIcon] = useState("📌");
   const [newItemCategory, setNewItemCategory] = useState("vlastní");
+  const [activityError, setActivityError] = useState<string | null>(null);
   const flags = getFeatureFlags();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
@@ -481,10 +482,23 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
   // Add custom activity (persisted to DB)
   const addCustomActivity = async () => {
-    const name = prompt("Název aktivity (např. běhání):");
-    if (!name) return;
-    const icon = prompt("Emoji (např. 🏃):") || "📌";
-    const category = prompt("Kategorie (volný čas, sport, práce, vlastní...):") || "vlastní";
+    setNewItemName("");
+    setNewItemIcon("📌");
+    setNewItemCategory("vlastní");
+    setActivityError(null);
+    setShowAddActivity(true);
+  };
+
+  const confirmAddCustomActivity = async () => {
+    const name = newItemName.trim();
+    if (!name) {
+      setActivityError("Zadej název aktivity");
+      return;
+    }
+    const icon = newItemIcon.trim() || "📌";
+    const category = newItemCategory;
+
+    setShowAddActivity(false);
     
     const key = name.toLowerCase().replace(/\s+/g, "_");
     const newActivity: ActivityDef = { key, label: name, icon, category, color: "#6366f1", source: "custom" };
@@ -495,11 +509,20 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     // Persist to DB
     if (userId) {
       const tok = getAccessToken();
-      fetch("/api/manage-activities", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ action: "add", userId, key, label: name, icon, category }),
-      }).catch(() => {});
+      try {
+        const res = await fetch("/api/manage-activities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
+          body: JSON.stringify({ action: "add", userId, key, label: name, icon, category }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          setActivityError(`Nepodařilo se uložit aktivitu: ${errData.error || res.statusText}`);
+          // Keep in local state — user can retry later
+        }
+      } catch (e: any) {
+        setActivityError(`Chyba sítě: ${e.message || "neznámá"}`);
+      }
     }
   };
 
@@ -525,7 +548,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         method: "POST",
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "remove", userId, key: activityKey }),
-      }).catch(() => {});
+      }).then(res => {
+        if (!res.ok) res.json().then(d => setActivityError(`Chyba při odebírání: ${d.error || res.statusText}`)).catch(() => {});
+      }).catch(e => setActivityError(`Chyba sítě při odebírání: ${e.message}`));
     }
   };
 
@@ -544,7 +569,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         method: "POST",
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "restore", userId, key: activityKey }),
-      }).catch(() => {});
+      }).then(res => {
+        if (!res.ok) res.json().then(d => setActivityError(`Chyba při obnově: ${d.error || res.statusText}`)).catch(() => {});
+      }).catch(e => setActivityError(`Chyba sítě při obnově: ${e.message}`));
     }
   };
 
@@ -1172,6 +1199,93 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           />
         </div>
       </div>
+
+      {/* Error banner */}
+      {activityError && !showAddActivity && (
+        <div className="fixed top-4 left-4 right-4 z-50 bg-red-500/20 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-300 flex items-center justify-between shadow-lg backdrop-blur-lg">
+          <span>{activityError}</span>
+          <button onClick={() => setActivityError(null)} className="text-red-400/60 hover:text-red-300 ml-2 shrink-0">✕</button>
+        </div>
+      )}
+
+      {/* ── ADD ACTIVITY MODAL ── */}
+      {showAddActivity && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddActivity(false)}>
+        <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="px-5 pt-5 pb-2">
+            <h3 className="text-base font-semibold text-white">➕ Přidat aktivitu</h3>
+          </div>
+
+          <div className="px-5 pb-2 space-y-3">
+            {/* Activity name */}
+            <div>
+              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">Název</label>
+              <input
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                placeholder="Např. běhání"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
+                autoFocus
+                onKeyDown={e => { if (e.key === "Enter") confirmAddCustomActivity(); }}
+              />
+            </div>
+
+            {/* Emoji */}
+            <div>
+              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">Emoji</label>
+              <input
+                value={newItemIcon}
+                onChange={e => setNewItemIcon(e.target.value)}
+                placeholder="🏃"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
+              />
+            </div>
+
+            {/* Category grid */}
+            <div>
+              <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">Kategorie</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {Object.entries(CATEGORY_GROUPS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setNewItemCategory(key)}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      newItemCategory === key
+                        ? "bg-indigo-500/30 text-indigo-200 ring-1 ring-indigo-400/50"
+                        : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Inline error */}
+            {activityError && (
+              <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{activityError}</div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 px-5 pb-5 pt-2">
+            <button
+              onClick={() => { setShowAddActivity(false); setActivityError(null); }}
+              className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white/70 hover:bg-white/10 transition-colors text-sm font-medium"
+            >
+              Zrušit
+            </button>
+            <button
+              onClick={confirmAddCustomActivity}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white transition-colors text-sm font-medium"
+            >
+              Přidat
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* Bottom area: Save button + Navigation */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
