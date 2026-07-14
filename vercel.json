@@ -3,14 +3,6 @@
     {
       "path": "/api/push/send",
       "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/cron/ai-report?type=weekly&secret=c2417f506e1f217a921d0c67177c169f",
-      "schedule": "0 20 * * 0"
-    },
-    {
-      "path": "/api/cron/ai-report?type=monthly&secret=c2417f506e1f217a921d0c67177c169f",
-      "schedule": "0 8 1 * *"
     }
   ]
 }

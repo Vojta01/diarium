@@ -1,6 +1,7 @@
 "use client";
 
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 
 export interface DailyEntry {
   date: string;
@@ -24,7 +25,7 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
   let userId: string | null = null;
   if (typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+      const stored = localStorage.getItem(getSupabaseAuthTokenKey());
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.user?.id) {

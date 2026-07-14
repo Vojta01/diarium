@@ -6,6 +6,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { StatsDashboard } from "@/components/StatsDashboard";
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 import type { User } from "@supabase/supabase-js";
 
 type View = "dashboard" | "checkin" | "stats";
@@ -41,7 +42,7 @@ export default function Home() {
 
   useEffect(() => {
     // Try manual localStorage first (set by callback page)
-    const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
+    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
     if (stored) {
       try {
         const parsed = JSON.parse(stored);

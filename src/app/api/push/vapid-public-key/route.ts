@@ -1,6 +1,6 @@
-export const runtime = "edge";
+import { VAPID_PUBLIC_KEY } from "@/lib/vapid";
 
-const VAPID_PUBLIC_KEY = "BDQqhS8ckDCRGmoE6gfdRsoM9rGTbP9188B_Ue-XpHV3oNG9bbkG3rpLLONLwVT3D_mJFEhAjzhE2inp_hc0POY";
+export const runtime = "edge";
 
 export async function GET() {
   return Response.json({ publicKey: VAPID_PUBLIC_KEY });

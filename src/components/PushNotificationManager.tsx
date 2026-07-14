@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-
-const VAPID_PUBLIC_KEY =
-  "BDQqhS8ckDCRGmoE6gfdRsoM9rGTbP9188B_Ue-XpHV3oNG9bbkG3rpLLONLwVT3D_mJFEhAjzhE2inp_hc0POY";
+import { VAPID_PUBLIC_KEY } from "@/lib/vapid";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
