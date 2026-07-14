@@ -392,7 +392,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     // Load activities
     getActivities().then(defs => {
       if (defs.length > 0) setActivityDefs(defs);
-    }).catch(() => {});
+    }).catch(e => console.error('Failed to load activities:', e));
     
     // Load hidden activities (for restore UI)
     getHiddenActivities().then(defs => {
