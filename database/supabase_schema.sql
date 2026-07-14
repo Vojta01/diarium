@@ -1,7 +1,7 @@
 -- ============================================================
 -- DIARIUM — DATABÁZOVÉ SCHÉMA
 -- Spustit v Supabase SQL Editoru:
--- https://supabase.com/dashboard/project/vmqbslghzgfotwhzgawa/sql/new
+-- https://supabase.com/dashboard/project/YOUR_PROJECT_REF/sql/new
 -- ============================================================
 
 -- 1. PROFILES (napojené na auth.users)

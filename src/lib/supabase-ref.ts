@@ -3,12 +3,10 @@
  *
  * Supabase localStorage keys use the format `sb-{project_ref}-auth-token`.
  * Instead of hardcoding the project ref, we extract it from
- * NEXT_PUBLIC_SUPABASE_URL (e.g. `https://vmqbslghzgfotwhzgawa.supabase.co`).
- *
- * Falls back to the original project ref for backwards compatibility.
+ * NEXT_PUBLIC_SUPABASE_URL (e.g. `https://abc123.supabase.co`).
  */
 
-const FALLBACK_REF = "vmqbslghzgfotwhzgawa";
+const FALLBACK_REF = "";
 
 function getSupabaseUrl(): string {
   // process.env.NEXT_PUBLIC_SUPABASE_URL is inlined at build time for client components

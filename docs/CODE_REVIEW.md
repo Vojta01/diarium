@@ -8,7 +8,7 @@ Diarium je denní check-in aplikace (PWA) umožňující uživatelům zaznamená
 - **Stack:** Next.js 16 (Turbopack), React 19, TypeScript, Tailwind v4, Supabase
 - **AI:** DeepSeek V4 Pro / DeepSeek Chat
 - **Hosting:** Vercel
-- **DB:** Supabase PostgreSQL (project: `vmqbslghzgfotwhzgawa`)
+- **DB:** Supabase PostgreSQL (project: `YOUR_PROJECT_REF`)
 
 ---
 
