@@ -10,6 +10,7 @@
   <p><strong>Your daily mood & diary companion — AI-powered, PWA-first, built with Next.js 16</strong></p>
 
   <p>
+    <a href="https://diarium.vercel.app">► Live Demo</a> •
     <a href="#features">Features</a> •
     <a href="#tech-stack">Tech Stack</a> •
     <a href="#architecture">Architecture</a> •
@@ -32,7 +33,7 @@
   </p>
 
   <p>
-    <img src="https://img.shields.io/github/license/vojtaid/diarium?style=flat-square" alt="MIT License">
+    <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome">
   </p>
 
@@ -46,7 +47,7 @@
 
 Built for anyone who wants to understand their emotional well-being through data, Diarium combines the simplicity of a daily diary with the analytical power of AI — all wrapped in an installable, offline-capable PWA.
 
-> **Portfolio note:** This project demonstrates full-stack Next.js development — Supabase Auth & Storage, push notifications, cron jobs, PWA service workers, AI integration, and feature-flag-driven architecture.
+This project demonstrates full-stack Next.js development: Supabase Auth & Storage, push notifications via Upstash Redis, cron jobs, PWA service workers, AI-powered analysis, and feature-flag-driven architecture.
 
 ---
 
@@ -227,7 +228,7 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be prompted to si
 | `UPSTASH_REDIS_REST_URL` | ⚠️ | Upstash Redis REST URL for storing push subscriptions |
 | `UPSTASH_REDIS_REST_TOKEN` | ⚠️ | Upstash Redis REST token |
 | `CRON_SECRET` | ⚠️ | Secret to authenticate Vercel Cron Job requests |
-| `NEXT_PUBLIC_FEATURES` | ❌ | Comma-separated feature flags (defaults to `core`) |
+| `NEXT_PUBLIC_FEATURES` | ❌ | Feature flags (defaults to `core`; set `personal` for full version) |
 
 > 📄 See [`.env.example`](./.env.example) for a complete template with annotations.
 
@@ -277,7 +278,7 @@ vercel env add NEXT_PUBLIC_VAPID_PUBLIC_KEY
 vercel env add VAPID_EMAIL
 ```
 
-> **Important:** Set `NEXT_PUBLIC_FEATURES=core` in production to keep the portfolio-facing version clean.
+> By default, Diarium runs in **core** mode — no extra configuration needed. See [Feature Flags](#-feature-flags) for details on the `personal` mode.
 
 ---
 
@@ -295,12 +296,13 @@ diarium/
 │   └── icon-512-maskable.png        # Maskable PWA icon
 │
 ├── src/
+│   ├── middleware.ts               # Supabase auth middleware (session refresh)
+│   │
 │   ├── app/
 │   │   ├── layout.tsx               # Root layout (PWA meta, SW registration)
 │   │   ├── globals.css              # Tailwind CSS global styles
 │   │   ├── page.tsx                 # Main page (dashboard + check-in)
 │   │   ├── favicon.ico
-│   │   ├── middleware.ts            # Supabase auth middleware (session refresh)
 │   │   │
 │   │   ├── stats/
 │   │   │   └── page.tsx             # Stats & analytics page
@@ -315,7 +317,6 @@ diarium/
 │   │       ├── manage-habits/route.ts       # CRUD habits
 │   │       ├── seed-activities/route.ts     # Seed default activities
 │   │       ├── seed-habits/route.ts         # Seed default habits
-│   │       ├── fix-vojta-habits/route.ts    # Migration helper
 │   │       │
 │   │       ├── ai/
 │   │       │   ├── reflect/route.ts    # Daily AI reflection (7-day context)
@@ -359,7 +360,6 @@ diarium/
 ├── vercel.json                        # Vercel config + cron schedule
 ├── next.config.ts                     # Next.js configuration
 ├── postcss.config.mjs                 # PostCSS config (Tailwind 4)
-├── tailwind.config.ts                 # Tailwind CSS configuration
 ├── tsconfig.json                      # TypeScript strict mode config
 ├── eslint.config.mjs                  # ESLint flat config
 ├── .env.example                       # Environment variable template
