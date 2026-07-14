@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { DailyEntry } from "@/lib/stats";
+import { useTranslation } from "@/lib/i18n";
 
 type Tab = "activities" | "habits" | "screentime" | "unlocks" | "trends";
 
@@ -408,20 +409,67 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
     };
   }, [entries]);
 
-  // ── Mood color helper ──
+  // ── Mood color helper (smooth gradient across 1-5) ──
   const moodColor = (avgMood: number) => {
-    if (avgMood >= 4) return "#22c55e";
-    if (avgMood >= 3) return "#eab308";
-    return "#ef4444";
+    const colors = [
+      { mood: 1, hex: { r: 0xef, g: 0x44, b: 0x44 } }, // red — hrozně
+      { mood: 2, hex: { r: 0xf9, g: 0x73, b: 0x16 } }, // orange — špatně
+      { mood: 3, hex: { r: 0xea, g: 0xb3, b: 0x08 } }, // yellow — jde to
+      { mood: 4, hex: { r: 0x84, g: 0xcc, b: 0x16 } }, // light green — dobře
+      { mood: 5, hex: { r: 0x22, g: 0xc5, b: 0x5e } }, // green — skvěle
+    ];
+    if (avgMood <= 1) return "#ef4444";
+    if (avgMood >= 5) return "#22c55e";
+    const idx = Math.min(Math.floor(avgMood - 1), 3);
+    const t = avgMood - (idx + 1);
+    const lower = colors[idx];
+    const upper = colors[idx + 1];
+    const r = Math.round(lower.hex.r * (1 - t) + upper.hex.r * t);
+    const g = Math.round(lower.hex.g * (1 - t) + upper.hex.g * t);
+    const b = Math.round(lower.hex.b * (1 - t) + upper.hex.b * t);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   };
 
-  // ── Cohen's d interpretation ──
-  const dLabel = (d: number) => {
+  // ── Plain-language significance badge ──
+  const significanceBadge = (sig: string) => {
+    switch (sig) {
+      case "***": return { text: "Silná souvislost", className: "text-emerald-300 bg-emerald-500/10 border border-emerald-500/20" };
+      case "**": return { text: "Střední souvislost", className: "text-yellow-300 bg-yellow-500/10 border border-yellow-500/20" };
+      case "*": return { text: "Slabá souvislost", className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
+      case "~": return { text: "Slabá souvislost", className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
+      default: return { text: "Bez souvislosti", className: "text-white/30 bg-white/5 border border-white/10" };
+    }
+  };
+
+  // ── Plain-language effect size ──
+  const effectLabel = (d: number) => {
     const abs = Math.abs(d);
-    if (abs < 0.2) return "zanedbatelný";
-    if (abs < 0.5) return "malý";
-    if (abs < 0.8) return "střední";
-    return "velký";
+    let size: string;
+    if (abs < 0.2) size = "Zanedbatelný";
+    else if (abs < 0.5) size = "Malý";
+    else if (abs < 0.8) size = "Střední";
+    else size = "Velký";
+    const direction = d > 0.1 ? "pozitivní" : d < -0.1 ? "negativní" : "neutrální";
+    return `${size} vliv (${direction})`;
+  };
+
+  // ── Human-readable mood summary ──
+  const moodSummary = (name: string, moodWith: number, moodWithout: number, d: number) => {
+    const diff = moodWith - moodWithout;
+    if (Math.abs(diff) < 0.15) return `${name}: Podobná nálada s i bez`;
+    if (diff > 0) return `${name}: Dny s aktivitou = nálada o ${diff.toFixed(1)} bodu lepší`;
+    return `${name}: Dny s aktivitou = nálada o ${Math.abs(diff).toFixed(1)} bodu horší`;
+  };
+
+  // ── Human-readable habit summary ──
+  const habitSummary = (name: string, moodWith: number, moodWithout: number, d: number, isNegative: boolean) => {
+    const diff = moodWith - moodWithout;
+    const label = isNegative ? "narušení" : "splnění";
+    if (Math.abs(diff) < 0.15) return `${name}: Žádný rozdíl v náladě`;
+    if ((!isNegative && diff > 0) || (isNegative && diff < 0)) {
+      return `${name}: Při ${label} = nálada o ${Math.abs(diff).toFixed(1)} bodu lepší`;
+    }
+    return `${name}: Při ${label} = nálada o ${Math.abs(diff).toFixed(1)} bodu horší`;
   };
 
   const hasAnyData = activityStats.length > 0 || habitStats.length > 0 || screenTimeStats.length > 0 || unlocksStats.length > 0 || trendData !== null;
@@ -470,13 +518,13 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       </div>
 
       {/* ── Legend ── */}
-      <div className="flex items-center gap-3 text-[9px] text-white/30 flex-wrap">
-        <span>*** p&lt;0.01 (silné)</span>
-        <span>** p&lt;0.05 (průkazné)</span>
-        <span>* p&lt;0.1 (náznak)</span>
-        <span>~ p&lt;0.2 (slabé)</span>
-        <span className="ml-auto">
-          d = Cohenovo d (míra účinku)
+      <div className="flex items-center gap-2 text-[9px] flex-wrap">
+        <span className="px-1.5 py-0.5 rounded text-emerald-300 bg-emerald-500/10 border border-emerald-500/20">Silná souvislost</span>
+        <span className="px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">Střední souvislost</span>
+        <span className="px-1.5 py-0.5 rounded text-orange-300 bg-orange-500/10 border border-orange-500/20">Slabá souvislost</span>
+        <span className="px-1.5 py-0.5 rounded text-white/30 bg-white/5 border border-white/10">Bez souvislosti</span>
+        <span className="ml-auto text-white/25">
+          Porovnáváme průměrnou náladu S aktivitou vs BEZ
         </span>
       </div>
 
@@ -485,9 +533,8 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {/* ── Activities Tab ── */}
         {tab === "activities" && (
           <div>
-            <p className="text-white/40 text-xs mb-2">
-              Cohenovo d porovnává náladu ve dnech s aktivitou vs bez ní.
-              Kladné d = lepší nálada s aktivitou.
+            <p className="text-white/30 text-[10px] mb-3 leading-relaxed">
+              Porovnáváme průměrnou náladu ve dnech, kdy jsi danou aktivitu <span className="text-white/60">dělal/a</span>, oproti dnům <span className="text-white/60">bez ní</span>. Čím větší rozdíl, tím silnější souvislost.
             </p>
             <div className="space-y-2">
               {activityStats.slice(0, 15).map(s => {
@@ -495,6 +542,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                 const hasEffect = Math.abs(s.cohensD) > 0.3;
                 const positive = s.cohensD > 0.1;
                 const negative = s.cohensD < -0.1;
+                const badge = significanceBadge(s.significance);
                 
                 return (
                   <div key={s.name} className={`p-2 rounded-lg ${hasEffect ? "bg-white/5" : "bg-white/2"}`}>
@@ -515,25 +563,23 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                         {s.moodWith.toFixed(1)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 text-[9px]">
+                    <div className="flex items-center gap-1 text-[9px] flex-wrap">
                       <span className={`font-mono ${positive ? "text-emerald-400" : negative ? "text-red-400" : "text-white/30"}`}>
-                        d={s.cohensD > 0 ? "+" : ""}{s.cohensD}
+                        {s.cohensD > 0 ? "+" : ""}{s.cohensD}
                       </span>
                       <span className="text-white/20">·</span>
-                      <span className="text-white/25">{dLabel(s.cohensD)} efekt</span>
+                      <span className="text-white/25">{effectLabel(s.cohensD)}</span>
                       <span className="text-white/20">·</span>
-                      <span className="text-white/25">CI [{s.ci[0]}; {s.ci[1]}]</span>
+                      <span className="text-white/25">Ø s: {s.moodWith.toFixed(1)} / Ø bez: {s.moodWithout.toFixed(1)}</span>
                       <span className="text-white/20">·</span>
-                      <span className="text-white/20">{s.countWith} dní</span>
-                      {s.significance && (
-                        <span className={`ml-auto font-bold ${
-                          s.significance === "***" ? "text-emerald-400" :
-                          s.significance === "**" ? "text-blue-400" :
-                          s.significance === "*" ? "text-yellow-400" : "text-white/20"
-                        }`}>
-                          {s.significance}
-                        </span>
-                      )}
+                      <span className="text-white/20">{s.countWith} dní s</span>
+                      <span className={`ml-auto px-1.5 py-0.5 rounded text-[8px] ${badge.className}`}>
+                        {badge.text}
+                      </span>
+                    </div>
+                    {/* Human-readable summary */}
+                    <div className="mt-1 text-[9px] text-white/40 italic">
+                      {moodSummary(s.name, s.moodWith, s.moodWithout, s.cohensD)}
                     </div>
                   </div>
                 );
@@ -545,11 +591,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {/* ── Habits Tab ── */}
         {tab === "habits" && (
           <div>
-            <p className="text-white/40 text-xs mb-1">
-              Cohenovo d porovnává dny s návykem vs bez. <span className="text-emerald-400">Kladné d</span> = lepší nálada, když je hodnota <b>ano</b>.
+            <p className="text-white/30 text-[10px] mb-1 leading-relaxed">
+              Porovnáváme průměrnou náladu ve dnech, kdy jsi návyk <span className="text-white/60">dodržel/a</span>, oproti dnům <span className="text-white/60">bez dodržení</span>.
             </p>
             <p className="text-white/20 text-[10px] mb-3">
-              U negativních návyků (🍺{" "}alkohol, 🔞{" "}porno apod.) znamená "ano" = narušení. U pozitivních (🧘{" "}meditace, 🏋️{" "}cvičení) "ano" = splněno.
+              U negativních návyků (🍺 alkohol, 🔞 porno apod.) znamená "dodrženo" = <span className="text-emerald-400/60">v pořádku</span> (abstinence). U pozitivních (🧘 meditace, 🏋️ cvičení) "dodrženo" = <span className="text-emerald-400/60">splněno</span>.
             </p>
             <div className="space-y-2">
               {habitStats.map(s => {
@@ -564,30 +610,21 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                   s.name === "masturbace" ? "💦" : "✅";
                 const isNegative = ["alkohol", "porno", "masturbace"].includes(s.name);
                 const hasEffect = Math.abs(s.cohensD) > 0.3;
-                const positive = s.cohensD > 0.1;
-                const negative = s.cohensD < -0.1;
-                
+                const badge = significanceBadge(s.significance);
+
                 // For negative habits, "Ano" means bad (abstinence failed).
                 // For positive habits, "Ano" means good (task done).
                 const withLabel = isNegative ? "⚠️ Narušeno" : "✅ Ano";
                 const withoutLabel = isNegative ? "✅ V pořádku" : "❌ Ne";
 
-                // Flip interpretation for negative habits
-                const moodWithColor = isNegative
-                  ? (s.moodWith < s.moodWithout ? "text-emerald-400" : "text-red-400")
-                  : (s.moodWith > s.moodWithout ? "text-emerald-400" : "text-red-400");
-                
                 return (
                   <div key={s.name} className={`p-3 rounded-lg ${hasEffect ? "bg-white/5 border border-white/5" : "bg-white/2"}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-white/70 font-medium">
                         {icon} {s.name}
                       </span>
-                      <span className={`text-xs font-mono ${
-                        positive ? "text-emerald-400" : negative ? "text-red-400" : "text-white/30"
-                      }`}>
-                        d = {s.cohensD > 0 ? "+" : ""}{s.cohensD}
-                        {s.significance && ` ${s.significance}`}
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] ${badge.className}`}>
+                        {badge.text}
                       </span>
                     </div>
 
@@ -631,9 +668,14 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                       </span>
                     </div>
 
-                    <div className="mt-2 text-[9px] text-white/25 flex gap-2">
-                      <span>Efekt: {dLabel(s.cohensD)}</span>
+                    <div className="mt-1 text-[9px] text-white/25 flex gap-2">
+                      <span>Efekt: {effectLabel(s.cohensD)}</span>
+                      <span>·</span>
                       <span>CI [{s.ci[0]}; {s.ci[1]}]</span>
+                    </div>
+                    {/* Human-readable summary */}
+                    <div className="mt-1 text-[9px] text-white/40 italic">
+                      {habitSummary(s.name, s.moodWith, s.moodWithout, s.cohensD, isNegative)}
                     </div>
                   </div>
                 );
@@ -759,6 +801,14 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
               </div>
             </div>
 
+            {/* Trend summary */}
+            <div className="text-xs text-white/60 mb-2 italic">
+              Tvoje nálada za posledních {trendData.days} dní:{' '}
+              <span className={trendData.slope > 0.2 ? "text-emerald-400 not-italic" : trendData.slope < -0.2 ? "text-red-400 not-italic" : "text-white/40 not-italic"}>
+                {trendData.slope > 0.3 ? "stoupá ↑" : trendData.slope < -0.3 ? "klesá ↓" : "stabilní →"}
+              </span>
+            </div>
+
             {/* Mini line chart */}
             <div className="relative h-24 mb-3">
               {/* Grid lines */}
@@ -775,8 +825,20 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                 <span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
               </div>
 
-              {/* Rolling average line */}
+              {/* Rolling average line with mood-colored dots */}
               <svg className="absolute inset-0 ml-4" viewBox={`0 0 ${trendData.rolling.length - 1} 4`} preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="trendGradient" x1="0" y1="0" x2="1" y2="0">
+                    {trendData.rolling.map((p, i) => (
+                      <stop
+                        key={i}
+                        offset={`${(i / Math.max(trendData.rolling.length - 1, 1)) * 100}%`}
+                        stopColor={moodColor(p.avgMood)}
+                      />
+                    ))}
+                  </linearGradient>
+                </defs>
+                {/* Line */}
                 <polyline
                   points={trendData.rolling.map((p, i) => {
                     const x = i;
@@ -789,12 +851,21 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                <defs>
-                  <linearGradient id="trendGradient" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={moodColor(trendData.firstAvg)} />
-                    <stop offset="100%" stopColor={moodColor(trendData.lastAvg)} />
-                  </linearGradient>
-                </defs>
+                {/* Dots */}
+                {trendData.rolling.map((p, i) => {
+                  const x = i;
+                  const y = 4 - ((p.avgMood - 1) / 4) * 4;
+                  return (
+                    <circle
+                      key={i}
+                      cx={x}
+                      cy={y.toFixed(1)}
+                      r={0.08}
+                      fill={moodColor(p.avgMood)}
+                      opacity={0.8}
+                    />
+                  );
+                })}
               </svg>
 
               {/* Trend arrow annotation */}
@@ -806,11 +877,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             <div className="flex gap-3 text-[10px]">
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
                 <div className="text-white/30">Začátek období</div>
-                <div className="text-white font-mono">{trendData.firstAvg}</div>
+                <div className="text-white font-mono" style={{ color: moodColor(trendData.firstAvg) }}>{trendData.firstAvg}</div>
               </div>
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
                 <div className="text-white/30">Konec období</div>
-                <div className="text-white font-mono">{trendData.lastAvg}</div>
+                <div className="text-white font-mono" style={{ color: moodColor(trendData.lastAvg) }}>{trendData.lastAvg}</div>
               </div>
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
                 <div className="text-white/30">Změna</div>
@@ -821,7 +892,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             </div>
 
             <p className="text-white/20 text-[9px] mt-3 text-center">
-              Čára ukazuje 7denní klouzavý průměr nálady. Barva přechází od začátku (vlevo) ke konci (vpravo) období.
+              Každá tečka = průměrná nálada za 7 dní. Barva ukazuje, jakou měla náladu hodnotu — od červené (špatná) po zelenou (skvělá).
             </p>
           </div>
         )}

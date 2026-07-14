@@ -9,8 +9,10 @@ import { PeriodicSummary } from "@/components/PeriodicSummary";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { useTranslation } from "@/lib/i18n";
 
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"calendar" | "correlation" | "screentime" | "ai" | "year">("calendar");
@@ -41,7 +43,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white/40 text-lg">Načítám statistiky...</div>
+        <div className="text-white/40 text-lg">{t("statsDashboard.loading")}</div>
       </div>
     );
   }
@@ -50,12 +52,12 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
     <div className="min-h-screen p-4 pt-8">
       <header className="text-center mb-6">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-          Diarium
+          {t("statsDashboard.title")}
         </h1>
-        <p className="text-white/40 text-sm mt-1">Statistiky</p>
+        <p className="text-white/40 text-sm mt-1">{t("statsDashboard.subtitle")}</p>
       </header>
 
-      {/* Tab bar — reordered: Calendar → Correlations → Screen → AI → Pixels */}
+      {/* Tab bar */}
       <div className="flex gap-1 mb-6 max-w-md mx-auto">
         <button
           onClick={() => setTab("calendar")}
@@ -65,7 +67,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
               : "text-white/30 hover:text-white/50"
           }`}
         >
-          🗓️ Kalendář
+          {t("statsDashboard.tab_calendar")}
         </button>
         <button
           onClick={() => setTab("correlation")}
@@ -75,7 +77,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
               : "text-white/30 hover:text-white/50"
           }`}
         >
-          🔗 Korelace
+          {t("statsDashboard.tab_correlation")}
         </button>
         {flags.screenTime && (
           <button
@@ -86,7 +88,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
                 : "text-white/30 hover:text-white/50"
             }`}
           >
-            📱 Screen
+            {t("statsDashboard.tab_screentime")}
           </button>
         )}
         <button
@@ -97,7 +99,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
               : "text-white/30 hover:text-white/50"
           }`}
         >
-          🤖 AI
+          {t("statsDashboard.tab_ai")}
         </button>
         <button
           onClick={() => setTab("year")}
@@ -107,7 +109,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
               : "text-white/30 hover:text-white/50"
           }`}
         >
-          📅 Pixels
+          {t("statsDashboard.tab_pixels")}
         </button>
       </div>
 
