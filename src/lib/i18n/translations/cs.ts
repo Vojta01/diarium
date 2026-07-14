@@ -202,6 +202,7 @@ export const cs = {
     great_day: 'Skvělý den!',
     day_recorded: 'Den zapsán',
     it_counts: 'I to se počítá',
+    activities_short: 'Aktivit',
     sleep: 'Spánek',
     stress: 'Stres',
     activities: 'Aktivit',
@@ -297,6 +298,53 @@ export const cs = {
     ci: 'CI [{low}; {high}]',
     diff_vs_mean: '{diff} vs Ø',
     sigma: 'σ = {value}',
+  },
+
+  // ── ScreenTimeChart ──
+  screenTime: {
+    title: '📱 Screen Time',
+    no_data: 'Zatím žádná data o screen timu.',
+    no_data_hint: 'Data se sbírají z Home Assistant — první data budou zítra.',
+    last_7_days: 'posledních 7 dní',
+    avg_daily: 'průměr denně',
+    total: 'celkem',
+    max: 'nejvíc',
+    screen_time_chart: '⏱️ Čas na obrazovce',
+    unlocks_chart: '🔓 Odemknutí telefonu',
+    legend: 'Legenda:',
+    apps: 'Appky:',
+    other: 'Ostatní',
+    weekdays: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
+  },
+
+  // ── CalendarView ──
+  calendar: {
+    edit_entry: '✏️ Upravit tento záznam',
+    gratitude: 'Vděčnost',
+    day_names: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
+    month_names: ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'],
+  },
+
+  // ── YearInPixels ──
+  yearInPixels: {
+    loading: 'Načítám...',
+    title: '🗓️ Rok {year} v pixelech',
+    description: 'Každý čtvereček = jeden den. Čím zelenější, tím lepší nálada.',
+    avg_mood: 'Průměrná nálada',
+    days_tracked: 'Sledovaných dní',
+    today: 'dnes',
+    mood: 'nálada',
+  },
+
+  // ── PhotoPicker ──
+  photoPicker: {
+    device: 'Zařízení',
+    google_photos: 'Google Photos',
+    remove: '✕ Odebrat',
+    selected_photo_alt: 'Vybraná fotka',
+    google_not_configured: 'Google Photos není nakonfigurováno. Použijte prosím nahrání ze zařízení.',
+    no_photos_found: 'V Google Photos nebyly nalezeny žádné fotky.',
+    connection_error: 'Chyba připojení',
   },
 
   // ── PeriodicSummary (AI reports) ──

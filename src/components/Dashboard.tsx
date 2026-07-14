@@ -7,6 +7,7 @@ import type { Entry } from "@/lib/supabase/db";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -148,6 +149,9 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
           Diarium
         </h1>
         <p className="text-white/40 text-sm mt-1">{t("dashboard.subtitle")}</p>
+        <div className="flex items-center justify-center mt-2">
+          <LanguageSwitcher />
+        </div>
       </header>
 
       {/* ── Today Overview ── */}

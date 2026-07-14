@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
+import { useTranslation } from "@/lib/i18n";
 
 declare global {
   interface Window {
@@ -24,6 +25,7 @@ interface PhotoPickerProps {
 }
 
 export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps) {
+  const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [authToken] = useState<string | null>(() =>
     typeof window !== "undefined"
@@ -74,7 +76,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
       if (!clientId) {
         alert(
-          "Google Photos není nakonfigurováno. Použijte prosím nahrání ze zařízení."
+          t("photoPicker.google_not_configured")
         );
         return;
       }
@@ -120,7 +122,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
         // Take the first photo — we could build an actual gallery picker later
         onPhotoSelected(data.mediaItems[0].baseUrl + "=w1024-h1024");
       } else {
-        alert("V Google Photos nebyly nalezeny žádné fotky.");
+        alert(t("photoPicker.no_photos_found"));
         fileRef.current?.click();
       }
     } catch {
@@ -140,7 +142,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
           className="btn-glass flex items-center gap-2 text-sm px-3 py-2"
         >
           <span className="text-lg">📷</span>
-          Zařízení
+          {t("photoPicker.device")}
         </button>
         <button
           type="button"
@@ -148,7 +150,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
           className="btn-glass flex items-center gap-2 text-sm px-3 py-2"
         >
           <span className="text-lg">🖼️</span>
-          Google Photos
+          {t("photoPicker.google_photos")}
         </button>
         {currentPhoto && (
           <button
@@ -156,7 +158,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
             onClick={clearPhoto}
             className="btn-glass flex items-center gap-1 text-sm px-3 py-2 text-red-400"
           >
-            ✕ Odebrat
+            {t("photoPicker.remove")}
           </button>
         )}
       </div>
@@ -165,7 +167,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
         <div className="relative rounded-xl overflow-hidden border border-white/10">
           <img
             src={currentPhoto}
-            alt="Vybraná fotka"
+            alt={t("photoPicker.selected_photo_alt")}
             className="w-full max-h-48 object-cover"
           />
         </div>

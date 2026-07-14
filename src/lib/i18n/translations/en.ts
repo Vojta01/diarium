@@ -202,6 +202,7 @@ export const en = {
     great_day: 'Great day!',
     day_recorded: 'Day recorded',
     it_counts: 'It counts too',
+    activities_short: 'Activities',
     sleep: 'Sleep',
     stress: 'Stress',
     activities: 'Activities',
@@ -297,6 +298,53 @@ export const en = {
     ci: 'CI [{low}; {high}]',
     diff_vs_mean: '{diff} vs Ø',
     sigma: 'σ = {value}',
+  },
+
+  // ── ScreenTimeChart ──
+  screenTime: {
+    title: '📱 Screen Time',
+    no_data: 'No screen time data yet.',
+    no_data_hint: 'Data is collected from Home Assistant — first data will be available tomorrow.',
+    last_7_days: 'last 7 days',
+    avg_daily: 'avg daily',
+    total: 'total',
+    max: 'max',
+    screen_time_chart: '⏱️ Screen Time',
+    unlocks_chart: '🔓 Phone Unlocks',
+    legend: 'Legend:',
+    apps: 'Apps:',
+    other: 'Other',
+    weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  },
+
+  // ── CalendarView ──
+  calendar: {
+    edit_entry: '✏️ Edit this entry',
+    gratitude: 'Gratitude',
+    day_names: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    month_names: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  },
+
+  // ── YearInPixels ──
+  yearInPixels: {
+    loading: 'Loading...',
+    title: '🗓️ Year {year} in pixels',
+    description: 'Each square = one day. Greener means better mood.',
+    avg_mood: 'Average mood',
+    days_tracked: 'Days tracked',
+    today: 'today',
+    mood: 'mood',
+  },
+
+  // ── PhotoPicker ──
+  photoPicker: {
+    device: 'Device',
+    google_photos: 'Google Photos',
+    remove: '✕ Remove',
+    selected_photo_alt: 'Selected photo',
+    google_not_configured: 'Google Photos is not configured. Please use device upload.',
+    no_photos_found: 'No photos found in Google Photos.',
+    connection_error: 'Connection error',
   },
 
   // ── PeriodicSummary (AI reports) ──

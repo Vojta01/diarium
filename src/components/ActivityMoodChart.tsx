@@ -117,18 +117,6 @@ interface CorrelatedItem {
   significance: "***" | "**" | "*" | "~" | "";
 }
 
-interface TrendItem {
-  name: string;
-  /** Slope over time — positive = improving mood trend */
-  slope: number;
-  /** Average mood in first half vs second half */
-  firstHalfMood: number;
-  secondHalfMood: number;
-  /** Count of days */
-  count: number;
-  direction: "📈" | "📉" | "➡️";
-}
-
 interface BucketStats {
   label: string;
   range: [number, number];
@@ -143,6 +131,7 @@ interface BucketStats {
 // ── Component ──
 
 export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("activities");
 
   // ── Overall stats for reference ──
@@ -267,10 +256,6 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       .map(b => {
         const m = b.moods.length > 0 ? b.moods.reduce((a, m) => a + m, 0) / b.moods.length : 0;
         const s = stddev(b.moods, m);
-        const d = b.moods.length >= 2 ? cohensD(b.moods, allMoods.filter((_, i) => {
-          // Compare bucket vs rest
-          return true; // simplified — compare vs overall
-        })) : 0;
         const overallStd = stddev(allMoods, overallMean);
         const se = overallStd / Math.sqrt(Math.max(b.moods.length, 1));
         const ciMargin = 1.96 * Math.max(se, 0.1);
@@ -283,7 +268,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
           count: b.moods.length,
           avgMood: parseFloat(m.toFixed(1)),
           stdMood: parseFloat(s.toFixed(1)),
-          cohensD: parseFloat(d.toFixed(2)) as number,
+          cohensD: 0 as number,
           ci: [ciLower, ciUpper] as [number, number],
           significance: b.moods.length >= 3 ? (s < 0.3 ? "***" as const : s < 0.6 ? "**" as const : "*" as const) : "" as const,
         } as BucketStats;
@@ -301,18 +286,14 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       pairs.map(p => p.time),
       pairs.map(p => p.mood)
     );
-    const p = tTestPValue(
-      pairs.map(p => p.mood),
-      pairs.map(() => overallMean)
-    );
     return {
       r: parseFloat(r.toFixed(3)),
       n: pairs.length,
-      interpretation: Math.abs(r) < 0.1 ? "žádná" : Math.abs(r) < 0.3 ? "slabá" : Math.abs(r) < 0.5 ? "střední" : "silná",
-      direction: r > 0.1 ? "📈 více času → lepší nálada" : r < -0.1 ? "📉 více času → horší nálada" : "➡️ žádný vztah",
+      interpretation: Math.abs(r) < 0.1 ? t("interpretation.none") : Math.abs(r) < 0.3 ? t("interpretation.weak") : Math.abs(r) < 0.5 ? t("interpretation.medium") : t("interpretation.strong"),
+      direction: r > 0.1 ? t("interpretation.direction_more_time_better") : r < -0.1 ? t("interpretation.direction_more_time_worse") : t("interpretation.direction_no_relation"),
       significant: Math.abs(r) > 0.3 && pairs.length >= 7,
     };
-  }, [entries, overallMean]);
+  }, [entries, overallMean, t]);
 
   // ── 5. Unlocks Buckets ──
   const unlocksStats = useMemo((): BucketStats[] => {
@@ -360,8 +341,68 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       .filter(b => b.count >= 1);
   }, [entries, overallMean]);
 
+  // ── Mood color helper (smooth gradient across 1-5) ──
+  const moodColor = (avgMood: number) => {
+    const colors = [
+      { mood: 1, hex: { r: 0xef, g: 0x44, b: 0x44 } }, // red
+      { mood: 2, hex: { r: 0xf9, g: 0x73, b: 0x16 } }, // orange
+      { mood: 3, hex: { r: 0xea, g: 0xb3, b: 0x08 } }, // yellow
+      { mood: 4, hex: { r: 0x84, g: 0xcc, b: 0x16 } }, // light green
+      { mood: 5, hex: { r: 0x22, g: 0xc5, b: 0x5e } }, // green
+    ];
+    if (avgMood <= 1) return "#ef4444";
+    if (avgMood >= 5) return "#22c55e";
+    const idx = Math.min(Math.floor(avgMood - 1), 3);
+    const t = avgMood - (idx + 1);
+    const lower = colors[idx];
+    const upper = colors[idx + 1];
+    const r = Math.round(lower.hex.r * (1 - t) + upper.hex.r * t);
+    const g = Math.round(lower.hex.g * (1 - t) + upper.hex.g * t);
+    const b = Math.round(lower.hex.b * (1 - t) + upper.hex.b * t);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  };
+
+  // ── Plain-language significance badge ──
+  const significanceBadge = (sig: string) => {
+    switch (sig) {
+      case "***": return { text: t("correlation.legend_strong"), className: "text-emerald-300 bg-emerald-500/10 border border-emerald-500/20" };
+      case "**": return { text: t("correlation.legend_significant"), className: "text-yellow-300 bg-yellow-500/10 border border-yellow-500/20" };
+      case "*": return { text: t("correlation.legend_hint"), className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
+      case "~": return { text: t("correlation.legend_weak"), className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
+      default: return { text: t("correlation.legend_hint").replace("p<0.1", "p≥0.2"), className: "text-white/30 bg-white/5 border border-white/10" };
+    }
+  };
+
+  // ── Plain-language effect size ──
+  const effectLabel = (d: number) => {
+    const abs = Math.abs(d);
+    let size: string;
+    if (abs < 0.2) size = t("correlation.effect_negligible");
+    else if (abs < 0.5) size = t("correlation.effect_small");
+    else if (abs < 0.8) size = t("correlation.effect_medium");
+    else size = t("correlation.effect_large");
+    return t("correlation.effect_label", { label: size });
+  };
+
+  // ── Human-readable mood summary ──
+  const moodSummary = (name: string, moodWith: number, moodWithout: number, d: number) => {
+    const diff = moodWith - moodWithout;
+    if (Math.abs(diff) < 0.15) return `${name}: ${t("correlation.activities_desc").split(".")[0]}`;
+    if (diff > 0) return `${name}: ${t("interpretation.direction_more_time_better").replace("📈 ", "")}`;
+    return `${name}: ${t("interpretation.direction_more_time_worse").replace("📉 ", "")}`;
+  };
+
+  // ── Human-readable habit summary ──
+  const habitSummary = (name: string, moodWith: number, moodWithout: number, d: number, isNegative: boolean) => {
+    const diff = moodWith - moodWithout;
+    if (Math.abs(diff) < 0.15) return `${name}: ${t("correlation.habits_desc").split(".")[0]}`;
+    if ((!isNegative && diff > 0) || (isNegative && diff < 0)) {
+      return `${name}: ${t("correlation.habits_with_pos")}`;
+    }
+    return `${name}: ${t("correlation.habits_with_neg")}`;
+  };
+
   // ── 6. Trends: 7-day rolling average mood ──
-  // ── 6. Rolling average mood trend ──
   const trendData = useMemo(() => {
     const sortedEntries = [...entries].filter(e => e.mood > 0).sort((a, b) => a.date.localeCompare(b.date));
     if (sortedEntries.length < 10) return null;
@@ -402,82 +443,19 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       lastAvg: parseFloat(lastAvg.toFixed(1)),
       slope: parseFloat(slope.toFixed(2)),
       trendSlope: parseFloat(trendSlope.toFixed(4)),
-      direction: slope > 0.3 ? "📈" : slope < -0.3 ? "📉" : "➡️",
+      direction: slope > 0.3 ? t("correlation.trends_improving") : slope < -0.3 ? t("correlation.trends_worsening") : t("correlation.trends_stable"),
       days: sortedEntries.length,
       minMood: Math.min(...rolling.map(p => p.avgMood)),
       maxMood: Math.max(...rolling.map(p => p.avgMood)),
     };
-  }, [entries]);
-
-  // ── Mood color helper (smooth gradient across 1-5) ──
-  const moodColor = (avgMood: number) => {
-    const colors = [
-      { mood: 1, hex: { r: 0xef, g: 0x44, b: 0x44 } }, // red — hrozně
-      { mood: 2, hex: { r: 0xf9, g: 0x73, b: 0x16 } }, // orange — špatně
-      { mood: 3, hex: { r: 0xea, g: 0xb3, b: 0x08 } }, // yellow — jde to
-      { mood: 4, hex: { r: 0x84, g: 0xcc, b: 0x16 } }, // light green — dobře
-      { mood: 5, hex: { r: 0x22, g: 0xc5, b: 0x5e } }, // green — skvěle
-    ];
-    if (avgMood <= 1) return "#ef4444";
-    if (avgMood >= 5) return "#22c55e";
-    const idx = Math.min(Math.floor(avgMood - 1), 3);
-    const t = avgMood - (idx + 1);
-    const lower = colors[idx];
-    const upper = colors[idx + 1];
-    const r = Math.round(lower.hex.r * (1 - t) + upper.hex.r * t);
-    const g = Math.round(lower.hex.g * (1 - t) + upper.hex.g * t);
-    const b = Math.round(lower.hex.b * (1 - t) + upper.hex.b * t);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  };
-
-  // ── Plain-language significance badge ──
-  const significanceBadge = (sig: string) => {
-    switch (sig) {
-      case "***": return { text: "Silná souvislost", className: "text-emerald-300 bg-emerald-500/10 border border-emerald-500/20" };
-      case "**": return { text: "Střední souvislost", className: "text-yellow-300 bg-yellow-500/10 border border-yellow-500/20" };
-      case "*": return { text: "Slabá souvislost", className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
-      case "~": return { text: "Slabá souvislost", className: "text-orange-300 bg-orange-500/10 border border-orange-500/20" };
-      default: return { text: "Bez souvislosti", className: "text-white/30 bg-white/5 border border-white/10" };
-    }
-  };
-
-  // ── Plain-language effect size ──
-  const effectLabel = (d: number) => {
-    const abs = Math.abs(d);
-    let size: string;
-    if (abs < 0.2) size = "Zanedbatelný";
-    else if (abs < 0.5) size = "Malý";
-    else if (abs < 0.8) size = "Střední";
-    else size = "Velký";
-    const direction = d > 0.1 ? "pozitivní" : d < -0.1 ? "negativní" : "neutrální";
-    return `${size} vliv (${direction})`;
-  };
-
-  // ── Human-readable mood summary ──
-  const moodSummary = (name: string, moodWith: number, moodWithout: number, d: number) => {
-    const diff = moodWith - moodWithout;
-    if (Math.abs(diff) < 0.15) return `${name}: Podobná nálada s i bez`;
-    if (diff > 0) return `${name}: Dny s aktivitou = nálada o ${diff.toFixed(1)} bodu lepší`;
-    return `${name}: Dny s aktivitou = nálada o ${Math.abs(diff).toFixed(1)} bodu horší`;
-  };
-
-  // ── Human-readable habit summary ──
-  const habitSummary = (name: string, moodWith: number, moodWithout: number, d: number, isNegative: boolean) => {
-    const diff = moodWith - moodWithout;
-    const label = isNegative ? "narušení" : "splnění";
-    if (Math.abs(diff) < 0.15) return `${name}: Žádný rozdíl v náladě`;
-    if ((!isNegative && diff > 0) || (isNegative && diff < 0)) {
-      return `${name}: Při ${label} = nálada o ${Math.abs(diff).toFixed(1)} bodu lepší`;
-    }
-    return `${name}: Při ${label} = nálada o ${Math.abs(diff).toFixed(1)} bodu horší`;
-  };
+  }, [entries, t]);
 
   const hasAnyData = activityStats.length > 0 || habitStats.length > 0 || screenTimeStats.length > 0 || unlocksStats.length > 0 || trendData !== null;
 
   if (!hasAnyData) {
     return (
       <div className="text-center text-white/30 py-12 glass-card">
-        Zatím není dost dat pro korelace. Vyplňuj Diarium a uvidíš, co ovlivňuje tvou náladu.
+        {t("correlation.no_data")}
       </div>
     );
   }
@@ -487,11 +465,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
       {/* Sub-tabs */}
       <div className="flex gap-1 flex-wrap">
         {([
-          ["activities", "🎯 Aktivity"],
-          ["habits", "✅ Návyky"],
-          ["screentime", "📱 Screen time"],
-          ["unlocks", "🔓 Odemknutí"],
-          ["trends", "📊 Trendy"],
+          ["activities", t("correlation.tab_activities")],
+          ["habits", t("correlation.tab_habits")],
+          ["screentime", t("correlation.tab_screentime")],
+          ["unlocks", t("correlation.tab_unlocks")],
+          ["trends", t("correlation.tab_trends")],
         ] as [Tab, string][]).map(([key, label]) => {
           const hasData =
             key === "activities" ? activityStats.length > 0 :
@@ -519,12 +497,12 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
       {/* ── Legend ── */}
       <div className="flex items-center gap-2 text-[9px] flex-wrap">
-        <span className="px-1.5 py-0.5 rounded text-emerald-300 bg-emerald-500/10 border border-emerald-500/20">Silná souvislost</span>
-        <span className="px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">Střední souvislost</span>
-        <span className="px-1.5 py-0.5 rounded text-orange-300 bg-orange-500/10 border border-orange-500/20">Slabá souvislost</span>
-        <span className="px-1.5 py-0.5 rounded text-white/30 bg-white/5 border border-white/10">Bez souvislosti</span>
+        <span className="px-1.5 py-0.5 rounded text-emerald-300 bg-emerald-500/10 border border-emerald-500/20">{t("correlation.legend_strong")}</span>
+        <span className="px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">{t("correlation.legend_significant")}</span>
+        <span className="px-1.5 py-0.5 rounded text-orange-300 bg-orange-500/10 border border-orange-500/20">{t("correlation.legend_hint")}</span>
+        <span className="px-1.5 py-0.5 rounded text-white/30 bg-white/5 border border-white/10">{t("correlation.legend_weak")}</span>
         <span className="ml-auto text-white/25">
-          Porovnáváme průměrnou náladu S aktivitou vs BEZ
+          {t("correlation.activities_desc").split(".")[0]}
         </span>
       </div>
 
@@ -534,7 +512,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {tab === "activities" && (
           <div>
             <p className="text-white/30 text-[10px] mb-3 leading-relaxed">
-              Porovnáváme průměrnou náladu ve dnech, kdy jsi danou aktivitu <span className="text-white/60">dělal/a</span>, oproti dnům <span className="text-white/60">bez ní</span>. Čím větší rozdíl, tím silnější souvislost.
+              {t("correlation.activities_desc")}
             </p>
             <div className="space-y-2">
               {activityStats.slice(0, 15).map(s => {
@@ -570,9 +548,9 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                       <span className="text-white/20">·</span>
                       <span className="text-white/25">{effectLabel(s.cohensD)}</span>
                       <span className="text-white/20">·</span>
-                      <span className="text-white/25">Ø s: {s.moodWith.toFixed(1)} / Ø bez: {s.moodWithout.toFixed(1)}</span>
+                      <span className="text-white/25">{t("correlation.diff_vs_mean", { diff: `+${(s.moodWith - s.moodWithout).toFixed(1)}` })}</span>
                       <span className="text-white/20">·</span>
-                      <span className="text-white/20">{s.countWith} dní s</span>
+                      <span className="text-white/20">{t("correlation.days_count", { count: s.countWith })}</span>
                       <span className={`ml-auto px-1.5 py-0.5 rounded text-[8px] ${badge.className}`}>
                         {badge.text}
                       </span>
@@ -592,10 +570,10 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {tab === "habits" && (
           <div>
             <p className="text-white/30 text-[10px] mb-1 leading-relaxed">
-              Porovnáváme průměrnou náladu ve dnech, kdy jsi návyk <span className="text-white/60">dodržel/a</span>, oproti dnům <span className="text-white/60">bez dodržení</span>.
+              {t("correlation.habits_desc")}
             </p>
             <p className="text-white/20 text-[10px] mb-3">
-              U negativních návyků (🍺 alkohol, 🔞 porno apod.) znamená "dodrženo" = <span className="text-emerald-400/60">v pořádku</span> (abstinence). U pozitivních (🧘 meditace, 🏋️ cvičení) "dodrženo" = <span className="text-emerald-400/60">splněno</span>.
+              {t("correlation.habits_desc_neg")}
             </p>
             <div className="space-y-2">
               {habitStats.map(s => {
@@ -614,8 +592,8 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
                 // For negative habits, "Ano" means bad (abstinence failed).
                 // For positive habits, "Ano" means good (task done).
-                const withLabel = isNegative ? "⚠️ Narušeno" : "✅ Ano";
-                const withoutLabel = isNegative ? "✅ V pořádku" : "❌ Ne";
+                const withLabel = isNegative ? t("correlation.habits_with_neg") : t("correlation.habits_with_pos");
+                const withoutLabel = isNegative ? t("correlation.habits_without_neg") : t("correlation.habits_without_pos");
 
                 return (
                   <div key={s.name} className={`p-3 rounded-lg ${hasEffect ? "bg-white/5 border border-white/5" : "bg-white/2"}`}>
@@ -669,9 +647,9 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                     </div>
 
                     <div className="mt-1 text-[9px] text-white/25 flex gap-2">
-                      <span>Efekt: {effectLabel(s.cohensD)}</span>
+                      <span>{t("correlation.effect_label", { label: effectLabel(s.cohensD) })}</span>
                       <span>·</span>
-                      <span>CI [{s.ci[0]}; {s.ci[1]}]</span>
+                      <span>{t("correlation.ci", { low: s.ci[0].toFixed(1), high: s.ci[1].toFixed(1) })}</span>
                     </div>
                     {/* Human-readable summary */}
                     <div className="mt-1 text-[9px] text-white/40 italic">
@@ -691,24 +669,24 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             {spearmanScreenTime && (
               <div className={`p-3 rounded-lg mb-4 ${spearmanScreenTime.significant ? "bg-white/5 border border-white/10" : "bg-white/2"}`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/60">📱 Screen time vs nálada</span>
+                  <span className="text-sm text-white/60">{t("correlation.screentime_title")}</span>
                   <span className={`text-sm font-mono ${spearmanScreenTime.significant ? "text-white font-bold" : "text-white/40"}`}>
                     ρ = {spearmanScreenTime.r}
                   </span>
                 </div>
                 <div className="text-xs text-white/30 mt-1">
-                  {spearmanScreenTime.interpretation === "silná" 
-                    ? `Čím víc času na telefonu, tím ${spearmanScreenTime.direction === "negativní" ? "horší" : "lepší"} nálada (${spearmanScreenTime.interpretation} korelace, ${spearmanScreenTime.n} dní).`
-                    : spearmanScreenTime.interpretation === "střední"
-                    ? `Mírná souvislost: víc screen timu → ${spearmanScreenTime.direction === "negativní" ? "trochu horší" : "trochu lepší"} nálada (${spearmanScreenTime.n} dní).`
-                    : `Slabá nebo žádná souvislost mezi screen timem a náladou (${spearmanScreenTime.n} dní).`
+                  {spearmanScreenTime.interpretation === t("interpretation.strong")
+                    ? t("correlation.screentime_strong", { direction: spearmanScreenTime.direction.includes("worse") || spearmanScreenTime.direction.includes("horší") ? t("interpretation.worse") : t("interpretation.better"), interpretation: spearmanScreenTime.interpretation, n: spearmanScreenTime.n })
+                    : spearmanScreenTime.interpretation === t("interpretation.medium")
+                    ? t("correlation.screentime_medium", { direction: spearmanScreenTime.direction.includes("worse") || spearmanScreenTime.direction.includes("horší") ? t("interpretation.worse") : t("interpretation.better"), n: spearmanScreenTime.n })
+                    : t("correlation.screentime_weak", { n: spearmanScreenTime.n })
                   }
                 </div>
               </div>
             )}
 
             <p className="text-white/25 text-[10px] mb-3">
-              Průměrná nálada v jednotlivých pásmech screen timu. Sloupec ukazuje Ø náladu, pod ním je rozdíl proti celkovému průměru ({overallMean.toFixed(1)}).
+              {t("correlation.screentime_desc", { mean: overallMean.toFixed(1) })}
             </p>
 
             <div className="space-y-2">
@@ -729,15 +707,15 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                       <span className="text-xs font-mono text-white/60 w-6 text-right shrink-0">{s.avgMood.toFixed(1)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[9px] text-white/25">
-                      <span>{s.count} dní</span>
+                      <span>{t("correlation.days_count", { count: s.count })}</span>
                       <span>·</span>
                       <span className={diffFromMean > 0.3 ? "text-emerald-400" : diffFromMean < -0.3 ? "text-red-400" : ""}>
-                        {diffFromMean > 0 ? "+" : ""}{diffFromMean.toFixed(1)} vs Ø
+                        {t("correlation.diff_vs_mean", { diff: `${diffFromMean > 0 ? "+" : ""}${diffFromMean.toFixed(1)}` })}
                       </span>
                       <span>·</span>
-                      <span>CI [{s.ci[0]}; {s.ci[1]}]</span>
+                      <span>{t("correlation.ci", { low: s.ci[0].toFixed(1), high: s.ci[1].toFixed(1) })}</span>
                       <span>·</span>
-                      <span>σ = {s.stdMood.toFixed(1)}</span>
+                      <span>{t("correlation.sigma", { value: s.stdMood.toFixed(1) })}</span>
                     </div>
                   </div>
                 );
@@ -750,7 +728,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         {tab === "unlocks" && (
           <div>
             <p className="text-white/40 text-xs mb-2">
-              Průměrná nálada podle počtu odemknutí telefonu za den.
+              {t("correlation.unlocks_desc")}
             </p>
             <div className="space-y-2">
               {unlocksStats.map(s => {
@@ -770,13 +748,13 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                       <span className="text-xs font-mono text-white/60 w-6 text-right shrink-0">{s.avgMood.toFixed(1)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[9px] text-white/25">
-                      <span>{s.count} dní</span>
+                      <span>{t("correlation.days_count", { count: s.count })}</span>
                       <span>·</span>
                       <span className={diffFromMean > 0.3 ? "text-emerald-400" : diffFromMean < -0.3 ? "text-red-400" : ""}>
-                        {diffFromMean > 0 ? "+" : ""}{diffFromMean.toFixed(1)} vs Ø {overallMean.toFixed(1)}
+                        {t("correlation.diff_vs_mean", { diff: `${diffFromMean > 0 ? "+" : ""}${diffFromMean.toFixed(1)}` })}
                       </span>
                       <span>·</span>
-                      <span>σ = {s.stdMood.toFixed(1)}</span>
+                      <span>{t("correlation.sigma", { value: s.stdMood.toFixed(1) })}</span>
                     </div>
                   </div>
                 );
@@ -790,11 +768,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-white/60 text-sm font-medium">Vývoj nálady</p>
-                <p className="text-white/25 text-[10px]">7denní klouzavý průměr — {trendData.days} dní</p>
+                <p className="text-white/60 text-sm font-medium">{t("correlation.trends_title")}</p>
+                <p className="text-white/25 text-[10px]">{t("correlation.trends_subtitle", { days: trendData.days })}</p>
               </div>
               <div className="text-right">
-                <span className="text-2xl">{trendData.direction}</span>
+                <span className="text-2xl">{trendData.direction?.match(/[↑↓→]/)?.[0] || "→"}</span>
                 <p className={`text-xs font-mono ${trendData.slope > 0.2 ? "text-emerald-400" : trendData.slope < -0.2 ? "text-red-400" : "text-white/40"}`}>
                   {trendData.slope > 0 ? "+" : ""}{trendData.slope}
                 </p>
@@ -803,9 +781,9 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
             {/* Trend summary */}
             <div className="text-xs text-white/60 mb-2 italic">
-              Tvoje nálada za posledních {trendData.days} dní:{' '}
+              {t("correlation.trends_footer").split(".")[0]}{' '}
               <span className={trendData.slope > 0.2 ? "text-emerald-400 not-italic" : trendData.slope < -0.2 ? "text-red-400 not-italic" : "text-white/40 not-italic"}>
-                {trendData.slope > 0.3 ? "stoupá ↑" : trendData.slope < -0.3 ? "klesá ↓" : "stabilní →"}
+                {trendData.direction}
               </span>
             </div>
 
@@ -870,21 +848,21 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
 
               {/* Trend arrow annotation */}
               <div className="absolute bottom-0 right-0 text-[9px] text-white/30">
-                {trendData.slope > 0.3 ? "↑ zlepšuje se" : trendData.slope < -0.3 ? "↓ zhoršuje se" : "→ stabilní"}
+                {trendData.direction}
               </div>
             </div>
 
             <div className="flex gap-3 text-[10px]">
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
-                <div className="text-white/30">Začátek období</div>
+                <div className="text-white/30">{t("correlation.trends_start")}</div>
                 <div className="text-white font-mono" style={{ color: moodColor(trendData.firstAvg) }}>{trendData.firstAvg}</div>
               </div>
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
-                <div className="text-white/30">Konec období</div>
+                <div className="text-white/30">{t("correlation.trends_end")}</div>
                 <div className="text-white font-mono" style={{ color: moodColor(trendData.lastAvg) }}>{trendData.lastAvg}</div>
               </div>
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
-                <div className="text-white/30">Změna</div>
+                <div className="text-white/30">{t("correlation.trends_change")}</div>
                 <div className={`font-mono ${trendData.slope > 0.2 ? "text-emerald-400" : trendData.slope < -0.2 ? "text-red-400" : "text-white/40"}`}>
                   {trendData.slope > 0 ? "+" : ""}{trendData.slope}
                 </div>
@@ -892,7 +870,7 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
             </div>
 
             <p className="text-white/20 text-[9px] mt-3 text-center">
-              Každá tečka = průměrná nálada za 7 dní. Barva ukazuje, jakou měla náladu hodnotu — od červené (špatná) po zelenou (skvělá).
+              {t("correlation.trends_footer")}
             </p>
           </div>
         )}
