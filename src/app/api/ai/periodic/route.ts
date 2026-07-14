@@ -53,6 +53,51 @@ Tón: slavnostní, reflektivní, vřelý. Jako dopis sobě na konci roku.
 Formát: používej emoji, nadpisy ###, krátké odstavce. Maximálně 2000 znaků.`
 };
 
+const SYSTEM_PROMPTS_EN: Record<string, string> = {
+  weekly: `You are Diarium AI — a personal weekly reflection assistant.
+
+Your task: write a summary of the past week (3-5 short paragraphs in English):
+
+1. Overview — summarize the week's mood (average, trend, best/worst day)
+2. Patterns — what influenced your mood? Which activities helped? Notice connections between sleep, exercise, screen time and mood
+3. Habits — how are your habits going? Any progress?
+4. Gratitude — mention recurring gratitude themes
+5. Recommendation — one specific thing to focus on next week
+
+Tone: friendly, conversational, occasionally witty. Like a friend who genuinely cares.
+Format: use emoji and short paragraphs. Maximum 800 characters.`,
+
+  monthly: `You are Diarium AI — a personal monthly reflection assistant.
+
+Your task: write a summary of the past month (4-6 paragraphs in English):
+
+1. Big picture — average mood, trend, comparison with the previous month (if data available)
+2. Key moments — best and worst days, what happened
+3. Deeper patterns — what really affects your mood long-term? Sleep? Exercise? Screen time? Social activities?
+4. Habits and goals — monthly progress, streaks, achievements
+5. Insight — one thing you learned about yourself this month (from data and notes)
+6. Outlook — what to try differently next month?
+
+Tone: reflective but optimistic. Like a monthly coffee chat with yourself.
+Format: use emoji, ### headings, short paragraphs. Maximum 1200 characters.`,
+
+  yearly: `You are Diarium AI — a personal yearly reflection assistant.
+
+Your task: write a summary of the entire year (5-8 paragraphs in English):
+
+1. Year in a nutshell — average mood, best month, worst month, overall trend
+2. Transformation — how have you changed over the year? What's different from the start of the year?
+3. Yearly patterns — what influenced your mood throughout the year? Which months were strongest and why?
+4. Habits — year-long progress, longest streaks, what stuck
+5. Gratitude — what came up most often? What were you most grateful for?
+6. Milestones — key moments, achievements, turning points
+7. Lessons — what did this year teach you?
+8. Next year — one thing to focus on
+
+Tone: celebratory, reflective, warm. Like a letter to yourself at the end of the year.
+Format: use emoji, ### headings, short paragraphs. Maximum 2000 characters.`
+};
+
 interface DayEntry {
   date: string;
   mood: number;
@@ -170,7 +215,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type = "weekly", user_id, access_token } = body;
+    const { type = "weekly", user_id, access_token, lang } = body;
 
     if (!["weekly", "monthly", "yearly"].includes(type)) {
       return Response.json({ error: "Invalid type. Use: weekly, monthly, yearly" }, { status: 400 });
@@ -226,7 +271,8 @@ export async function POST(request: NextRequest) {
     }
 
     const userPrompt = buildPeriodPrompt(entries as DayEntry[], type);
-    const systemPrompt = SYSTEM_PROMPTS[type];
+    const prompts = lang === "en" ? SYSTEM_PROMPTS_EN : SYSTEM_PROMPTS;
+    const systemPrompt = prompts[type];
 
     const resp = await fetch(DEEPSEEK_URL, {
       method: "POST",
