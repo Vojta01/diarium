@@ -342,6 +342,10 @@ const FALLBACK_ACTIVITIES: ActivityDef[] = [
 ];
 
 export async function getActivities(): Promise<ActivityDef[]> {
+  // Always start with hardcoded fallback — guarantees activities show even if DB fails
+  let defaults: ActivityDef[] = [...FALLBACK_ACTIVITIES];
+  let customs: ActivityDef[] = [];
+
   try {
     const user = await getCurrentUser();
     const sb = getAuthenticatedClient();
@@ -356,25 +360,28 @@ export async function getActivities(): Promise<ActivityDef[]> {
         : Promise.resolve({ data: [] }),
     ]);
 
-    let defaults: ActivityDef[] = defaultRes.data?.map((a: any) => ({ ...a, source: "default" as const })) ?? [];
-    const customs: ActivityDef[] = customRes.data?.map((a: any) => ({ ...a, source: "custom" as const })) ?? [];
-    
-    // Filter out defaults that user has hidden (is_active=false in user_activities)
-    const hiddenKeys = new Set((hiddenRes.data || []).map((h: any) => h.key));
-    defaults = defaults.filter(d => !hiddenKeys.has(d.key));
-
-    // Fallback: if DB returned empty, use hardcoded catalog (first-launch / seeding not done yet)
-    if (defaults.length === 0 && customs.length === 0) {
-      defaults = FALLBACK_ACTIVITIES;
-      // Try to seed the DB in the background (fire-and-forget)
-      fetch("/api/seed-activities", { method: "POST" }).catch(() => {});
+    // Only override defaults if DB returned valid data
+    if (defaultRes.data && defaultRes.data.length > 0 && !('error' in defaultRes && defaultRes.error)) {
+      defaults = defaultRes.data.map((a: any) => ({ ...a, source: "default" as const }));
+      
+      // Filter out defaults that user has hidden
+      const hiddenKeys = new Set((hiddenRes.data || []).map((h: any) => h.key));
+      defaults = defaults.filter(d => !hiddenKeys.has(d.key));
     }
 
-    return [...defaults, ...customs];
+    if (customRes.data && customRes.data.length > 0 && !('error' in customRes && customRes.error)) {
+      customs = customRes.data.map((a: any) => ({ ...a, source: "custom" as const }));
+    }
+
+    // If DB is empty, try seeding in background
+    if ((!defaultRes.data || defaultRes.data.length === 0) && customs.length === 0) {
+      fetch("/api/seed-activities", { method: "POST" }).catch(() => {});
+    }
   } catch (e) {
-    console.error("getActivities() failed, using fallback:", e);
-    return [...FALLBACK_ACTIVITIES];
+    console.error("getActivities() DB error, using fallback:", e);
   }
+
+  return [...defaults, ...customs];
 }
 
 /** Returns activities that user has hidden (is_active=false) — for the "restore" UI */
