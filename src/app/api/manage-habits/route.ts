@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyAuth } from "@/lib/auth";
 
 export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,11 +10,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing env vars" }, { status: 500 });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const sb = createClient(supabaseUrl, serviceKey);
   const { action, userId, key, label, icon, is_negative } = await req.json();
 
   if (!userId || !action || !key) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  // Verify the caller owns this userId
+  if (userId !== user.id) {
+    return NextResponse.json({ error: "Forbidden: user_id mismatch" }, { status: 403 });
   }
 
   if (action === "add") {

@@ -54,7 +54,7 @@ function getSupabase() {
 }
 
 /** Get the stored access token from localStorage (bypasses supabase-js auth issues) */
-function getAccessToken(): string | null {
+export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
     const stored = localStorage.getItem(getSupabaseAuthTokenKey());
@@ -207,9 +207,12 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   if ((payload as any).ai_reflection) row.ai_reflection = (payload as any).ai_reflection;
 
   // Use our API endpoint which has the service_role key
+  const token = getAccessToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch("/api/save-entry", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(row),
   });
 

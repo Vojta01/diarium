@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth } from '@/lib/auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await verifyAuth(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const payload = await req.json();
     const { user_id, date, mood, mood_emoji, sleep_quality, stress, activities, habits, gratitude, note, weather, photo_path, phone_screen_time, phone_unlocks, phone_top_apps, ai_reflection } = payload;
 
     if (!user_id || !date) {
       return NextResponse.json({ error: 'Missing user_id or date' }, { status: 400 });
+    }
+
+    // Verify the caller owns this user_id
+    if (user_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden: user_id mismatch' }, { status: 403 });
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);

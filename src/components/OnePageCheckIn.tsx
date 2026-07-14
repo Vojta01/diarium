@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getHiddenActivities } from "@/lib/supabase/db";
+import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getHiddenActivities, getAccessToken } from "@/lib/supabase/db";
 import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
@@ -494,9 +494,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     
     // Persist to DB
     if (userId) {
+      const tok = getAccessToken();
       fetch("/api/manage-activities", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "add", userId, key, label: name, icon, category }),
       }).catch(() => {});
     }
@@ -519,9 +520,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     
     // Persist to DB
     if (userId) {
+      const tok = getAccessToken();
       fetch("/api/manage-activities", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "remove", userId, key: activityKey }),
       }).catch(() => {});
     }
@@ -537,9 +539,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     
     // Persist to DB
     if (userId) {
+      const tok = getAccessToken();
       fetch("/api/manage-activities", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "restore", userId, key: activityKey }),
       }).catch(() => {});
     }
@@ -559,9 +562,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     
     // Persist to DB
     if (userId) {
+      const tok = getAccessToken();
       fetch("/api/manage-habits", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "add", userId, key, label: name, icon, is_negative: isNegative }),
       }).catch(() => {});
     }
@@ -578,9 +582,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     
     // Persist to DB
     if (userId) {
+      const tok = getAccessToken();
       fetch("/api/manage-habits", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "remove", userId, key: habitKey }),
       }).catch(() => {});
     }
@@ -661,7 +666,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
         body: JSON.stringify({
           user_id: userId,
           date: dateRef.current,
@@ -682,19 +687,24 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           setAiReflection(json.reflection);
           // Save reflection to DB
           try {
+            const tok = getAccessToken();
             await fetch("/api/save-entry", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
               body: JSON.stringify({
                 user_id: userId,
                 date: dateRef.current,
                 ai_reflection: json.reflection,
               }),
             });
-          } catch {}
+          } catch (e) {
+            console.error("Failed to save AI reflection:", e);
+          }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error("AI reflection fetch error:", e);
+    }
     setAiLoading(false);
   };
 

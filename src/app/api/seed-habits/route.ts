@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyAuth } from "@/lib/auth";
 
 // Default habits: only alkohol is shown to all users
 // Vojta's private habits (porno, masturbace) are in user_habits table, not here
@@ -12,12 +13,18 @@ const HABITS_TO_REMOVE = [
   "porno", "masturbace",
 ];
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
     return NextResponse.json({ error: "Missing env vars" }, { status: 500 });
+  }
+
+  // Require valid auth (any authenticated user can seed the catalog)
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const sb = createClient(supabaseUrl, serviceKey);
