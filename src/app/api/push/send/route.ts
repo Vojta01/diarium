@@ -1,30 +1,19 @@
 import { NextRequest } from "next/server";
 import webpush from "web-push";
+import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
+import { getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
-let _redis: any = null;
-function getRedis() {
-  if (!_redis && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    // Dynamic import so build doesn't fail without env vars
-    const { Redis } = require("@upstash/redis") as typeof import("@upstash/redis");
-    _redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-  return _redis;
-}
-
 let _vapidReady = false;
 function ensureVapid() {
   if (!_vapidReady && process.env.VAPID_PRIVATE_KEY) {
     webpush.setVapidDetails(
-      "mailto:vojta1@gmail.com",
-      "BDQqhS8ckDCRGmoE6gfdRsoM9rGTbP9188B_Ue-XpHV3oNG9bbkG3rpLLONLwVT3D_mJFEhAjzhE2inp_hc0POY",
+      VAPID_EMAIL,
+      VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     );
     _vapidReady = true;

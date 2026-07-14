@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getSupabaseAuthTokenKey } from '@/lib/supabase-ref';
 
 function decodeJWT(token: string) {
   try {
@@ -30,7 +31,7 @@ async function storeAndSetSession(access_token: string, refresh_token: string, e
   
   // Store in localStorage (for client-side use)
   localStorage.setItem(
-    'sb-vmqbslghzgfotwhzgawa-auth-token',
+    getSupabaseAuthTokenKey(),
     JSON.stringify({ access_token, refresh_token, expires_at: exp, token_type: 'bearer', user })
   );
 

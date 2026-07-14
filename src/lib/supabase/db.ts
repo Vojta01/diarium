@@ -1,4 +1,6 @@
 import { createSupabaseClient } from "./client";
+import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
 
 // ── Typy ──
 
@@ -55,7 +57,7 @@ function getSupabase() {
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
     if (stored) {
       const parsed = JSON.parse(stored);
       return parsed.access_token || null;
@@ -80,7 +82,7 @@ function getAuthenticatedClient() {
 export async function getCurrentUser() {
   // Try localStorage first (set by callback page)
   if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -450,6 +452,12 @@ export async function getHabits(): Promise<HabitDef[]> {
   const customs: HabitDef[] = userHabits
     .filter((h: any) => h.is_active && !defaultKeys.has(h.key))
     .map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
+  
+  // In core mode, filter out sensitive habits (porno, masturbace)
+  if (!isPersonalMode()) {
+    const sensitiveSet = new Set(SENSITIVE_HABIT_KEYS);
+    defaults = defaults.filter(d => !sensitiveSet.has(d.key));
+  }
   
   return [...defaults, ...customs];
 }

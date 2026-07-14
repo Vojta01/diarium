@@ -5,6 +5,7 @@ import { fetchDailyEntries, type DailyEntry, MOOD_EMOJIS } from "@/lib/stats";
 import { getEntry, getCurrentUser } from "@/lib/supabase/db";
 import type { Entry } from "@/lib/supabase/db";
 import { Markdown } from "@/components/Markdown";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -63,7 +64,8 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
     );
   }
 
-  const hasHomeAssistant = userEmail === "vojta1@gmail.com";
+  const flags = getFeatureFlags();
+  const hasHomeAssistant = flags.homeAssistant;
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("cs-CZ", {

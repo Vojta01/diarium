@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
+import { getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -186,18 +188,6 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
 
 const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
-let _redis: any = null;
-function getRedis() {
-  if (!_redis && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    const { Redis } = require("@upstash/redis") as typeof import("@upstash/redis");
-    _redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-  return _redis;
-}
-
 async function sendPushNotification(userId: string, title: string, body: string) {
   try {
     const redis = getRedis();
@@ -217,8 +207,8 @@ async function sendPushNotification(userId: string, title: string, body: string)
 
     const webpush = await import("web-push");
     webpush.setVapidDetails(
-      "mailto:vojta1@gmail.com",
-      "BDQqhS8ckDCRGmoE6gfdRsoM9rGTbP9188B_Ue-XpHV3oNG9bbkG3rpLLONLwVT3D_mJFEhAjzhE2inp_hc0POY",
+      VAPID_EMAIL,
+      VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY || ""
     );
 

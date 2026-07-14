@@ -7,6 +7,8 @@ import { ScreenTimeChart } from "@/components/ScreenTimeChart";
 import { ActivityMoodChart } from "@/components/ActivityMoodChart";
 import { PeriodicSummary } from "@/components/PeriodicSummary";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
+import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
@@ -14,7 +16,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   const [tab, setTab] = useState<"calendar" | "correlation" | "screentime" | "ai" | "year">("calendar");
   const [userId, setUserId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
-  const isVojta = userEmail === "vojta1@gmail.com" || userEmail === "vojtech.marvan@gmail.com";
+  const flags = getFeatureFlags();
 
   useEffect(() => {
     fetchDailyEntries()
@@ -26,7 +28,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
 
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('sb-vmqbslghzgfotwhzgawa-auth-token');
+        const stored = localStorage.getItem(getSupabaseAuthTokenKey());
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.user?.id) setUserId(parsed.user.id);
@@ -75,7 +77,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         >
           🔗 Korelace
         </button>
-        {isVojta && (
+        {flags.screenTime && (
           <button
             onClick={() => setTab("screentime")}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
@@ -112,7 +114,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
       <div className="max-w-2xl mx-auto pb-16">
         {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "correlation" && <ActivityMoodChart entries={entries} />}
-        {tab === "screentime" && isVojta && <ScreenTimeChart entries={entries} />}
+        {tab === "screentime" && flags.screenTime && <ScreenTimeChart entries={entries} />}
         {tab === "ai" && <PeriodicSummary userId={userId} />}
         {tab === "year" && <YearInPixels />}
       </div>

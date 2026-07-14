@@ -6,6 +6,8 @@ import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
 import { Markdown } from "@/components/Markdown";
+import { getFeatureFlags, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
+import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 
 // ── Mood ──
 const MOODS = [
@@ -179,8 +181,12 @@ function CompletedCard({
   const hasGratitude = data.gratitude.some(g => g.trim());
   const hasNote = data.note.trim().length > 0;
 
-  // Habit status
-  const habitStatus = habitDefs.map(h => ({
+  // Habit status — filter out sensitive habits in core mode
+  const flags = getFeatureFlags();
+  const displayHabitDefs = flags.habitTracking
+    ? habitDefs
+    : habitDefs.filter(h => !SENSITIVE_HABIT_KEYS.includes(h.key));
+  const habitStatus = displayHabitDefs.map(h => ({
     ...h,
     kept: h.is_negative ? !data.habits[h.key] : data.habits[h.key],
   }));
@@ -361,6 +367,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [newItemName, setNewItemName] = useState("");
   const [newItemIcon, setNewItemIcon] = useState("📌");
   const [newItemCategory, setNewItemCategory] = useState("vlastní");
+  const flags = getFeatureFlags();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
   const dataRef = useRef<CheckInData>(data);
@@ -394,7 +401,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     // Get user email and id
     if (typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
+        const stored = localStorage.getItem(getSupabaseAuthTokenKey());
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.user?.email) setUserEmail(parsed.user.email);
@@ -644,7 +651,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       let userName = "";
       if (typeof window !== "undefined") {
         try {
-          const stored = localStorage.getItem("sb-vmqbslghzgfotwhzgawa-auth-token");
+          const stored = localStorage.getItem(getSupabaseAuthTokenKey());
           if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed.user?.email) userName = parsed.user.email;
@@ -902,7 +909,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         {/* ── HABITS ── */}
         <Section title="Návyky">
           <div className="space-y-2">
-            {habitDefs.map(h => {
+            {(flags?.habitTracking
+              ? habitDefs
+              : habitDefs.filter(h => !SENSITIVE_HABIT_KEYS.includes(h.key))
+            ).map(h => {
               const isOn = data.habits[h.key] ?? false;
               const isGreen = h.is_negative ? !isOn : isOn;
               return (
@@ -1023,7 +1033,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 </p>
               ) : (
                 <div className="space-y-1.5 mb-3">
-                  {habitDefs.map(h => (
+                  {(flags.habitTracking
+                    ? habitDefs
+                    : habitDefs.filter(h => !SENSITIVE_HABIT_KEYS.includes(h.key))
+                  ).map(h => (
                     <div key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5">
                       <span className="flex items-center gap-2 text-sm">
                         <span>{h.icon}</span>

@@ -1,16 +1,6 @@
-const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
+import { getRedis } from "@/lib/redis";
 
-let _redis: any = null;
-function getRedis() {
-  if (!_redis && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    const { Redis } = require("@upstash/redis") as typeof import("@upstash/redis");
-    _redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
-  }
-  return _redis;
-}
+const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
 export async function POST(request: Request) {
   try {

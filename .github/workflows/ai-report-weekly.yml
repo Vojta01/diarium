@@ -1,0 +1,72 @@
+# Weekly AI Report Generator
+#
+# Replaces the Vercel Cron job for generating weekly AI reports.
+# Vercel Hobby plan is limited to 1 cron job, so this workflow runs
+# on GitHub Actions (free for public/private repos) to handle the
+# weekly report generation.
+#
+# Required GitHub Secrets:
+#   DIARIUM_URL  - Base URL of the deployed app (e.g., https://diarium-two.vercel.app)
+#   CRON_SECRET  - Secret token for authenticating cron requests (same as Vercel env var)
+#
+# The endpoint authenticates via ?secret= query param or Bearer token.
+# This workflow passes CRON_SECRET as a query parameter.
+#
+# Schedules: Every Sunday at 20:00 UTC
+# Also supports manual trigger via workflow_dispatch.
+
+name: AI Report - Weekly
+
+on:
+  schedule:
+    # Sunday at 20:00 UTC
+    - cron: "0 20 * * 0"
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  trigger-report:
+    name: Generate Weekly AI Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trigger weekly AI report endpoint
+        id: api_call
+        env:
+          DIARIUM_URL: ${{ secrets.DIARIUM_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+
+          URL="${DIARIUM_URL}/api/cron/ai-report?type=weekly&secret=${CRON_SECRET}"
+          echo "Calling: ${DIARIUM_URL}/api/cron/ai-report?type=weekly&secret=***"
+
+          HTTP_RESPONSE=$(curl -s -o /tmp/response_body.txt -w "%{http_code}" --max-time 120 "$URL")
+          EXIT_CODE=$?
+
+          echo "HTTP status code: ${HTTP_RESPONSE}"
+          echo "Exit code: ${EXIT_CODE}"
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ curl failed with exit code ${EXIT_CODE}"
+            echo "response_body<<DELIM" >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/response_body.txt >> "$GITHUB_STEP_SUMMARY"
+            echo -e "\nDELIM" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if [ "$HTTP_RESPONSE" -lt 200 ] || [ "$HTTP_RESPONSE" -ge 300 ]; then
+            echo "❌ API returned non-success status: ${HTTP_RESPONSE}"
+            echo "response_body<<DELIM" >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/response_body.txt >> "$GITHUB_STEP_SUMMARY"
+            echo -e "\nDELIM" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "✅ API call succeeded (${HTTP_RESPONSE})"
+          echo "response_body<<DELIM" >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/response_body.txt >> "$GITHUB_STEP_SUMMARY"
+          echo -e "\nDELIM" >> "$GITHUB_STEP_SUMMARY"
