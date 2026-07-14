@@ -5,8 +5,10 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { Dashboard } from "@/components/Dashboard";
 import { StatsDashboard } from "@/components/StatsDashboard";
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { useTranslation } from "@/lib/i18n";
 import type { User } from "@supabase/supabase-js";
 
 type View = "dashboard" | "checkin" | "stats";
@@ -35,6 +37,7 @@ function doLogout() {
 }
 
 export default function Home() {
+  const { t } = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [loading, setLoading] = useState(true);
@@ -85,7 +88,7 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white/40 text-lg">Načítám...</div>
+        <div className="text-white/40 text-lg">{t("common.loading")}</div>
       </div>
     );
   }
@@ -105,7 +108,7 @@ export default function Home() {
             : "text-white/30 hover:text-white/50"
         }`}
       >
-        🏠 Dashboard
+        {t("page.tab_dashboard")}
       </button>
       <button
         onClick={() => { setCheckinDate(null); setView("checkin"); }}
@@ -115,7 +118,7 @@ export default function Home() {
             : "text-white/30 hover:text-white/50"
         }`}
       >
-        ✏️ Check-in
+        {t("page.tab_checkin")}
       </button>
       <button
         onClick={() => setView("stats")}
@@ -125,7 +128,7 @@ export default function Home() {
             : "text-white/30 hover:text-white/50"
         }`}
       >
-        📊 Statistiky
+        {t("page.tab_stats")}
       </button>
     </div>
   );
@@ -161,8 +164,9 @@ export default function Home() {
             onClick={doLogout}
             className="text-white/30 text-xs hover:text-red-400 transition-colors cursor-pointer border border-white/10 rounded px-2 py-0.5 hover:border-red-400/30"
           >
-            odhlásit
+            {t("page.logout")}
           </button>
+          <LanguageSwitcher />
         </div>
       </header>
 

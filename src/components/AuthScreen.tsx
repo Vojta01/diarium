@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { useTranslation } from "@/lib/i18n";
 
 export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +23,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
       if (error) throw error;
       // Přesměruje na Google OAuth → není potřeba volat onSignedIn
     } catch (e: any) {
-      setError(e.message || "Nepodařilo se přihlásit");
+      setError(e.message || t("auth.sign_in_error"));
       setLoading(false);
     }
   };
@@ -31,10 +33,10 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
       <div className="glass-card w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-            Diarium
+            {t("auth.title")}
           </h1>
           <p className="text-white/30 text-sm mt-2">
-            Tvůj denní check-in — teď s Google účtem
+            {t("auth.subtitle")}
           </p>
         </div>
 
@@ -70,12 +72,12 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            {loading ? "Přihlašuji..." : "Přihlásit přes Google"}
+            {loading ? t("auth.signing_in") : t("auth.sign_in_google")}
           </button>
         </div>
 
         <p className="text-white/15 text-[10px] text-center mt-6">
-          Po přihlášení se vytvoří tvůj účet. Data jsou jen tvoje.
+          {t("auth.data_privacy")}
         </p>
       </div>
     </div>

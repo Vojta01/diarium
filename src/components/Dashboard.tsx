@@ -6,6 +6,7 @@ import { getEntry, getCurrentUser } from "@/lib/supabase/db";
 import type { Entry } from "@/lib/supabase/db";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { useTranslation } from "@/lib/i18n";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -30,6 +31,7 @@ function formatScreenTime(seconds: number): string {
 }
 
 export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [todayEntry, setTodayEntry] = useState<Entry | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white/40 text-lg">Načítám...</div>
+        <div className="text-white/40 text-lg">{t("common.loading")}</div>
       </div>
     );
   }
@@ -145,13 +147,13 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
         <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
           Diarium
         </h1>
-        <p className="text-white/40 text-sm mt-1">Tvůj denní deník</p>
+        <p className="text-white/40 text-sm mt-1">{t("dashboard.subtitle")}</p>
       </header>
 
       {/* ── Today Overview ── */}
       <div className="glass-card mb-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-white">📅 Dnes</h2>
+          <h2 className="text-lg font-semibold text-white">{t("dashboard.today")}</h2>
           <span className="text-white/40 text-xs">{dateStr}</span>
         </div>
 
@@ -176,13 +178,13 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                          text-white/50 hover:text-white hover:bg-white/10
                          transition-colors text-sm font-medium cursor-pointer"
             >
-              ✏️ Upravit dnešní check-in
+              {t("dashboard.edit_today")}
             </button>
           </>
         ) : (
           <div className="text-center">
             <p className="text-white/40 text-sm mb-3">
-              Dnes ještě nemáš check-in
+              {t("dashboard.no_checkin_today")}
             </p>
             <button
               onClick={() => onNavigateToCheckIn(today)}
@@ -192,7 +194,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                          transition-all duration-200 active:scale-[0.97]
                          cursor-pointer flex items-center justify-center gap-2"
             >
-              ✏️ Check-in
+              ✏️ {t("dashboard.checkin_button")}
             </button>
           </div>
         )}
@@ -201,7 +203,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
       {/* ── Mood — Last 7 Days (Clickable Emoji Row) ── */}
       <div className="glass-card mb-4">
         <h3 className="text-sm font-medium text-white/50 mb-3">
-          🎭 Nálada — posledních 7 dní
+          {t("dashboard.mood_last_7")}
         </h3>
         <div className="flex justify-between items-end gap-1">
           {last7Days.map((day) => (
@@ -213,8 +215,8 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                          focus:outline-none"
               title={
                 day.mood
-                  ? `${MOOD_TEXT[day.mood]} — klikni pro check-in`
-                  : `Žádný zápis — klikni pro check-in`
+                  ? t("dashboard.tooltip_mood", { mood: MOOD_TEXT[day.mood] })
+                  : t("dashboard.tooltip_no_entry")
               }
             >
               <span
@@ -243,7 +245,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
       {/* ── Quick Overview ── */}
       <div className="glass-card mb-4">
         <h3 className="text-sm font-medium text-white/50 mb-3">
-          ⚡ Rychlý přehled
+          {t("dashboard.quick_overview")}
         </h3>
 
         {/* Main stats row */}
@@ -255,25 +257,25 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                 <div className="text-xl font-bold text-white mb-0.5">
                   {streak > 0 ? `🔥${streak}` : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">dnů v řadě</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.days_streak")}</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white mb-0.5">
                   📱{formatScreenTime(screenTimeToday)}
                 </div>
-                <div className="text-[10px] text-white/30">screen time</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.screen_time")}</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white mb-0.5">
                   {todayEntry?.phone_unlocks ? `🔓${todayEntry.phone_unlocks}` : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">odemknutí</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.unlocks")}</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white mb-0.5">
                   🎯{activitiesCount > 0 ? activitiesCount : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">aktivity</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.activities_count")}</div>
               </div>
             </div>
           ) : (
@@ -283,15 +285,13 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                 <div className="text-xl font-bold text-white mb-0.5">
                   {streak > 0 ? `🔥${streak}` : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">dnů v řadě</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.days_streak")}</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white mb-0.5">
                   {weekAvgMood ? `📊${weekAvgMood}` : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">
-                  nálada tento týden
-                </div>
+                <div className="text-[10px] text-white/30">{t("dashboard.mood_this_week")}</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-white mb-0.5">
@@ -299,7 +299,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                     ? `${yesterdayEntry.moodEmoji}`
                     : "—"}
                 </div>
-                <div className="text-[10px] text-white/30">včerejší nálada</div>
+                <div className="text-[10px] text-white/30">{t("dashboard.yesterday_mood")}</div>
               </div>
             </div>
           )
@@ -309,14 +309,14 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
               <div className="text-xl font-bold text-white mb-0.5">
                 {streak > 0 ? `🔥${streak}` : "—"}
               </div>
-              <div className="text-[10px] text-white/30">dnů v řadě</div>
+              <div className="text-[10px] text-white/30">{t("dashboard.days_streak")}</div>
             </div>
             <div className="text-center">
               <div className="text-xl font-bold text-white mb-0.5">
                 {weekAvgMood ? `📊${weekAvgMood}` : "—"}
               </div>
               <div className="text-[10px] text-white/30">
-                nálada tento týden
+                {t("dashboard.mood_this_week")}
               </div>
             </div>
             <div className="text-center">
@@ -325,7 +325,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                   ? `${yesterdayEntry.moodEmoji}`
                   : "—"}
               </div>
-              <div className="text-[10px] text-white/30">včerejší nálada</div>
+              <div className="text-[10px] text-white/30">{t("dashboard.yesterday_mood")}</div>
             </div>
           </div>
         )}
@@ -336,19 +336,19 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
             <div className="text-sm font-semibold text-white mb-0.5">
               {weekEntryCount > 0 ? `${weekEntryCount}/7` : "—"}
             </div>
-            <div className="text-[10px] text-white/30">dní tento týden</div>
+            <div className="text-[10px] text-white/30">{t("dashboard.days_this_week")}</div>
           </div>
           <div className="text-center">
             <div className="text-sm font-semibold text-white mb-0.5">
               {sleepQuality ? `😴${sleepQuality}/3` : "—"}
             </div>
-            <div className="text-[10px] text-white/30">spánek dnes</div>
+            <div className="text-[10px] text-white/30">{t("dashboard.sleep_today")}</div>
           </div>
           <div className="text-center">
             <div className="text-sm font-semibold text-white mb-0.5">
               📅{entriesThisMonth}
             </div>
-            <div className="text-[10px] text-white/30">tento měsíc</div>
+            <div className="text-[10px] text-white/30">{t("dashboard.this_month")}</div>
           </div>
         </div>
       </div>
@@ -357,7 +357,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
       {aiReflection && (
         <div className="glass-card mb-4 border-indigo-400/10 bg-indigo-500/5">
           <h3 className="text-sm font-medium text-indigo-300 mb-2">
-            🤖 AI Reflexe
+            🤖 {t("dashboard.ai_reflection")}
           </h3>
           <Markdown content={aiReflection} />
         </div>
@@ -368,7 +368,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
         <div className="glass-card mb-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-white/50">
-              🙏 Poslední vděčnost
+              {t("dashboard.last_gratitude")}
             </h3>
             <span className="text-[11px] text-white/20">
               {new Date(gratitudeEntry.date + "T00:00:00").toLocaleDateString(
@@ -391,7 +391,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
           {gratitudeEntry.moodEmoji && (
             <div className="mt-2 flex items-center gap-1.5">
               <span className="text-lg">{gratitudeEntry.moodEmoji}</span>
-              <span className="text-[11px] text-white/20">nálada toho dne</span>
+              <span className="text-[11px] text-white/20">{t("dashboard.mood_that_day")}</span>
             </div>
           )}
         </div>
@@ -408,7 +408,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
             <div className="glass-card mb-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-white/50">
-                  📝 Poslední zápis
+                  {t("dashboard.last_entry")}
                 </h3>
                 <span className="text-[11px] text-white/20">
                   {new Date(recentEntry.date + "T00:00:00").toLocaleDateString(

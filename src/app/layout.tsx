@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
+import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -40,7 +41,13 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}<PushNotificationManager /><UpdatePrompt /></body>
+      <body>
+        <I18nProvider>
+          {children}
+          <PushNotificationManager />
+          <UpdatePrompt />
+        </I18nProvider>
+      </body>
     </html>
   );
 }

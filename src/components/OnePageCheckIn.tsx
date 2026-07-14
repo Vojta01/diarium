@@ -8,6 +8,7 @@ import type { CheckInData } from "@/lib/types";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
 import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { useTranslation } from "@/lib/i18n";
 
 // ── Mood ──
 const MOODS = [
@@ -173,6 +174,7 @@ function CompletedCard({
   data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; dateStr: string;
   habitDefs: HabitDef[];
 }) {
+  const { t } = useTranslation();
   const mood = MOODS.find(m => m.value === data.mood);
   const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
   const stressLevel = data.stress > 0 ? STRESS_LEVELS[data.stress - 1] : null;
@@ -224,13 +226,13 @@ function CompletedCard({
           {/* Sleep */}
           <div className="p-2">
             <div className="text-2xl mb-0.5">{sleep?.emoji || "—"}</div>
-            <div className="text-[10px] text-white/30">Spánek</div>
-            <div className="text-[11px] text-white/60 font-medium">{sleep?.label || "—"}</div>
+            <div className="text-[10px] text-white/30">{t("completedCard.sleep")}</div>
+            <div className="text-[11px] text-white/60 font-medium">{sleep?.label || t("common.no_data")}</div>
           </div>
           {/* Stress */}
           <div className="p-2">
             <div className="text-2xl mb-0.5">{stressLevel?.emoji || "—"}</div>
-            <div className="text-[10px] text-white/30">Stres</div>
+            <div className="text-[10px] text-white/30">{t("completedCard.stress")}</div>
             <div className="text-[11px] text-white/60 font-medium">{stressLevel?.label || "—"}</div>
           </div>
           {/* Activities count */}
@@ -238,7 +240,7 @@ function CompletedCard({
             <div className="text-2xl mb-0.5">{data.activities.length || "—"}</div>
             <div className="text-[10px] text-white/30">Aktivit</div>
             <div className="text-[11px] text-white/60 font-medium">
-              {data.activities.length > 0 ? data.activities.slice(0, 2).join(", ") : "žádné"}
+              {data.activities.length > 0 ? data.activities.slice(0, 2).join(", ") : t("activities.none")}
             </div>
           </div>
         </div>
@@ -247,7 +249,7 @@ function CompletedCard({
       {/* Activities tags */}
       {data.activities.length > 0 && (
         <div className="glass-card">
-          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Aktivity</h3>
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">{t("completedCard.activities_section")}</h3>
           <div className="flex flex-wrap gap-1.5">
             {data.activities.map(a => (
               <span key={a} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-white/70">{a}</span>
@@ -258,7 +260,7 @@ function CompletedCard({
 
       {/* Habits status */}
       <div className="glass-card">
-        <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Návyky</h3>
+        <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">{t("completedCard.habits_section")}</h3>
         <div className="flex gap-2">
           {habitStatus.map(h => (
             <div key={h.key} className={`flex-1 text-center p-2 rounded-lg ${h.kept ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-red-500/5 border border-red-500/10"}`}>
@@ -276,7 +278,7 @@ function CompletedCard({
       {goals.length > 0 && (
         <div className="glass-card">
           <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">
-            Cíle {goalsDone.length}/{goals.length}
+            {t("completedCard.goals_label", { done: goalsDone.length, total: goals.length })}
           </h3>
           <div className="space-y-1.5">
             {goals.map(g => {
@@ -299,7 +301,7 @@ function CompletedCard({
       {/* Gratitude */}
       {hasGratitude && (
         <div className="glass-card">
-          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">Vděčnost</h3>
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">{t("completedCard.gratitude_section")}</h3>
           {data.gratitude.filter(g => g.trim()).map((g, i) => (
             <p key={i} className="text-white/60 text-sm leading-relaxed">🙏 {g}</p>
           ))}
@@ -309,7 +311,7 @@ function CompletedCard({
       {/* Note */}
       {hasNote && (
         <div className="glass-card">
-          <h3 className="text-xs font-medium text-white/30 mb-1 uppercase tracking-wider">Poznámka</h3>
+          <h3 className="text-xs font-medium text-white/30 mb-1 uppercase tracking-wider">{t("completedCard.note_section")}</h3>
           <p className="text-white/60 text-sm leading-relaxed italic">&ldquo;{data.note}&rdquo;</p>
         </div>
       )}
@@ -319,7 +321,7 @@ function CompletedCard({
         <div className="glass-card bg-indigo-500/5 border-indigo-400/10">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm">🤖</span>
-            <h3 className="text-xs font-medium text-indigo-300/60 uppercase tracking-wider">AI reflexe</h3>
+            <h3 className="text-xs font-medium text-indigo-300/60 uppercase tracking-wider">{t("completedCard.ai_reflection")}</h3>
           </div>
           <Markdown content={aiReflection} />
         </div>
@@ -337,7 +339,7 @@ function CompletedCard({
         onClick={onEdit}
         className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
       >
-        ✏️ Upravit záznam
+        ✏️ {t("completedCard.edit_record")}
       </button>
     </div>
   );
@@ -345,6 +347,7 @@ function CompletedCard({
 
 // ── MAIN COMPONENT ──
 export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => void; initialDate?: string | null }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
   const [goals, setGoals] = useState<Goal[]>([]);
   const [saving, setSaving] = useState(false);
@@ -473,9 +476,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   };
 
   const addGoal = () => {
-    const name = prompt("Název cíle:");
+    const name = prompt(t("goals.prompt_name"));
     if (!name) return;
-    const emoji = prompt("Emoji (např. 🏃):") || "✅";
+    const emoji = prompt(t("goals.prompt_emoji")) || "✅";
     setGoals(prev => [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]);
   };
   const removeGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
@@ -492,7 +495,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const confirmAddCustomActivity = async () => {
     const name = newItemName.trim();
     if (!name) {
-      setActivityError("Zadej název aktivity");
+      setActivityError(t("activities.error_empty"));
       return;
     }
     const icon = newItemIcon.trim() || "📌";
@@ -517,11 +520,11 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          setActivityError(`Nepodařilo se uložit aktivitu: ${errData.error || res.statusText}`);
+          setActivityError(t("activities.error_save", { error: errData.error || res.statusText }));
           // Keep in local state — user can retry later
         }
       } catch (e: any) {
-        setActivityError(`Chyba sítě: ${e.message || "neznámá"}`);
+        setActivityError(t("activities.error_network", { error: e.message || "neznámá" }));
       }
     }
   };
@@ -549,8 +552,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "remove", userId, key: activityKey }),
       }).then(res => {
-        if (!res.ok) res.json().then(d => setActivityError(`Chyba při odebírání: ${d.error || res.statusText}`)).catch(() => {});
-      }).catch(e => setActivityError(`Chyba sítě při odebírání: ${e.message}`));
+        if (!res.ok) res.json().then(d => setActivityError(t("activities.error_remove", { error: d.error || res.statusText }))).catch(() => {});
+      }).catch(e => setActivityError(t("activities.error_remove_network", { error: e.message })));
     }
   };
 
@@ -570,17 +573,17 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         body: JSON.stringify({ action: "restore", userId, key: activityKey }),
       }).then(res => {
-        if (!res.ok) res.json().then(d => setActivityError(`Chyba při obnově: ${d.error || res.statusText}`)).catch(() => {});
-      }).catch(e => setActivityError(`Chyba sítě při obnově: ${e.message}`));
+        if (!res.ok) res.json().then(d => setActivityError(t("activities.error_restore", { error: d.error || res.statusText }))).catch(() => {});
+      }).catch(e => setActivityError(t("activities.error_restore_network", { error: e.message })));
     }
   };
 
   // Add custom habit (persisted to DB)
   const addCustomHabit = async () => {
-    const name = prompt("Název návyku (např. běhání):");
+    const name = prompt(t("habits.prompt_name"));
     if (!name) return;
-    const icon = prompt("Emoji (např. 🏃):") || "✅";
-    const isNegative = confirm("Je to 'abstinenční' návyk? (tj. zelená = dnes jsem to NEdělal)\nOK = Ano (např. alkohol, kouření), Zrušit = Ne (např. cvičení)");
+    const icon = prompt(t("habits.prompt_emoji")) || "✅";
+    const isNegative = confirm(t("habits.prompt_negative"));
     
     const key = name.toLowerCase().replace(/\s+/g, "_");
     const newHabit: HabitDef = { key, label: name, icon, category: "vlastní", color: "#6366f1", is_negative: isNegative, source: "custom" };
@@ -775,7 +778,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">Načítám...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-white/40">{t("common.loading")}</div>;
   }
 
   // ── COMPLETED CARD VIEW ──
@@ -791,7 +794,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               currentDate === today ? "bg-indigo-500/20 text-white" : "text-white/30 hover:text-white/50"
             }`}
           >
-            {currentDate === today ? "Dnes" : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" })}
+            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" })}
           </button>
           <button
             onClick={() => navigateDate(1)}
@@ -808,7 +811,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           habitDefs={habitDefs}
         />
         {aiLoading && (
-          <div className="text-center text-white/20 text-sm py-4 animate-pulse">🤖 AI přemýšlí...</div>
+          <div className="text-center text-white/20 text-sm py-4 animate-pulse">{t("checkin.ai_thinking")}</div>
         )}
       
         {/* Bottom navigation */}
@@ -818,16 +821,16 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               onClick={() => window.location.href = "/"}
               className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
             >
-              🏠 Dashboard
+              {t("checkin.nav_dashboard")}
             </button>
             <button className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5">
-              📝 Check-in
+              {t("checkin.nav_checkin")}
             </button>
             <button
               onClick={() => window.location.href = "/stats"}
               className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
             >
-              📊 Stats
+              {t("checkin.nav_stats")}
             </button>
           </div>
         </div>
@@ -843,7 +846,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
         <div className="text-center">
           <span className={`text-sm font-medium ${currentDate === today ? "text-white" : "text-white/40"}`}>
-            {currentDate === today ? "Dnes" : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "long" })}
+            {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString("cs-CZ", { day: "numeric", month: "long" })}
           </span>
         </div>
         <button
@@ -856,7 +859,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           disabled={saving}
           className="ml-auto flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
         >
-          ✓ {saving ? "Ukládám..." : "Uložit"}
+          ✓ {saving ? t("common.saving") : t("common.save")}
         </button>
       </div>
 
@@ -883,7 +886,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
         {/* ── SLEEP QUALITY ── */}
         <div>
-          <p className="text-xs text-white/30 text-center mb-2">Kvalita spánku</p>
+          <p className="text-xs text-white/30 text-center mb-2">{t("checkin.sleep_label")}</p>
           <div className="flex justify-center gap-1 flex-wrap">
             {SLEEP_QUALITY.map(s => (
               <button
@@ -931,7 +934,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             onClick={addCustomActivity}
             className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
           >
-            ➕ Přidat vlastní aktivitu
+            ➕ {t("activities.add_custom")}
           </button>
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -939,12 +942,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               showSettings ? "bg-indigo-500/20 text-indigo-300 border border-indigo-400/20" : "bg-white/5 border border-white/10 text-white/40 hover:text-white"
             }`}
           >
-            ⚙️ Spravovat
+            {t("activities.manage")}
           </button>
         </div>
 
         {/* ── HABITS ── */}
-        <Section title="Návyky">
+        <Section title={t("habits.section_title")}>
           <div className="space-y-2">
             {(flags?.habitTracking
               ? habitDefs
@@ -957,7 +960,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{h.icon}</span>
                     <span className="text-sm text-white/80">{h.label}</span>
-                    <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">dnes ne</span>
+                    <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">{t("habits.not_today")}</span>
                   </div>
                   <button
                     onClick={() => setData(d => ({ ...d, habits: { ...d.habits, [h.key]: !isOn } }))}
@@ -976,7 +979,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               onClick={addCustomHabit}
               className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
             >
-              ➕ Přidat vlastní návyk
+              ➕ {t("habits.add_custom")}
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -984,7 +987,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 showSettings ? "bg-indigo-500/20 text-indigo-300 border border-indigo-400/20" : "bg-white/5 border border-white/10 text-white/40 hover:text-white"
               }`}
             >
-              ⚙️ Spravovat
+              {t("activities.manage")}
             </button>
           </div>
         </Section>
@@ -994,10 +997,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           <div className="mb-4 p-4 bg-white/3 rounded-xl border border-white/5 space-y-4">
             {/* Activity Management */}
             <div>
-              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">📋 Tvoje aktivity</p>
+              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">{t("activities.your_activities")}</p>
               <p className="text-[10px] text-white/25 mb-2">
-                {activityDefs.length} aktivit v {groupActivities(activityDefs).length} kategoriích.
-                Vlastní můžeš odebrat, výchozí schovat.
+                {t("activities.activities_summary", { count: activityDefs.length, categories: groupActivities(activityDefs).length })}
               </p>
               
               {/* Activity list with remove buttons */}
@@ -1011,13 +1013,13 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                           <span>{a.icon}</span>
                           <span className="text-white/60">{a.label}</span>
                           <span className="text-[10px] text-white/20">
-                            {a.source === "custom" ? "· vlastní" : "· výchozí"}
+                            {a.source === "custom" ? t("activities.custom_badge") : t("activities.default_badge")}
                           </span>
                         </span>
                         <button
                           onClick={() => removeActivity(a.key)}
                           className="text-red-400/40 hover:text-red-400 text-xs px-1.5 py-0.5 rounded hover:bg-red-500/10 transition-colors"
-                          title={a.source === "custom" ? "Odebrat aktivitu" : "Skrýt aktivitu"}
+                          title={a.source === "custom" ? t("activities.remove_tooltip_custom") : t("activities.remove_tooltip_default")}
                         >
                           ✕
                         </button>
@@ -1031,14 +1033,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 onClick={addCustomActivity}
                 className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
               >
-                ➕ Přidat vlastní aktivitu
+                ➕ {t("activities.add_custom")}
               </button>
 
               {/* Hidden activities — restore section */}
               {hiddenActivities.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-white/5">
                   <p className="text-[10px] text-white/20 uppercase tracking-wider mb-2">
-                    🔒 Skryté aktivity ({hiddenActivities.length})
+                    {t("activities.hidden_activities", { count: hiddenActivities.length })}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {hiddenActivities.map(a => (
@@ -1046,7 +1048,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         key={a.key}
                         onClick={() => restoreActivity(a.key)}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/20 text-xs text-white/40 hover:text-emerald-400 transition-colors"
-                        title="Kliknutím obnovíš"
+                        title={t("activities.restore_tooltip")}
                       >
                         <span>{a.icon}</span>
                         <span>{a.label}</span>
@@ -1063,10 +1065,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
             {/* Habit Management */}
             <div>
-              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">🎯 Tvoje návyky</p>
+              <p className="text-xs font-medium text-white/50 mb-2 uppercase tracking-wider">{t("habits.your_habits")}</p>
               {habitDefs.length === 0 ? (
                 <p className="text-xs text-white/20 italic mb-3">
-                  Zatím žádné. Přidej první tlačítkem níže.
+                  {t("activities.no_activities_yet")}
                 </p>
               ) : (
                 <div className="space-y-1.5 mb-3">
@@ -1079,15 +1081,15 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         <span>{h.icon}</span>
                         <span className="text-white/70">{h.label}</span>
                         <span className="text-[10px] text-white/25">
-                          {h.is_negative ? "(abstinenční)" : "(pozitivní)"}
-                          {h.source === "default" ? " · výchozí" : ""}
+                          {h.is_negative ? t("habits.negative_badge") : t("habits.positive_badge")}
+                          {h.source === "default" ? t("habits.default_badge") : ""}
                         </span>
                       </span>
                       <button
                         onClick={() => removeHabit(h.key)}
                         className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
                       >
-                        ✕ Odebrat
+                        ✕ {t("habits.remove_btn")}
                       </button>
                     </div>
                   ))}
@@ -1097,14 +1099,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 onClick={addCustomHabit}
                 className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
               >
-                ➕ Přidat návyk
+                ➕ {t("habits.add_habit")}
               </button>
             </div>
           </div>
         )}
 
         {/* ── GOALS ── */}
-        <Section title={`Cíle ${goals.filter(g => g.completedDates.includes(currentDate)).length}/${goals.length}`} defaultOpen={goals.length > 0}>
+        <Section title={t("goals.section_title", { done: goals.filter(g => g.completedDates.includes(currentDate)).length, total: goals.length })} defaultOpen={goals.length > 0}>
           <div className="space-y-2">
             {goals.map(g => {
               const isDone = g.completedDates.includes(currentDate);
@@ -1118,7 +1120,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                     <span className="text-lg">{g.emoji}</span>
                     <div className="text-left">
                       <span className="text-sm text-white/80 block">{g.name}</span>
-                      {streak > 0 && <span className="text-[10px] text-indigo-400">🔥 {streak}-denní řada</span>}
+                      {streak > 0 && <span className="text-[10px] text-indigo-400">{t("goals.streak", { streak })}</span>}
                     </div>
                   </button>
                   <button onClick={() => removeGoal(g.id)} className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 text-sm transition-all ml-2">✕</button>
@@ -1126,14 +1128,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               );
             })}
           </div>
-          <button onClick={addGoal} className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1">+ Přidat cíl</button>
+          <button onClick={addGoal} className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1">+ {t("goals.add_goal")}</button>
         </Section>
 
         {/* ── STRESS ── */}
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-            <span className="text-sm font-medium text-white/80">Stres</span>
+            <span className="text-sm font-medium text-white/80">{t("completedCard.stress")}</span>
           </div>
           <div className="flex gap-1">
             {STRESS_LEVELS.map(s => (
@@ -1155,7 +1157,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-            <span className="text-sm font-medium text-white/80">Za co jsi vděčný?</span>
+            <span className="text-sm font-medium text-white/80">{t("checkin.gratitude_title")}</span>
           </div>
           <div className="space-y-2">
             {[0, 1, 2].map(i => (
@@ -1164,7 +1166,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 <input
                   value={data.gratitude[i]}
                   onChange={e => { const g = [...data.gratitude]; g[i] = e.target.value; setData(d => ({ ...d, gratitude: g })); }}
-                  placeholder={`${i + 1}. věc...`}
+                  placeholder={t("gratitude.placeholder", { n: i + 1 })}
                   className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
                 />
               </div>
@@ -1176,12 +1178,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-            <span className="text-sm font-medium text-white/80">Rychlá poznámka</span>
+            <span className="text-sm font-medium text-white/80">{t("checkin.note_title")}</span>
           </div>
           <textarea
             value={data.note}
             onChange={e => setData(d => ({ ...d, note: e.target.value }))}
-            placeholder="Co ti dnes běželo hlavou..."
+            placeholder={t("checkin.note_placeholder")}
             rows={3}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50 resize-none"
           />
@@ -1191,7 +1193,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-            <span className="text-sm font-medium text-white/80">Fotka</span>
+            <span className="text-sm font-medium text-white/80">{t("checkin.photo_title")}</span>
           </div>
           <PhotoPicker
             onPhotoSelected={url => setData(d => ({ ...d, photoDataUrl: url }))}
@@ -1214,37 +1216,37 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="px-5 pt-5 pb-2">
-            <h3 className="text-base font-semibold text-white">➕ Přidat aktivitu</h3>
+            <h3 className="text-base font-semibold text-white">{t("addActivity.title")}</h3>
           </div>
 
           <div className="px-5 pb-2 space-y-3">
             {/* Activity name */}
             <div>
-              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">Název</label>
+              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">{t("addActivity.name_label")}</label>
               <input
                 value={newItemName}
                 onChange={e => setNewItemName(e.target.value)}
-                placeholder="Např. běhání"
+                placeholder={t("addActivity.name_placeholder")}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
                 autoFocus
                 onKeyDown={e => { if (e.key === "Enter") confirmAddCustomActivity(); }}
               />
             </div>
 
-            {/* Emoji */}
+            {/* {t("addActivity.emoji_label")} */}
             <div>
-              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">Emoji</label>
+              <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">{t("addActivity.emoji_label")}</label>
               <input
                 value={newItemIcon}
                 onChange={e => setNewItemIcon(e.target.value)}
-                placeholder="🏃"
+                placeholder={t("addActivity.emoji_placeholder")}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
               />
             </div>
 
             {/* Category grid */}
             <div>
-              <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">Kategorie</label>
+              <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">{t("addActivity.category_label")}</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {Object.entries(CATEGORY_GROUPS).map(([key, label]) => (
                   <button
@@ -1274,13 +1276,13 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               onClick={() => { setShowAddActivity(false); setActivityError(null); }}
               className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white/70 hover:bg-white/10 transition-colors text-sm font-medium"
             >
-              Zrušit
+              {t("addActivity.cancel")}
             </button>
             <button
               onClick={confirmAddCustomActivity}
               className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white transition-colors text-sm font-medium"
             >
-              Přidat
+              {t("addActivity.add")}
             </button>
           </div>
         </div>
@@ -1296,7 +1298,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             disabled={saving}
             className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
           >
-            {saving ? "⏳ Ukládám..." : "✓ Uložit do vaultu"}
+            {saving ? t("checkin.saving") : t("checkin.save_to_vault")}
           </button>
         </div>
         
@@ -1306,19 +1308,19 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             onClick={() => window.location.href = "/"}
             className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
           >
-            🏠 Dashboard
+            {t("checkin.nav_dashboard")}
           </button>
           <button
             onClick={() => {}}
             className="flex-1 py-2.5 text-xs font-medium text-white flex items-center justify-center gap-1.5"
           >
-            📝 Check-in
+            {t("checkin.nav_checkin")}
           </button>
           <button
             onClick={() => window.location.href = "/stats"}
             className="flex-1 py-2.5 text-xs font-medium text-white/30 hover:text-white/50 flex items-center justify-center gap-1.5 transition-colors"
           >
-            📊 Stats
+            {t("checkin.nav_stats")}
           </button>
         </div>
       </div>
