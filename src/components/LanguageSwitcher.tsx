@@ -3,7 +3,7 @@
 import { useTranslation } from "@/lib/i18n";
 
 export function LanguageSwitcher() {
-  const { lang, setLang } = useTranslation();
+  const { lang, setLang, t } = useTranslation();
 
   return (
     <div className="flex items-center gap-0.5">
@@ -14,8 +14,8 @@ export function LanguageSwitcher() {
             ? "bg-indigo-500/30 text-indigo-200 border border-indigo-400/30"
             : "text-white/25 hover:text-white/50 border border-transparent"
         }`}
-        title="Čeština"
-        aria-label="Přepnout na češtinu"
+        title={t("language.cs")}
+        aria-label={t("language.switch_to_cs")}
       >
         🇨🇿
       </button>
@@ -26,8 +26,8 @@ export function LanguageSwitcher() {
             ? "bg-indigo-500/30 text-indigo-200 border border-indigo-400/30"
             : "text-white/25 hover:text-white/50 border border-transparent"
         }`}
-        title="English"
-        aria-label="Switch to English"
+        title={t("language.en")}
+        aria-label={t("language.switch_to_en")}
       >
         🇬🇧
       </button>

@@ -45,6 +45,12 @@ function interpolate(str: string, params?: Record<string, string | number>): str
 
 function detectBrowserLang(): Lang {
   if (typeof window === "undefined") return DEFAULT_LANG;
+  // URL query param override (for screenshots, e.g. ?lang=en)
+  const urlLang = new URLSearchParams(window.location.search).get("lang");
+  if (urlLang === "en" || urlLang === "cs") {
+    localStorage.setItem(STORAGE_KEY, urlLang);
+    return urlLang;
+  }
   const stored = localStorage.getItem(STORAGE_KEY) as Lang | null;
   if (stored === "cs" || stored === "en") return stored;
   const navLang = navigator.language?.toLowerCase().startsWith("cs") ? "cs" : "en";

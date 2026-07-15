@@ -157,6 +157,8 @@ function CompletedCard({
   habitDefs: HabitDef[];
 }) {
   const { t, lang } = useTranslation();
+  const displayLabel = (item: { label: string; labelEn?: string }) =>
+    lang === 'en' ? (item.labelEn || item.label) : item.label;
   const mood = MOODS.find(m => m.value === data.mood);
   const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
   const stressLevel = data.stress > 0 ? STRESS_LEVELS[data.stress - 1] : null;
@@ -247,7 +249,7 @@ function CompletedCard({
           {habitStatus.map(h => (
             <div key={h.key} className={`flex-1 text-center p-2 rounded-lg ${h.kept ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-red-500/5 border border-red-500/10"}`}>
               <div className="text-lg">{h.icon}</div>
-              <div className="text-[10px] text-white/50 mt-0.5">{h.label}</div>
+              <div className="text-[10px] text-white/50 mt-0.5">{displayLabel(h)}</div>
               <div className={`text-[10px] font-medium ${h.kept ? "text-emerald-400" : "text-red-400"}`}>
                 {h.kept ? "✓" : "✗"}
               </div>
@@ -330,6 +332,8 @@ function CompletedCard({
 // ── MAIN COMPONENT ──
 export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => void; initialDate?: string | null }) {
   const { t, lang } = useTranslation();
+  const displayLabel = (item: { label: string; labelEn?: string }) =>
+    lang === 'en' ? (item.labelEn || item.label) : item.label;
   const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
   const [goals, setGoals] = useState<Goal[]>([]);
   const [saving, setSaving] = useState(false);
@@ -880,7 +884,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                       }`}
                     >
                       <span className="text-2xl">{a.icon}</span>
-                      <span className="text-[10px] text-white/50 leading-tight text-center">{a.label}</span>
+                      <span className="text-[10px] text-white/50 leading-tight text-center">{displayLabel(a)}</span>
                     </button>
                   );
                 })}
@@ -920,7 +924,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 <div key={h.key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{h.icon}</span>
-                    <span className="text-sm text-white/80">{h.label}</span>
+                    <span className="text-sm text-white/80">{displayLabel(h)}</span>
                     <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">{t("habits.not_today")}</span>
                   </div>
                   <button
@@ -972,7 +976,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                       <div key={a.key} className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-white/5 text-xs">
                         <span className="flex items-center gap-1.5">
                           <span>{a.icon}</span>
-                          <span className="text-white/60">{a.label}</span>
+                          <span className="text-white/60">{displayLabel(a)}</span>
                           <span className="text-[10px] text-white/20">
                             {a.source === "custom" ? t("activities.custom_badge") : t("activities.default_badge")}
                           </span>
@@ -1012,7 +1016,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         title={t("activities.restore_tooltip")}
                       >
                         <span>{a.icon}</span>
-                        <span>{a.label}</span>
+                        <span>{displayLabel(a)}</span>
                         <span className="text-[10px] text-emerald-500/40 ml-0.5">↩</span>
                       </button>
                     ))}
@@ -1040,7 +1044,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                     <div key={h.key} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5">
                       <span className="flex items-center gap-2 text-sm">
                         <span>{h.icon}</span>
-                        <span className="text-white/70">{h.label}</span>
+                        <span className="text-white/70">{displayLabel(h)}</span>
                         <span className="text-[10px] text-white/25">
                           {h.is_negative ? t("habits.negative_badge") : t("habits.positive_badge")}
                           {h.source === "default" ? t("habits.default_badge") : ""}

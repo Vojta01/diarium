@@ -268,6 +268,7 @@ export async function getEntry(date: string): Promise<Entry | null> {
 export interface ActivityDef {
   key: string;
   label: string;
+  labelEn?: string;
   icon: string;
   category: string;
   color: string;
@@ -277,6 +278,7 @@ export interface ActivityDef {
 export interface HabitDef {
   key: string;
   label: string;
+  labelEn?: string;
   icon: string;
   category: string;
   color: string;
@@ -287,58 +289,58 @@ export interface HabitDef {
 // Hardcoded fallback — original activity catalog, used when DB is empty
 const FALLBACK_ACTIVITIES: ActivityDef[] = [
   // Společenské
-  { key: "rodina", label: "Rodina", icon: "👨‍👩‍👧", category: "sociální", color: "#8b5cf6", source: "default" },
-  { key: "pratele", label: "Přátelé", icon: "👥", category: "sociální", color: "#8b5cf6", source: "default" },
-  { key: "rande", label: "Rande", icon: "💑", category: "sociální", color: "#ec4899", source: "default" },
-  { key: "party", label: "Párty", icon: "🎉", category: "sociální", color: "#f97316", source: "default" },
-  { key: "office", label: "Office", icon: "🏢", category: "sociální", color: "#3b82f6", source: "default" },
+  { key: "rodina", label: "Rodina", labelEn: "Family", icon: "👨‍👩‍👧", category: "sociální", color: "#8b5cf6", source: "default" },
+  { key: "pratele", label: "Přátelé", labelEn: "Friends", icon: "👥", category: "sociální", color: "#8b5cf6", source: "default" },
+  { key: "rande", label: "Rande", labelEn: "Date", icon: "💑", category: "sociální", color: "#ec4899", source: "default" },
+  { key: "party", label: "Párty", labelEn: "Party", icon: "🎉", category: "sociální", color: "#f97316", source: "default" },
+  { key: "office", label: "Office", labelEn: "Office", icon: "🏢", category: "sociální", color: "#3b82f6", source: "default" },
   // Záliby
-  { key: "filmy_a_tv", label: "Filmy a TV", icon: "🎬", category: "volný čas", color: "#eab308", source: "default" },
-  { key: "cteni", label: "Čtení", icon: "📖", category: "volný čas", color: "#a855f7", source: "default" },
-  { key: "hrani_her", label: "Hraní her", icon: "🎮", category: "volný čas", color: "#22c55e", source: "default" },
-  { key: "sport", label: "Sport", icon: "🏃", category: "volný čas", color: "#22c55e", source: "default" },
-  { key: "relax", label: "Relax", icon: "😌", category: "volný čas", color: "#8b5cf6", source: "default" },
-  { key: "hudba", label: "Hudba", icon: "🎵", category: "volný čas", color: "#ef4444", source: "default" },
+  { key: "filmy_a_tv", label: "Filmy a TV", labelEn: "Movies & TV", icon: "🎬", category: "volný čas", color: "#eab308", source: "default" },
+  { key: "cteni", label: "Čtení", labelEn: "Reading", icon: "📖", category: "volný čas", color: "#a855f7", source: "default" },
+  { key: "hrani_her", label: "Hraní her", labelEn: "Gaming", icon: "🎮", category: "volný čas", color: "#22c55e", source: "default" },
+  { key: "sport", label: "Sport", labelEn: "Sports", icon: "🏃", category: "volný čas", color: "#22c55e", source: "default" },
+  { key: "relax", label: "Relax", labelEn: "Relax", icon: "😌", category: "volný čas", color: "#8b5cf6", source: "default" },
+  { key: "hudba", label: "Hudba", labelEn: "Music", icon: "🎵", category: "volný čas", color: "#ef4444", source: "default" },
   // Jídlo
-  { key: "jist_zdrave", label: "Jíst zdravě", icon: "🥗", category: "jídlo", color: "#22c55e", source: "default" },
-  { key: "rychle_obcerstveni", label: "Rychlé občerstvení", icon: "🍔", category: "jídlo", color: "#f97316", source: "default" },
-  { key: "domaci_vyroba", label: "Domácí výroba", icon: "🍳", category: "jídlo", color: "#f59e0b", source: "default" },
-  { key: "restaurace", label: "Restaurace", icon: "🍽️", category: "jídlo", color: "#f97316", source: "default" },
-  { key: "donaska", label: "Donáška", icon: "📦", category: "jídlo", color: "#f97316", source: "default" },
-  { key: "den_bez_masa", label: "Den bez masa", icon: "🥬", category: "jídlo", color: "#22c55e", source: "default" },
-  { key: "zadne_sladkosti", label: "Žádné sladkosti", icon: "🚫🍰", category: "jídlo", color: "#ef4444", source: "default" },
-  { key: "zadne_limonady", label: "Žádné limonády", icon: "🚫🥤", category: "jídlo", color: "#ef4444", source: "default" },
+  { key: "jist_zdrave", label: "Jíst zdravě", labelEn: "Eat healthy", icon: "🥗", category: "jídlo", color: "#22c55e", source: "default" },
+  { key: "rychle_obcerstveni", label: "Rychlé občerstvení", labelEn: "Fast food", icon: "🍔", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "domaci_vyroba", label: "Domácí výroba", labelEn: "Home cooking", icon: "🍳", category: "jídlo", color: "#f59e0b", source: "default" },
+  { key: "restaurace", label: "Restaurace", labelEn: "Restaurant", icon: "🍽️", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "donaska", label: "Donáška", labelEn: "Delivery", icon: "📦", category: "jídlo", color: "#f97316", source: "default" },
+  { key: "den_bez_masa", label: "Den bez masa", labelEn: "Meatless day", icon: "🥬", category: "jídlo", color: "#22c55e", source: "default" },
+  { key: "zadne_sladkosti", label: "Žádné sladkosti", labelEn: "No sweets", icon: "🚫🍰", category: "jídlo", color: "#ef4444", source: "default" },
+  { key: "zadne_limonady", label: "Žádné limonády", labelEn: "No soda", icon: "🚫🥤", category: "jídlo", color: "#ef4444", source: "default" },
   // Zdraví / Sport
-  { key: "trenink", label: "Trénink", icon: "🏋️", category: "sport", color: "#16a34a", source: "default" },
-  { key: "pit_vody", label: "Pít vodu", icon: "💧", category: "sport", color: "#3b82f6", source: "default" },
-  { key: "chuze", label: "Chůze", icon: "🚶", category: "sport", color: "#84cc16", source: "default" },
-  { key: "kolo", label: "Kolo", icon: "🚴", category: "sport", color: "#84cc16", source: "default" },
-  { key: "plavani", label: "Plavání", icon: "🏊", category: "sport", color: "#06b6d4", source: "default" },
-  { key: "paddleboard", label: "Paddleboard", icon: "🏄", category: "sport", color: "#06b6d4", source: "default" },
-  { key: "snooker", label: "Snooker", icon: "🎱", category: "sport", color: "#ef4444", source: "default" },
+  { key: "trenink", label: "Trénink", labelEn: "Workout", icon: "🏋️", category: "sport", color: "#16a34a", source: "default" },
+  { key: "pit_vody", label: "Pít vodu", labelEn: "Drink water", icon: "💧", category: "sport", color: "#3b82f6", source: "default" },
+  { key: "chuze", label: "Chůze", labelEn: "Walking", icon: "🚶", category: "sport", color: "#84cc16", source: "default" },
+  { key: "kolo", label: "Kolo", labelEn: "Cycling", icon: "🚴", category: "sport", color: "#84cc16", source: "default" },
+  { key: "plavani", label: "Plavání", labelEn: "Swimming", icon: "🏊", category: "sport", color: "#06b6d4", source: "default" },
+  { key: "paddleboard", label: "Paddleboard", labelEn: "Paddleboarding", icon: "🏄", category: "sport", color: "#06b6d4", source: "default" },
+  { key: "snooker", label: "Snooker", labelEn: "Snooker", icon: "🎱", category: "sport", color: "#ef4444", source: "default" },
   // Mé lepší já
-  { key: "meditovat", label: "Meditovat", icon: "🧘", category: "wellness", color: "#7c3aed", source: "default" },
-  { key: "laskavost", label: "Laskavost", icon: "💝", category: "wellness", color: "#ec4899", source: "default" },
-  { key: "naslouchani", label: "Naslouchání", icon: "👂", category: "wellness", color: "#8b5cf6", source: "default" },
-  { key: "darcovstvi", label: "Dárcovství", icon: "💰", category: "wellness", color: "#22c55e", source: "default" },
-  { key: "dej_darek", label: "Dej dárek", icon: "🎁", category: "wellness", color: "#f97316", source: "default" },
-  { key: "terapie", label: "Terapie", icon: "🛋️", category: "wellness", color: "#8b5cf6", source: "default" },
-  { key: "integrita", label: "Integrita", icon: "⚖️", category: "wellness", color: "#6366f1", source: "default" },
+  { key: "meditovat", label: "Meditovat", labelEn: "Meditation", icon: "🧘", category: "wellness", color: "#7c3aed", source: "default" },
+  { key: "laskavost", label: "Laskavost", labelEn: "Kindness", icon: "💝", category: "wellness", color: "#ec4899", source: "default" },
+  { key: "naslouchani", label: "Naslouchání", labelEn: "Listening", icon: "👂", category: "wellness", color: "#8b5cf6", source: "default" },
+  { key: "darcovstvi", label: "Dárcovství", labelEn: "Giving", icon: "💰", category: "wellness", color: "#22c55e", source: "default" },
+  { key: "dej_darek", label: "Dej dárek", labelEn: "Gift", icon: "🎁", category: "wellness", color: "#f97316", source: "default" },
+  { key: "terapie", label: "Terapie", labelEn: "Therapy", icon: "🛋️", category: "wellness", color: "#8b5cf6", source: "default" },
+  { key: "integrita", label: "Integrita", labelEn: "Integrity", icon: "⚖️", category: "wellness", color: "#6366f1", source: "default" },
   // Domácí práce
-  { key: "nakupovani", label: "Nakupování", icon: "🛒", category: "domácí práce", color: "#f59e0b", source: "default" },
-  { key: "uklizeni", label: "Uklízení", icon: "🧹", category: "domácí práce", color: "#3b82f6", source: "default" },
-  { key: "vareni", label: "Vaření", icon: "🍲", category: "domácí práce", color: "#f97316", source: "default" },
-  { key: "prani", label: "Praní", icon: "🧺", category: "domácí práce", color: "#3b82f6", source: "default" },
-  { key: "zehleni", label: "Žehlení", icon: "👕", category: "domácí práce", color: "#ef4444", source: "default" },
+  { key: "nakupovani", label: "Nakupování", labelEn: "Shopping", icon: "🛒", category: "domácí práce", color: "#f59e0b", source: "default" },
+  { key: "uklizeni", label: "Uklízení", labelEn: "Cleaning", icon: "🧹", category: "domácí práce", color: "#3b82f6", source: "default" },
+  { key: "vareni", label: "Vaření", labelEn: "Cooking", icon: "🍲", category: "domácí práce", color: "#f97316", source: "default" },
+  { key: "prani", label: "Praní", labelEn: "Laundry", icon: "🧺", category: "domácí práce", color: "#3b82f6", source: "default" },
+  { key: "zehleni", label: "Žehlení", labelEn: "Ironing", icon: "👕", category: "domácí práce", color: "#ef4444", source: "default" },
   // Počasí
-  { key: "slunecno", label: "Slunečno", icon: "☀️", category: "počasí", color: "#eab308", source: "default" },
-  { key: "zatazeno", label: "Zataženo", icon: "☁️", category: "počasí", color: "#9ca3af", source: "default" },
-  { key: "dest", label: "Déšť", icon: "🌧️", category: "počasí", color: "#3b82f6", source: "default" },
-  { key: "snih", label: "Sníh", icon: "❄️", category: "počasí", color: "#e0e7ff", source: "default" },
-  { key: "mraz", label: "Mráz", icon: "🥶", category: "počasí", color: "#93c5fd", source: "default" },
-  { key: "horko", label: "Horko", icon: "🌡️", category: "počasí", color: "#ef4444", source: "default" },
-  { key: "bourka", label: "Bouřka", icon: "🌩️", category: "počasí", color: "#f59e0b", source: "default" },
-  { key: "vitr", label: "Vítr", icon: "💨", category: "počasí", color: "#9ca3af", source: "default" },
+  { key: "slunecno", label: "Slunečno", labelEn: "Sunny", icon: "☀️", category: "počasí", color: "#eab308", source: "default" },
+  { key: "zatazeno", label: "Zataženo", labelEn: "Cloudy", icon: "☁️", category: "počasí", color: "#9ca3af", source: "default" },
+  { key: "dest", label: "Déšť", labelEn: "Rain", icon: "🌧️", category: "počasí", color: "#3b82f6", source: "default" },
+  { key: "snih", label: "Sníh", labelEn: "Snow", icon: "❄️", category: "počasí", color: "#e0e7ff", source: "default" },
+  { key: "mraz", label: "Mráz", labelEn: "Freezing", icon: "🥶", category: "počasí", color: "#93c5fd", source: "default" },
+  { key: "horko", label: "Horko", labelEn: "Heatwave", icon: "🌡️", category: "počasí", color: "#ef4444", source: "default" },
+  { key: "bourka", label: "Bouřka", labelEn: "Thunderstorm", icon: "🌩️", category: "počasí", color: "#f59e0b", source: "default" },
+  { key: "vitr", label: "Vítr", labelEn: "Windy", icon: "💨", category: "počasí", color: "#9ca3af", source: "default" },
 ];
 
 export async function getActivities(): Promise<ActivityDef[]> {

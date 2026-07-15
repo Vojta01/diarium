@@ -14,14 +14,6 @@ interface Props {
   onNavigateToStats: () => void;
 }
 
-const MOOD_TEXT: Record<number, string> = {
-  5: "Skvěle",
-  4: "Dobře",
-  3: "Jde to",
-  2: "Špatně",
-  1: "Hrozně",
-};
-
 function formatScreenTime(seconds: number): string {
   if (seconds <= 0) return "—";
   const minutes = Math.round(seconds / 60);
@@ -32,7 +24,7 @@ function formatScreenTime(seconds: number): string {
 }
 
 export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [todayEntry, setTodayEntry] = useState<Entry | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -71,7 +63,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
   const hasHomeAssistant = flags.homeAssistant;
 
   const now = new Date();
-  const dateStr = now.toLocaleDateString("cs-CZ", {
+  const dateStr = now.toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -79,19 +71,17 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
   });
 
   // ── Last 7 days (for emoji row) ──
-  const dayLabels: Record<number, string> = {
-    0: "Ne", 1: "Po", 2: "Út", 3: "St", 4: "Čt", 5: "Pá", 6: "So",
-  };
   const last7Days: { date: string; mood?: number; label: string; isToday: boolean }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = d.toISOString().split("T")[0];
     const entry = entries.find((e) => e.date === key);
+    const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()];
     last7Days.push({
       date: key,
       mood: entry?.mood,
-      label: i === 0 ? "Dnes" : dayLabels[d.getDay()],
+      label: i === 0 ? t("dashboard.today_label") : t(`dashboard.day_labels.${dayKey}`),
       isToday: i === 0,
     });
   }
@@ -167,7 +157,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
               <span className="text-4xl">{todayEntry.mood_emoji}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-white font-medium text-lg">
-                  {MOOD_TEXT[todayEntry.mood]}
+                  {t(`mood.mood_${todayEntry.mood}`)}
                 </div>
                 {todayEntry.note && (
                   <p className="text-white/50 text-sm mt-1 line-clamp-2">
@@ -219,7 +209,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                          focus:outline-none"
               title={
                 day.mood
-                  ? t("dashboard.tooltip_mood", { mood: MOOD_TEXT[day.mood] })
+                  ? t("dashboard.tooltip_mood", { mood: t(`mood.mood_${day.mood}`) })
                   : t("dashboard.tooltip_no_entry")
               }
             >
@@ -376,7 +366,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
             </h3>
             <span className="text-[11px] text-white/20">
               {new Date(gratitudeEntry.date + "T00:00:00").toLocaleDateString(
-                "cs-CZ",
+                lang === "cs" ? "cs-CZ" : "en-US",
                 { day: "numeric", month: "short" }
               )}
             </span>
@@ -416,7 +406,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                 </h3>
                 <span className="text-[11px] text-white/20">
                   {new Date(recentEntry.date + "T00:00:00").toLocaleDateString(
-                    "cs-CZ",
+                    lang === "cs" ? "cs-CZ" : "en-US",
                     { day: "numeric", month: "short" }
                   )}
                 </span>

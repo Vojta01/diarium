@@ -377,10 +377,19 @@ export const cs = {
     status_inactive: 'Notifikace vypnuté ❌ — pro zapnutí obnov aplikaci',
   },
 
+  // ── Update Prompt (PWA) ──
+  updatePrompt: {
+    title: 'Nová verze k dispozici',
+    description: 'Aktualizuj pro nejnovější funkce',
+    update: 'Aktualizovat',
+  },
+
   // ── Language Switcher ──
   language: {
     cs: '🇨🇿 Čeština',
     en: '🇬🇧 English',
+    switch_to_cs: 'Přepnout na češtinu',
+    switch_to_en: 'Switch to English',
   },
 
   // ── ActivityMoodChart interpretations (used in screentime tab) ──

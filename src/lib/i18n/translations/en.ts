@@ -377,10 +377,19 @@ export const en = {
     status_inactive: 'Notifications off ❌ — restart the app to enable',
   },
 
+  // ── Update Prompt (PWA) ──
+  updatePrompt: {
+    title: 'New version available',
+    description: 'Update for the latest features',
+    update: 'Update',
+  },
+
   // ── Language Switcher ──
   language: {
     cs: '🇨🇿 Čeština',
     en: '🇬🇧 English',
+    switch_to_cs: 'Switch to Czech',
+    switch_to_en: 'Switch to English',
   },
 
   // ── ActivityMoodChart interpretations ──
