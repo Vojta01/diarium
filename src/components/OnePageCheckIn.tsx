@@ -36,7 +36,7 @@ const STRESS_LEVELS = [
 ];
 
 const STRESS_LABELS: Record<number, string> = {
-  1: "checkin.stress_1", 2: "checkin.stress_2", 3: "checkin.stress_3", 4: "checkin.stress_4", 5: "checkin.stress_5",
+  1: "stress.stress_1", 2: "stress.stress_2", 3: "stress.stress_3", 4: "stress.stress_4", 5: "stress.stress_5",
 };
 
 // ── Mood-based quotes ──
@@ -323,7 +323,7 @@ function CompletedCard({
         onClick={onEdit}
         className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
       >
-        ✏️ {t("completedCard.edit_record")}
+        {t("completedCard.edit_record")}
       </button>
     </div>
   );
@@ -899,7 +899,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             onClick={addCustomActivity}
             className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
           >
-            ➕ {t("activities.add_custom")}
+            {t("activities.add_custom")}
           </button>
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -944,7 +944,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
               onClick={addCustomHabit}
               className="flex-1 py-2 rounded-xl bg-white/5 border border-dashed border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors text-xs flex items-center justify-center gap-1"
             >
-              ➕ {t("habits.add_custom")}
+              {t("habits.add_custom")}
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -998,7 +998,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 onClick={addCustomActivity}
                 className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
               >
-                ➕ {t("activities.add_custom")}
+                {t("activities.add_custom")}
               </button>
 
               {/* Hidden activities — restore section */}
@@ -1054,7 +1054,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                         onClick={() => removeHabit(h.key)}
                         className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
                       >
-                        ✕ {t("habits.remove_btn")}
+                        {t("habits.remove_btn")}
                       </button>
                     </div>
                   ))}
@@ -1064,7 +1064,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 onClick={addCustomHabit}
                 className="w-full py-2 text-xs text-indigo-400/60 hover:text-indigo-400 border border-dashed border-indigo-400/20 rounded-lg transition-colors"
               >
-                ➕ {t("habits.add_habit")}
+                {t("habits.add_habit")}
               </button>
             </div>
           </div>

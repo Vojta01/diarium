@@ -188,7 +188,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                          transition-all duration-200 active:scale-[0.97]
                          cursor-pointer flex items-center justify-center gap-2"
             >
-              ✏️ {t("dashboard.checkin_button")}
+              {t("dashboard.checkin_button")}
             </button>
           </div>
         )}
@@ -351,7 +351,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
       {aiReflection && (
         <div className="glass-card mb-4 border-indigo-400/10 bg-indigo-500/5">
           <h3 className="text-sm font-medium text-indigo-300 mb-2">
-            🤖 {t("dashboard.ai_reflection")}
+            {t("dashboard.ai_reflection")}
           </h3>
           <Markdown content={aiReflection} />
         </div>
