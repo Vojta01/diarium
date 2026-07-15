@@ -852,6 +852,15 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
               </div>
             </div>
 
+            {/* X-axis date labels */}
+            <div className="flex justify-between text-[9px] text-white/30 mt-1 px-2">
+              {trendData.rolling.filter((_, i, arr) =>
+                i === 0 || i === arr.length - 1 || i % Math.max(1, Math.floor(arr.length / 6)) === 0
+              ).map((p, i) => (
+                <span key={i}>{p.date.slice(8, 10)}.{p.date.slice(5, 7)}</span>
+              ))}
+            </div>
+
             <div className="flex gap-3 text-[10px]">
               <div className="flex-1 p-2 rounded-lg bg-white/3 text-center">
                 <div className="text-white/30">{t("correlation.trends_start")}</div>
