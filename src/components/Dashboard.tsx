@@ -157,7 +157,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
               <span className="text-4xl">{todayEntry.mood_emoji}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-white font-medium text-lg">
-                  {t(`mood.mood_${todayEntry.mood}`)}
+                  {todayEntry.mood ? t(`mood.mood_${todayEntry.mood}`) : "—"}
                 </div>
                 {todayEntry.note && (
                   <p className="text-white/50 text-sm mt-1 line-clamp-2">
