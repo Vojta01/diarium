@@ -200,7 +200,7 @@ function CompletedCard({
           borderColor: (mood?.color || "#6366f1") + "30",
         }}>
           <span className="text-3xl">{mood?.emoji}</span>
-          <span className="text-white font-medium">{t(`mood.mood_${mood?.value}e`)}</span>
+          <span className="text-white font-medium">{mood?.value ? t(`mood.mood_${mood.value}e`) : "—"}</span>
         </div>
       </div>
 
