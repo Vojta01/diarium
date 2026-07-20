@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
+import { guardAIUser } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -275,6 +276,13 @@ export async function GET(request: NextRequest) {
     const results: any[] = [];
     for (const userId of uniqueUsers) {
       try {
+        // AI user whitelist
+        const userBlock = guardAIUser(userId);
+        if (userBlock) {
+          results.push({ userId, success: false, reason: "not_authorized" });
+          continue;
+        }
+
         const result = await generateAndSaveReport(userId, type);
         if (result) {
           results.push({ userId, success: true });
