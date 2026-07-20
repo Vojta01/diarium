@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
+import { guardAIUser, guardPeriodicReport } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 
@@ -209,6 +210,10 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // AI user whitelist
+    const userBlock = guardAIUser(user.id);
+    if (userBlock) return userBlock;
+
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       return Response.json({ error: "DEEPSEEK_API_KEY not configured" }, { status: 500 });
@@ -230,6 +235,26 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Rate limiting: check if report for this period already exists
+    const now = new Date();
+    let periodStart: string;
+    let periodEnd: string = now.toISOString().split("T")[0];
+
+    if (type === "weekly") {
+      const cutoff = new Date(now);
+      cutoff.setDate(cutoff.getDate() - 7);
+      periodStart = cutoff.toISOString().split("T")[0];
+    } else if (type === "monthly") {
+      const cutoff = new Date(now);
+      cutoff.setDate(cutoff.getDate() - 30);
+      periodStart = cutoff.toISOString().split("T")[0];
+    } else {
+      periodStart = `${now.getFullYear()}-01-01`;
+    }
+
+    const cachedReport = await guardPeriodicReport(user_id, type, periodStart, periodEnd);
+    if (cachedReport) return cachedReport;
+
     // Query entries from Supabase
     const serviceKey = SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) {
@@ -238,21 +263,8 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(SUPABASE_URL, serviceKey);
 
-    // Determine date range
-    const now = new Date();
-    let fromDate: string;
-
-    if (type === "weekly") {
-      const cutoff = new Date(now);
-      cutoff.setDate(cutoff.getDate() - 7);
-      fromDate = cutoff.toISOString().split("T")[0];
-    } else if (type === "monthly") {
-      const cutoff = new Date(now);
-      cutoff.setDate(cutoff.getDate() - 30);
-      fromDate = cutoff.toISOString().split("T")[0];
-    } else {
-      fromDate = `${now.getFullYear()}-01-01`;
-    }
+    // Reuse periodStart computed above for rate limiting
+    const fromDate = periodStart;
 
     const { data: entries, error: dbError } = await supabase
       .from("entries")

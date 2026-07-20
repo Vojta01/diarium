@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
+import { guardAIUser, guardDailyReflection } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,6 +124,10 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // AI user whitelist
+    const userBlock = guardAIUser(user.id);
+    if (userBlock) return userBlock;
+
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       return Response.json({ error: "API key not configured" }, { status: 500 });
@@ -138,6 +143,12 @@ export async function POST(request: NextRequest) {
     // Verify the caller owns this user_id
     if (user_id && user_id !== user.id) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limiting: check if today's reflection already exists in DB
+    if (user_id && date) {
+      const cached = await guardDailyReflection(user_id, date);
+      if (cached) return cached;
     }
 
     // Fetch last 7 days from Supabase
