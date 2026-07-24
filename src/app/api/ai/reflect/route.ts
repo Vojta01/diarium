@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
           { role: "system", content: lang === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 350,
+        max_tokens: 800,
         temperature: 0.7,
       }),
     });
