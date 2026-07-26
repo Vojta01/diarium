@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type = "weekly", user_id, access_token, lang } = body;
+    const { type = "weekly", user_id, access_token, lang, force } = body;
 
     if (!["weekly", "monthly", "yearly"].includes(type)) {
       return Response.json({ error: "Invalid type. Use: weekly, monthly, yearly" }, { status: 400 });
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
       periodStart = `${now.getFullYear()}-01-01`;
     }
 
-    const cachedReport = await guardPeriodicReport(user_id, type, periodStart, periodEnd);
+    const cachedReport = force ? null : await guardPeriodicReport(user_id, type, periodStart, periodEnd);
     if (cachedReport) return cachedReport;
 
     // Query entries from Supabase
@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: type === "yearly" ? 2048 : type === "monthly" ? 1536 : 1024,
+        max_tokens: type === "yearly" ? 4096 : type === "monthly" ? 3072 : 2048,
         temperature: 0.7,
       }),
     });
