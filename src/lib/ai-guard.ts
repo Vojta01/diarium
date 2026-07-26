@@ -94,3 +94,47 @@ export async function guardPeriodicReport(
   }
   return null;
 }
+
+/**
+ * Check regeneration cooldown — prevent token draining.
+ * Allows max 1 forced regeneration per hour per user+type+period.
+ */
+export async function guardRegenerationCooldown(
+  userId: string,
+  type: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<Response | null> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { persistSession: false },
+    });
+    const { data } = await supabase
+      .from('ai_reports')
+      .select('created_at')
+      .eq('user_id', userId)
+      .eq('type', type)
+      .eq('period_start', periodStart)
+      .eq('period_end', periodEnd)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (data && data.length > 0) {
+      const lastGen = new Date(data[0].created_at).getTime();
+      const now = Date.now();
+      const cooldownMs = 60 * 60 * 1000; // 1 hour
+      if (now - lastGen < cooldownMs) {
+        const minutesLeft = Math.ceil((cooldownMs - (now - lastGen)) / 60000);
+        return Response.json({
+          error: `Regeneration cooldown active. Try again in ${minutesLeft} minute(s).`,
+          cooldown: true,
+          minutesLeft,
+        }, { status: 429 });
+      }
+    }
+  } catch (e) {
+    console.error('guardRegenerationCooldown: failed', e);
+    // On error, allow through — don't block legitimate use
+  }
+  return null;
+}
