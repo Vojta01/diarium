@@ -56,7 +56,7 @@ export function PeriodicSummary({ userId }: Props) {
       const resp = await fetch("/api/ai/periodic", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ type, user_id: userId, lang }),
+        body: JSON.stringify({ type, user_id: userId, lang, force: true }),
       });
       const json = await resp.json();
       if (json.error) {
