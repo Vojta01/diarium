@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
-import { guardAIUser, guardPeriodicReport } from "@/lib/ai-guard";
+import { guardAIUser, guardPeriodicReport, guardRegenerationCooldown } from "@/lib/ai-guard";
 
 export const runtime = "nodejs";
 
@@ -250,6 +250,12 @@ export async function POST(request: NextRequest) {
       periodStart = cutoff.toISOString().split("T")[0];
     } else {
       periodStart = `${now.getFullYear()}-01-01`;
+    }
+
+    // Force regeneration: check cooldown (max 1× per hour)
+    if (force) {
+      const cooldownBlock = await guardRegenerationCooldown(user_id, type, periodStart, periodEnd);
+      if (cooldownBlock) return cooldownBlock;
     }
 
     const cachedReport = force ? null : await guardPeriodicReport(user_id, type, periodStart, periodEnd);
