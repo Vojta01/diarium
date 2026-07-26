@@ -156,7 +156,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
         { role: "system", content: SYSTEM_PROMPTS[type] },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: type === "monthly" ? 1536 : 1024,
+      max_tokens: type === "monthly" ? 3072 : 2048,
       temperature: 0.7,
     }),
   });
