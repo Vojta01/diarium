@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getSupabaseAuthTokenKey } from '@/lib/supabase-ref';
 
 function decodeJWT(token: string) {
@@ -121,8 +122,8 @@ function CallbackInner() {
           {debug.map((d, i) => <p key={i}>{d}</p>)}
         </div>
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-          <a href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</a>
-          <a href="/sw-reset" style={{ color: '#f59e0b' }}>Zkusit obnovit aplikaci</a>
+          <Link href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</Link>
+          <Link href="/sw-reset" style={{ color: '#f59e0b' }}>Zkusit obnovit aplikaci</Link>
         </div>
       </div>
     );

@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
 /**
  * SW Reset / Self-healing kill-switch page.
  *
@@ -11,8 +14,6 @@
  *
  * Must load fast even when things are broken — NO heavy imports.
  */
-
-import { useEffect, useState } from 'react';
 
 export default function SwResetPage() {
   const [status, setStatus] = useState('Obnovuji aplikaci…');
@@ -104,9 +105,9 @@ export default function SwResetPage() {
         }}
       >
         Pokud se nic neděje,{' '}
-        <a href="/" style={{ color: '#6366f1' }}>
+        <Link href="/" style={{ color: '#6366f1' }}>
           klikni sem
-        </a>
+        </Link>
         .
       </p>
     </div>
