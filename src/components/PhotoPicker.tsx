@@ -27,11 +27,19 @@ interface PhotoPickerProps {
 export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [authToken] = useState<string | null>(() =>
-    typeof window !== "undefined"
-      ? localStorage.getItem("diarium_google_token")
-      : null
-  );
+  const [authToken] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      // Check expiry before returning token
+      const expiresAt = localStorage.getItem("diarium_google_token_expires_at");
+      if (expiresAt && Date.now() > parseInt(expiresAt)) {
+        localStorage.removeItem("diarium_google_token");
+        localStorage.removeItem("diarium_google_token_expires_at");
+        return null;
+      }
+      return localStorage.getItem("diarium_google_token");
+    }
+    return null;
+  });
   const [pickerMode, setPickerMode] = useState<"menu" | "google" | null>(null);
 
   const handleFileChange = useCallback(
@@ -69,6 +77,13 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
   );
 
   const handleGooglePhotos = useCallback(async () => {
+    // Re-check expiry at call time
+    const expiresAt = localStorage.getItem("diarium_google_token_expires_at");
+    if (expiresAt && Date.now() > parseInt(expiresAt)) {
+      localStorage.removeItem("diarium_google_token");
+      localStorage.removeItem("diarium_google_token_expires_at");
+    }
+
     const token = localStorage.getItem("diarium_google_token");
 
     if (!token) {
@@ -113,6 +128,7 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
       if (!res.ok) {
         // Token expired — clear and fall back
         localStorage.removeItem("diarium_google_token");
+        localStorage.removeItem("diarium_google_token_expires_at");
         fileRef.current?.click();
         return;
       }

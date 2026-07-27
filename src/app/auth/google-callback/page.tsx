@@ -23,8 +23,11 @@ export default function GooglePhotosCallback() {
     }
 
     if (access_token) {
-      // Store token for later use
+      // Store token with expiry for later use
+      const expires_in = parseInt(params.get('expires_in') || '3600');
+      const expires_at = Date.now() + expires_in * 1000;
       localStorage.setItem('diarium_google_token', access_token);
+      localStorage.setItem('diarium_google_token_expires_at', String(expires_at));
       setStatus('✅ Připojeno k Google Photos! Přesměrovávám...');
       
       // Redirect back to the main page
