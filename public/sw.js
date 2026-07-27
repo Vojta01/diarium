@@ -64,7 +64,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // NEVER cache auth-related pages — they must always hit the network
-  if (url.pathname.startsWith("/auth/") || url.pathname === "/sw-reset") {
+  if (url.pathname.startsWith("/auth/") || url.pathname === "/sw-reset" || url.pathname === "/sw-reset.html") {
     event.respondWith(fetch(event.request).catch(() => new Response(OFFLINE_FALLBACK_HTML, {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },
