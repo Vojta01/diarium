@@ -7,8 +7,8 @@ import { StatsDashboard } from "@/components/StatsDashboard";
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 import { useTranslation } from "@/lib/i18n";
+import { readStoredSession } from "@/lib/auth-storage";
 import type { User } from "@supabase/supabase-js";
 
 type View = "dashboard" | "checkin" | "stats";
@@ -45,16 +45,11 @@ export default function Home() {
 
   useEffect(() => {
     // Try manual localStorage first (set by callback page)
-    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed.user) {
-          setUser(parsed.user as User);
-          setLoading(false);
-          return;
-        }
-      } catch {}
+    const session = readStoredSession();
+    if (session?.user) {
+      setUser(session.user as User);
+      setLoading(false);
+      return;
     }
 
     // Fallback: supabase-js
