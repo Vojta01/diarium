@@ -50,13 +50,32 @@ function dump(label, value) {
     const accessToken = hashParams.get('access_token');
     log('implicit flow tokens in hash: ' + (accessToken ? 'YES ✅' : 'NO'), accessToken ? 'ok' : 'warn');
     if (accessToken) {
-      // Store tokens
+      // Store tokens — extract user from JWT, calculate proper expires_at
+      let user = {};
+      let expires_at = Math.floor(Date.now() / 1000) + 3600; // default 1h
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        user = {
+          id: payload.sub,
+          email: payload.email,
+          user_metadata: payload.user_metadata || {},
+          app_metadata: payload.app_metadata || {},
+          aud: payload.aud || 'authenticated',
+          role: payload.role || 'authenticated',
+        };
+        if (payload.exp) expires_at = payload.exp;
+      } catch {}
+      
+      // Also check for expires_in in hash
+      const expiresIn = parseInt(hashParams.get('expires_in') || '0');
+      if (expiresIn > 0) expires_at = Math.floor(Date.now() / 1000) + expiresIn;
+
       localStorage.setItem('sb-vmqbslghzgfotwhzgawa-auth-token', JSON.stringify({
         access_token: accessToken,
         refresh_token: hashParams.get('refresh_token') || '',
-        expires_at: parseInt(hashParams.get('expires_at') || '0'),
+        expires_at: expires_at,
         token_type: hashParams.get('token_type') || 'bearer',
-        user: JSON.parse(hashParams.get('user') || '{}'),
+        user: user,
       }));
       log('Tokens stored in localStorage ✅', 'ok');
       log('Redirecting to /debug.html ...', 'ok');

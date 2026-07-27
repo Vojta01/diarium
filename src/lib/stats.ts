@@ -24,11 +24,17 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
   // Get user from localStorage (bypasses supabase-js auth issues)
   let userId: string | null = null;
   const session = readStoredSession();
-  if (session?.user?.id) {
-    userId = session.user.id;
-    // Set session explicitly so RLS queries work
-    if (session.access_token) {
-      await sb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token || '' }).catch(() => {});
+  if (session?.access_token) {
+    // Always set session so RLS has auth.uid() context
+    await sb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token || '' }).catch(() => {});
+    
+    // Extract user ID from session, fallback to JWT decode
+    userId = session.user?.id || null;
+    if (!userId) {
+      try {
+        const payload = JSON.parse(atob(session.access_token.split('.')[1]));
+        userId = payload.sub;
+      } catch {}
     }
   }
   
