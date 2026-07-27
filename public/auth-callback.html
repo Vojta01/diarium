@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diarium — Auth Callback</title>
+<style>
+body{background:#0f0f23;color:#a5b4fc;font-family:monospace;padding:1.5rem;font-size:0.85rem}
+h1{color:#6366f1;font-size:1.1rem}
+pre{background:rgba(99,102,241,0.1);padding:0.75rem;border-radius:6px;overflow-x:auto;font-size:0.8rem;margin:0.3rem 0;max-height:300px;overflow-y:auto}
+.ok{color:#22c55e}
+.err{color:#ef4444}
+.warn{color:#f59e0b}
+.step{margin:0.5rem 0;padding:0.5rem;border-left:3px solid #6366f1;background:rgba(99,102,241,0.05)}
+</style>
+</head>
+<body>
+<h1>auth-callback diagnostika</h1>
+<div id="log"></div>
+
+<script>
+const logEl = document.getElementById('log');
+
+function log(msg, cls) {
+  const d = new Date().toISOString().slice(11,23);
+  logEl.innerHTML += `<div class="step ${cls||''}">[${d}] ${msg}</div>`;
+}
+
+function dump(label, value) {
+  log(`${label}: <pre>${JSON.stringify(value, null, 2) || '(null/undefined)'}</pre>`);
+}
+
+(async function main() {
+  log('=== START CALLBACK ===', 'ok');
+
+  // 1. Show URL info
+  dump('window.location.href', window.location.href);
+  dump('window.location.search', window.location.search);
+  dump('window.location.hash', window.location.hash || '(empty)');
+
+  // 2. Parse code from URL
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  dump('code param', code ? code.substring(0, 20) + '...' : 'MISSING');
+
+  // 3. Also check hash for tokens (implicit flow)
+  const hash = window.location.hash.substring(1);
+  if (hash) {
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+    log('implicit flow tokens in hash: ' + (accessToken ? 'YES ✅' : 'NO'), accessToken ? 'ok' : 'warn');
+    if (accessToken) {
+      // Store tokens
+      localStorage.setItem('sb-vmqbslghzgfotwhzgawa-auth-token', JSON.stringify({
+        access_token: accessToken,
+        refresh_token: hashParams.get('refresh_token') || '',
+        expires_at: parseInt(hashParams.get('expires_at') || '0'),
+        token_type: hashParams.get('token_type') || 'bearer',
+        user: JSON.parse(hashParams.get('user') || '{}'),
+      }));
+      log('Tokens stored in localStorage ✅', 'ok');
+      log('Redirecting to / ...', 'ok');
+      setTimeout(() => window.location.href = '/', 1000);
+      return;
+    }
+  }
+
+  // 4. If code is present, try PKCE exchange
+  if (code) {
+    log('Code found — attempting PKCE exchange...', 'ok');
+
+    // 4a. Try to find code_verifier in sessionStorage
+    log('Searching for code_verifier in sessionStorage...', '');
+    const sessionKeys = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      sessionKeys.push(sessionStorage.key(i));
+    }
+    dump('sessionStorage keys (' + sessionStorage.length + ' total)', sessionKeys.slice(0, 20));
+    
+    // Show values of all sessionStorage keys (truncated)
+    const sessionData = {};
+    for (const k of sessionKeys) {
+      const v = sessionStorage.getItem(k);
+      sessionData[k] = v ? (v.length > 100 ? v.substring(0,100) + '...' : v) : v;
+    }
+    dump('sessionStorage values (truncated)', sessionData);
+
+    // 4b. Try to import Supabase client dynamically
+    log('Importing Supabase client...', '');
+    try {
+      const supabaseUrl = 'https://vmqbslghzgfotwhzgawa.supabase.co';
+      // We need the anon key — hardcode it here since we can't dynamically import the module
+      // Actually, let's try loading from the window.__NEXT_DATA__ or fetch an env endpoint
+      
+      log('Attempting manual token exchange via fetch...', '');
+      // Find code_verifier — it might be stored with key containing 'code_verifier'
+      let codeVerifier = null;
+      for (const k of sessionKeys) {
+        if (k.includes('code_verifier') || k.includes('pkce')) {
+          codeVerifier = sessionStorage.getItem(k);
+          log(`Found code_verifier in key: ${k}`, 'ok');
+          break;
+        }
+      }
+      
+      // Also check localStorage
+      if (!codeVerifier) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.includes('code_verifier') || k.includes('pkce'))) {
+            codeVerifier = localStorage.getItem(k);
+            log(`Found code_verifier in localStorage key: ${k}`, 'ok');
+            break;
+          }
+        }
+      }
+
+      if (!codeVerifier) {
+        log('code_verifier NOT FOUND in sessionStorage or localStorage ❌', 'err');
+      } else {
+        log('code_verifier found', 'ok');
+      }
+
+      // 4c. Try to exchange via Supabase API directly
+      const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtcWJzbGdoemdmZ3R3aHpnYXdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY3NjY4MTIsImV4cCI6MjA1MjM0MjgxMn0.kMTtdt39ErOUH4l5r4CswuOK0ONKfSWoPEpyVMX0j6w';  // This is a placeholder
+      
+      log('Exchange would need the actual anon key from env...', 'warn');
+      
+      // Alternative: try loading Supabase from CDN
+      log('Loading @supabase/supabase-js from CDN...', '');
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      script.onload = async function() {
+        log('Supabase JS loaded from CDN', 'ok');
+        
+        // We need the actual env vars. Let's try to fetch them.
+        // Actually, the anon key is public. Let me just hardcode the actual one.
+        // BUT I don't want to commit it. Let me fetch it from the Next.js page.
+        
+        try {
+          // Fetch the home page and extract the NEXT_PUBLIC_SUPABASE_ANON_KEY from JS
+          const resp = await fetch('/');
+          const html = await resp.text();
+          // Extract from __NEXT_DATA__ or env variables
+          const match = html.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY["']?\s*[:=]\s*["']([^"']+)["']/);
+          const key = match ? match[1] : null;
+          
+          if (key && window.supabase) {
+            const sb = window.supabase.createClient('https://vmqbslghzgfotwhzgawa.supabase.co', key);
+            log('Supabase client created', 'ok');
+            
+            const { data, error } = await sb.auth.exchangeCodeForSession(code);
+            if (error) {
+              log(`Exchange failed: ${error.message}`, 'err');
+              dump('Full error', error);
+            } else if (data.session) {
+              log('Exchange SUCCESS ✅', 'ok');
+              localStorage.setItem('sb-vmqbslghzgfotwhzgawa-auth-token', JSON.stringify({
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: data.session.expires_at,
+                token_type: data.session.token_type,
+                user: data.session.user,
+              }));
+              log('Redirecting to / ...', 'ok');
+              setTimeout(() => window.location.href = '/', 1000);
+              return;
+            }
+          } else {
+            log('Could not load Supabase client or extract API key', 'err');
+          }
+        } catch(e) {
+          log(`Fetch error: ${e.message}`, 'err');
+        }
+      };
+      script.onerror = function() {
+        log('Failed to load Supabase JS from CDN ❌', 'err');
+      };
+      document.head.appendChild(script);
+      
+    } catch(e) {
+      log(`Exception: ${e.message}`, 'err');
+    }
+  } else {
+    log('No code and no hash tokens — nothing to do ❌', 'err');
+  }
+
+  log('=== END (waiting for async operations) ===', '');
+})();
+</script>
+</body>
+</html>
