@@ -23,6 +23,18 @@ function ensureVapid() {
 
 export async function GET(_request: NextRequest) {
   try {
+    // Server-only — require CRON_SECRET bearer token or ?secret= query param
+    const url = new URL(_request.url);
+    const authHeader = _request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+    const querySecret = url.searchParams.get("secret");
+    const isAuthorized = !cronSecret
+      || authHeader === `Bearer ${cronSecret}`
+      || querySecret === cronSecret;
+    if (!isAuthorized) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const redis = getRedis();
     if (!redis) {
       return Response.json({ error: "Redis not configured" }, { status: 500 });
