@@ -6,40 +6,30 @@ export const dynamic = "force-dynamic";
 
 const MOOD_EMOJI: Record<number,string> = {1:"😡",2:"😟",3:"😐",4:"🙂",5:"😄"};
 
-export async function POST(_request: NextRequest) {
+export async function POST(req: NextRequest) {
+  const { offset = 0, limit = 50 } = await req.json().catch(() => ({}));
   const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   
-  // 1. Get ALL entries before July 1, 2026
   const { data: entries, error } = await sb
-    .from("entries")
-    .select("date,mood,mood_emoji")
-    .lt("date", "2026-07-01");
+    .from("entries").select("date,mood,mood_emoji")
+    .lt("date", "2026-07-01")
+    .order("date")
+    .range(offset, offset + limit - 1);
   
   if (error) return Response.json({ error: error.message }, { status: 500 });
+  if (!entries?.length) return Response.json({ done: true, fixed: 0, message: "No more entries" });
   
   let fixed = 0;
-  let skipped = 0;
-  const log: string[] = [];
+  const samples: string[] = [];
   
-  for (const e of (entries || [])) {
-    const oldMood = e.mood;
-    if (oldMood == null || oldMood < 1 || oldMood > 5) { skipped++; continue; }
-    
-    const newMood = 6 - oldMood;
-    const newEmoji = MOOD_EMOJI[newMood] || "";
-    
-    const { error: updErr } = await sb
-      .from("entries")
-      .update({ mood: newMood, mood_emoji: newEmoji })
-      .eq("date", e.date);
-    
-    if (updErr) {
-      log.push(`${e.date}: FAILED — ${updErr.message}`);
-    } else {
-      fixed++;
-      if (fixed <= 10) log.push(`${e.date}: ${oldMood}→${newMood} (${e.mood_emoji}→${newEmoji})`);
-    }
+  for (const e of entries) {
+    const old = e.mood;
+    if (old == null || old < 1 || old > 5) continue;
+    const neo = 6 - old;
+    await sb.from("entries").update({ mood: neo, mood_emoji: MOOD_EMOJI[neo] }).eq("date", e.date);
+    fixed++;
+    if (samples.length < 5) samples.push(`${e.date}: ${old}→${neo}`);
   }
   
-  return Response.json({ fixed, skipped, total: (entries||[]).length, samples: log });
+  return Response.json({ done: entries.length < limit, fixed, samples, nextOffset: offset + limit });
 }
