@@ -34,9 +34,9 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // ── Emergency kill-switch: ?sw-reset redirects before SW init ──
+              // ── Emergency kill-switch: ?sw-reset redirects to static reset page ──
               if (location.search.includes('sw-reset')) {
-                location.replace('/sw-reset');
+                location.replace('/sw-reset.html');
               }
 
               // ── Service Worker registration ──
@@ -49,14 +49,14 @@ export default function RootLayout({
                 // The SW will eventually update on next page load.
 
                 // ── Conservative fetch-error detector ──
-                // If the page fails to load critical assets (5+ errors), redirect to /sw-reset.
+                // If the page fails to load critical assets (5+ errors), redirect to /sw-reset.html.
                 var _errorCount = 0;
                 window.addEventListener('error', function(e) {
                   // Only count resource load failures (not JS runtime errors)
                   if (e.target && (e.target.tagName === 'LINK' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'IMG')) {
                     _errorCount++;
                     if (_errorCount >= 5) {
-                      location.replace('/sw-reset');
+                      location.replace('/sw-reset.html');
                     }
                   }
                 }, true);
