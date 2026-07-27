@@ -49,18 +49,33 @@ export default function Home() {
     if (session?.user) {
       setUser(session.user as User);
       setLoading(false);
+
+      // Still subscribe to auth changes, but don't block rendering on network
+      try {
+        const sb = createSupabaseClient();
+        const { data: listener } = sb.auth.onAuthStateChange((_event, s) => {
+          setUser(s?.user ?? null);
+        });
+        return () => {
+          listener.subscription.unsubscribe();
+        };
+      } catch {
+        // Silently ignore — localStorage session is sufficient
+      }
       return;
     }
 
-    // Fallback: supabase-js
+    // Fallback: supabase-js (network session check)
     const sb = createSupabaseClient();
     sb.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
 
-    const { data: listener } = sb.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: listener } = sb.auth.onAuthStateChange((_event, s) => {
+      setUser(s?.user ?? null);
     });
 
     const params = new URLSearchParams(window.location.search);
