@@ -49,14 +49,15 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
     .from("entries")
     .select("*")
     .eq("user_id", userId)
-    .order("date", { ascending: true });
+    .order("date", { ascending: false })
+    .limit(1000);
 
   if (error) {
     console.error("Chyba při načítání entries:", error);
     return [];
   }
 
-  return (data ?? []).map((e: any) => ({
+  return (data ?? []).reverse().map((e: any) => ({
     date: e.date,
     mood: e.mood ?? 3,
     moodEmoji: e.mood_emoji ?? "😐",
