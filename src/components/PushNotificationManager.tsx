@@ -2,6 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { VAPID_PUBLIC_KEY } from "@/lib/vapid";
+import { getAccessToken } from "@/lib/supabase/db";
+
+function authHeaders(): Record<string, string> {
+  const tok = getAccessToken();
+  return {
+    "Content-Type": "application/json",
+    ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+  };
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -35,7 +44,7 @@ async function subscribeUser(): Promise<PushSubscription | null> {
   // Send to backend
   await fetch("/api/push/subscribe", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ subscription }),
   });
 
@@ -77,7 +86,7 @@ export function PushNotificationManager() {
       try {
         const res = await fetch("/api/push/subscribe", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
           body: JSON.stringify({ subscription: sub }),
         });
         if (!res.ok) console.error("[Push] Subscribe failed:", res.status, await res.text());
