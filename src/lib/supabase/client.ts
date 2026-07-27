@@ -15,6 +15,10 @@ export function createSupabaseClient() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      // Force localStorage instead of default sessionStorage.
+      // sessionStorage is lost when OAuth opens in external browser on mobile,
+      // causing "PKCE code verifier not found" errors.
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
   });
 }
