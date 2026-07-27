@@ -35,7 +35,7 @@ async function storeAndSetSession(access_token: string, refresh_token: string, e
     JSON.stringify({ access_token, refresh_token, expires_at: exp, token_type: 'bearer', user })
   );
 
-  // Also set session via Supabase client (sets cookies for middleware)
+  // Also set session via Supabase client (sets cookies for middleware via @supabase/ssr)
   try {
     const { createSupabaseClient } = await import('@/lib/supabase/client');
     const sb = createSupabaseClient();
@@ -120,7 +120,10 @@ function CallbackInner() {
         <div style={{ color: '#a5b4fc', marginTop: '1rem', fontSize: '0.8rem' }}>
           {debug.map((d, i) => <p key={i}>{d}</p>)}
         </div>
-        <a href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</a>
+        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+          <a href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</a>
+          <a href="/sw-reset" style={{ color: '#f59e0b' }}>Zkusit obnovit aplikaci</a>
+        </div>
       </div>
     );
   }
