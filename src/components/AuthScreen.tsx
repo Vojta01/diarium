@@ -14,10 +14,16 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
     setError(null);
     try {
       const sb = createSupabaseClient();
+      // On mobile, prefer implicit flow — no code_verifier needed,
+      // tokens come back in URL hash and survive external browser redirects.
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
       const { error } = await sb.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          ...(isMobile ? { flowType: "implicit" } : {}),
         },
       });
       if (error) throw error;
