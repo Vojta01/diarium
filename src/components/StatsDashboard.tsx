@@ -7,9 +7,9 @@ import { ScreenTimeChart } from "@/components/ScreenTimeChart";
 import { ActivityMoodChart } from "@/components/ActivityMoodChart";
 import { PeriodicSummary } from "@/components/PeriodicSummary";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
+import { readStoredSession } from "@/lib/auth-storage";
 
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const { t } = useTranslation();
@@ -28,15 +28,10 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
       })
       .catch(() => setLoading(false));
 
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.user?.id) setUserId(parsed.user.id);
-          if (parsed.user?.email) setUserEmail(parsed.user.email);
-        }
-      } catch {}
+    const session = readStoredSession();
+    if (session?.user) {
+      if (session.user.id) setUserId(session.user.id);
+      if (session.user.email) setUserEmail(session.user.email);
     }
   }, []);
 

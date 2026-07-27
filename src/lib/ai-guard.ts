@@ -5,12 +5,13 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 /**
  * Allowed user IDs that can use AI features.
- * Comma-separated in ALLOWED_AI_USERS env var, or default to Vojta.
+ * Comma-separated in AI_GUARD_ALLOWED_USER_ID env var, or ALLOWED_AI_USERS env var for backward compat,
+ * or default to Vojta's UUID (from ALLOWED_AI_USERS).
  */
 function getAllowedUsers(): string[] {
-  const env = process.env.ALLOWED_AI_USERS;
+  const env = process.env.AI_GUARD_ALLOWED_USER_ID || process.env.ALLOWED_AI_USERS;
   if (env) return env.split(',').map(s => s.trim()).filter(Boolean);
-  // Default: Vojta only
+  // Default: Vojta only — keep existing users working if env vars are unset
   return ['4a4de4ba-4733-4699-b2a8-2ad0db8ec700'];
 }
 
