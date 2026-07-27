@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { getSupabaseAuthTokenKey } from '@/lib/supabase-ref';
 
 function decodeJWT(token: string) {
@@ -36,10 +35,10 @@ async function storeAndSetSession(access_token: string, refresh_token: string, e
     JSON.stringify({ access_token, refresh_token, expires_at: exp, token_type: 'bearer', user })
   );
 
-  // Also set session via Supabase browser client (sets cookies for middleware via @supabase/ssr)
+  // Also set session via Supabase client (sets cookies for middleware)
   try {
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-    const sb = createSupabaseBrowserClient();
+    const { createSupabaseClient } = await import('@/lib/supabase/client');
+    const sb = createSupabaseClient();
     await sb.auth.setSession({ access_token, refresh_token });
   } catch {
     // Cookie-based auth failed, but localStorage works for client-side
@@ -97,17 +96,6 @@ function CallbackInner() {
             }
             if (data.session) {
               setDebug(d => [...d, 'PKCE session established, redirecting...']);
-              // Also store in localStorage for consistency with implicit flow
-              localStorage.setItem(
-                getSupabaseAuthTokenKey(),
-                JSON.stringify({
-                  access_token: data.session.access_token,
-                  refresh_token: data.session.refresh_token,
-                  expires_at: data.session.expires_at,
-                  token_type: data.session.token_type,
-                  user: data.session.user,
-                })
-              );
               window.location.href = '/';
               return;
             }
@@ -132,10 +120,7 @@ function CallbackInner() {
         <div style={{ color: '#a5b4fc', marginTop: '1rem', fontSize: '0.8rem' }}>
           {debug.map((d, i) => <p key={i}>{d}</p>)}
         </div>
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-          <Link href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</Link>
-          <Link href="/sw-reset" style={{ color: '#f59e0b' }}>Zkusit obnovit aplikaci</Link>
-        </div>
+        <a href="/" style={{ color: '#6366f1' }}>← Zpět na přihlášení</a>
       </div>
     );
   }
