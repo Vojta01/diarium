@@ -17,7 +17,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
       const { error } = await sb.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://diarium-two.vercel.app/auth/callback",
+          redirectTo: "https://diarium-two.vercel.app/auth-callback.html",
         },
       });
       if (error) throw error;
