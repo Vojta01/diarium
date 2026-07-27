@@ -1,4 +1,4 @@
-const CACHE = "diarium-v4";
+const CACHE = "diarium-v5";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -7,7 +7,7 @@ self.addEventListener("install", () => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -21,17 +21,25 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  // NEVER cache auth-related pages — they must always hit the network
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/auth/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // For everything else: network-first, cache as fallback
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request).then((res) => {
+    fetch(event.request)
+      .then((res) => {
         if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE).then((cache) => cache.put(event.request, clone));
         }
         return res;
-      });
-      return cached || fetched;
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 
