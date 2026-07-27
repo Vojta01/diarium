@@ -46,17 +46,20 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
         setEntries(data);
         setTodayEntry(entry);
         setUserEmail(user?.email ?? null);
-        // Compute last7Days inline for debug
-        const l7d: string[] = [];
+        // Deep debug: date format check
+        const firstKeys = data.slice(0, 3).map((x: any) => x.date).join(',');
+        const lastKeys = data.slice(-3).map((x: any) => x.date).join(',');
+        const targetKeys: string[] = [];
         for (let i = 6; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const key = d.toISOString().split("T")[0];
-          const e = data.find((x: any) => x.date === key);
-          l7d.push(e?.mood ? String(e.mood) : '-');
+          const d = new Date(); d.setDate(d.getDate() - i);
+          targetKeys.push(d.toISOString().split("T")[0]);
         }
+        // Try matching with different formats
+        const found = data.filter((x: any) => targetKeys.includes(x.date)).length;
         setDebugInfo(
-          `Loaded: ${data.length} entries | Last7: ${l7d.join(',')} | User: ${user?.id?.slice(0,8)}... | Today: ${entry ? (entry.mood ?? 'null') : 'none'}`,
+          `Loaded: ${data.length} | Found in last7: ${found} | ` +
+          `first: ${firstKeys} | last: ${lastKeys} | ` +
+          `looking for: ${targetKeys[0]}..${targetKeys[6]}`,
         );
       } catch (e) {
         console.error("Dashboard load error:", e);
