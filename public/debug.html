@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diarium — Diagnostika</title>
+<style>
+body{background:#0f0f23;color:#a5b4fc;font-family:monospace;padding:2rem;font-size:0.9rem}
+h1{font-size:1.2rem;color:#6366f1}
+pre{background:rgba(99,102,241,0.1);padding:1rem;border-radius:8px;overflow-x:auto;font-size:0.8rem;margin:0.5rem 0;word-break:break-all}
+.success{color:#22c55e}
+.fail{color:#ef4444}
+.warn{color:#f59e0b}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+</style>
+</head>
+<body>
+<h1>🩺 Diarium Auth Diagnostika</h1>
+<p>Poslední aktualizace: <span id="ts"></span></p>
+
+<h2>📍 Aktuální URL</h2>
+<pre id="url"></pre>
+
+<h2>🔍 Query parametry</h2>
+<pre id="query"></pre>
+
+<h2>🔑 Hash fragment</h2>
+<pre id="hash"></pre>
+
+<h2>📦 localStorage</h2>
+<div class="grid">
+  <div>
+    <h3>Supabase token key</h3>
+    <pre id="ls-token"></pre>
+  </div>
+  <div>
+    <h3>Všechny klíče</h3>
+    <pre id="ls-keys"></pre>
+  </div>
+</div>
+
+<h2>🍪 Cookies</h2>
+<pre id="cookies"></pre>
+
+<h2>🔌 Service Workers</h2>
+<pre id="sw"></pre>
+
+<h2>🌐 Network info</h2>
+<div class="grid">
+  <div>Online: <span id="online"></span></div>
+  <div>Referrer: <span id="ref"></span></div>
+</div>
+
+<h2>🧪 Test: Supabase API reachable?</h2>
+<button onclick="testSupabase()">Otestovat spojení</button>
+<pre id="supabase-test"></pre>
+
+<h2>🧹 Rychlý reset</h2>
+<button onclick="forceReset()">Smazat vše a restartovat</button>
+<p id="reset-msg"></p>
+
+<script>
+const el = id => document.getElementById(id);
+el('ts').textContent = new Date().toLocaleString();
+el('url').textContent = window.location.href;
+el('query').textContent = window.location.search || '(prázdné — žádné query parametry)';
+el('hash').textContent = window.location.hash || '(prázdné — žádný hash fragment)';
+
+// localStorage
+try {
+  const keys = [];
+  for (let i=0; i<localStorage.length; i++) keys.push(localStorage.key(i));
+  el('ls-keys').textContent = keys.join('\n') || '(prázdné)';
+  const tokenKeys = keys.filter(k => k.includes('auth') || k.includes('token') || k.startsWith('sb-'));
+  if (tokenKeys.length) {
+    el('ls-token').textContent = 'Nalezeny: ' + tokenKeys.join(', ') + '\n\nDélka: ';
+    tokenKeys.forEach(k => el('ls-token').textContent += k + '=' + localStorage.getItem(k).length + ' znaků\n');
+  } else {
+    el('ls-token').textContent = 'Žádné auth tokeny nenalezeny';
+  }
+} catch(e) { el('ls-keys').textContent = 'Chyba: ' + e; }
+
+// cookies
+el('cookies').textContent = document.cookie || '(prázdné — žádné cookies)';
+
+// service workers
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    if (regs.length) {
+      el('sw').textContent = regs.map(r => {
+        const scope = r.scope;
+        const state = r.active ? 'aktivní' : r.waiting ? 'čekající' : r.installing ? 'instaluje se' : 'neznámý';
+        return scope + ' [' + state + ']';
+      }).join('\n');
+    } else {
+      el('sw').textContent = 'Žádné service workery';
+    }
+  }).catch(e => el('sw').textContent = 'Chyba: ' + e);
+} else {
+  el('sw').textContent = 'SW nepodporovány';
+}
+
+el('online').textContent = navigator.onLine ? '✅ Ano' : '❌ Ne';
+el('online').className = navigator.onLine ? 'success' : 'fail';
+el('ref').textContent = document.referrer || '(žádný)';
+
+async function testSupabase() {
+  const out = el('supabase-test');
+  out.textContent = 'Testuji...';
+  try {
+    const resp = await fetch('https://vmqbslghzgfotwhzgawa.supabase.co');
+    out.textContent = 'Supabase API: ' + resp.status + ' ' + resp.statusText;
+  } catch(e) {
+    out.textContent = 'Chyba spojení: ' + e.message;
+  }
+}
+
+function forceReset() {
+  const msg = el('reset-msg');
+  msg.textContent = 'Mažu...';
+  // Unregister SW
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    });
+  }
+  // Clear caches
+  if ('caches' in window) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  }
+  // Clear localStorage & cookies
+  localStorage.clear();
+  document.cookie.split(';').forEach(c => {
+    const name = c.split('=')[0].trim();
+    if (name) {
+      document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=' + location.hostname;
+    }
+  });
+  msg.textContent = 'Hotovo. Přesměrovávám na hlavní stránku...';
+  setTimeout(() => window.location.href = '/', 1500);
+}
+</script>
+</body>
+</html>
