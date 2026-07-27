@@ -32,9 +32,6 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Debug counter — remove later
-  const [debugInfo, setDebugInfo] = useState("");
-
   useEffect(() => {
     const load = async () => {
       try {
@@ -46,21 +43,6 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
         setEntries(data);
         setTodayEntry(entry);
         setUserEmail(user?.email ?? null);
-        // Deep debug: date format check
-        const firstKeys = data.slice(0, 3).map((x: any) => x.date).join(',');
-        const lastKeys = data.slice(-3).map((x: any) => x.date).join(',');
-        const targetKeys: string[] = [];
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(); d.setDate(d.getDate() - i);
-          targetKeys.push(d.toISOString().split("T")[0]);
-        }
-        // Try matching with different formats
-        const found = data.filter((x: any) => targetKeys.includes(x.date)).length;
-        setDebugInfo(
-          `Loaded: ${data.length} | Found in last7: ${found} | ` +
-          `first: ${firstKeys} | last: ${lastKeys} | ` +
-          `looking for: ${targetKeys[0]}..${targetKeys[6]}`,
-        );
       } catch (e) {
         console.error("Dashboard load error:", e);
       }
@@ -151,8 +133,6 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
 
   return (
     <div className="min-h-screen p-4 pt-8 pb-24">
-      {/* Debug */}
-      {debugInfo && <div className="text-[10px] text-white/20 mb-2 text-center">{debugInfo}</div>}
       {/* Header */}
       <header className="text-center mb-6">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">

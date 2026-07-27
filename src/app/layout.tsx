@@ -39,10 +39,10 @@ export default function RootLayout({
                 location.replace('/sw-reset.html');
               }
 
-              // ── Service Worker temporarily DISABLED for debugging ──
-              // if ('serviceWorker' in navigator) {
-              //   navigator.serviceWorker.register('/sw.js').catch(function() {});
-              // }
+              // ── Service Worker registration ──
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(function() {});
+              }
             `,
           }}
         />
