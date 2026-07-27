@@ -1,7 +1,7 @@
 "use client";
 
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { readStoredSession } from "@/lib/auth-storage";
 
 export interface DailyEntry {
   date: string;
@@ -23,20 +23,13 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
   
   // Get user from localStorage (bypasses supabase-js auth issues)
   let userId: string | null = null;
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.user?.id) {
-          userId = parsed.user.id;
-          // Set session explicitly so RLS queries work
-          if (parsed.access_token) {
-            await sb.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' }).catch(() => {});
-          }
-        }
-      }
-    } catch {}
+  const session = readStoredSession();
+  if (session?.user?.id) {
+    userId = session.user.id;
+    // Set session explicitly so RLS queries work
+    if (session.access_token) {
+      await sb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token || '' }).catch(() => {});
+    }
   }
   
   if (!userId) {

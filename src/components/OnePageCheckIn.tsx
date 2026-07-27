@@ -7,8 +7,8 @@ import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
 import { useTranslation } from "@/lib/i18n";
+import { readStoredSession } from "@/lib/auth-storage";
 
 // ── Mood ──
 const MOODS = [
@@ -389,15 +389,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     }).catch(() => {});
     
     // Get user email and id
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.user?.email) setUserEmail(parsed.user.email);
-          if (parsed.user?.id) setUserId(parsed.user.id);
-        }
-      } catch {}
+    const session = readStoredSession();
+    if (session?.user) {
+      if (session.user.email) setUserEmail(session.user.email);
+      if (session.user.id) setUserId(session.user.id);
     }
   }, []);
 
@@ -670,15 +665,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     try {
       // Get user info for personalization
       let userName = "";
-      if (typeof window !== "undefined") {
-        try {
-          const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed.user?.email) userName = parsed.user.email;
-          }
-        } catch {}
-      }
+      const session = readStoredSession();
+      if (session?.user?.email) userName = session.user.email;
 
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
