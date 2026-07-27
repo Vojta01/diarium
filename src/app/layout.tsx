@@ -34,8 +34,42 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // ── Emergency kill-switch: ?sw-reset redirects before SW init ──
+              if (location.search.includes('sw-reset')) {
+                location.replace('/sw-reset');
+              }
+
+              // ── Service Worker registration with self-healing ──
               if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js');
+                var _swInitFailed = false;
+                var _swRegTimeout = setTimeout(function() {
+                  _swInitFailed = true;
+                }, 15000);
+
+                navigator.serviceWorker.register('/sw.js')
+                  .then(function() {
+                    clearTimeout(_swRegTimeout);
+                  })
+                  .catch(function() {
+                    clearTimeout(_swRegTimeout);
+                    _swInitFailed = true;
+                  });
+
+                // ── Watch for stuck SW: if controllerchange never fires, do nothing harmful ──
+                // The SW will eventually update on next page load.
+
+                // ── Conservative fetch-error detector ──
+                // If the page fails to load critical assets (3+ errors), redirect to /sw-reset.
+                var _errorCount = 0;
+                window.addEventListener('error', function(e) {
+                  // Only count resource load failures (not JS runtime errors)
+                  if (e.target && (e.target.tagName === 'LINK' || e.target.tagName === 'SCRIPT' || e.target.tagName === 'IMG')) {
+                    _errorCount++;
+                    if (_errorCount >= 5) {
+                      location.replace('/sw-reset');
+                    }
+                  }
+                }, true);
               }
             `,
           }}
