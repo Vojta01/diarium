@@ -1,9 +1,16 @@
 import { getRedis } from "@/lib/redis";
+import { verifyAuth } from "@/lib/auth";
 
 const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
 export async function POST(request: Request) {
   try {
+    // Require authentication — subscription must be tied to an authenticated user
+    const user = await verifyAuth(request);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const redis = getRedis();
     if (!redis) {
       return Response.json({ error: "Redis not configured" }, { status: 500 });
@@ -27,6 +34,12 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    // Require authentication
+    const user = await verifyAuth(request);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const redis = getRedis();
     if (!redis) {
       return Response.json({ error: "Redis not configured" }, { status: 500 });

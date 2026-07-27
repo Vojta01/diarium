@@ -1,5 +1,5 @@
 import { createSupabaseClient } from "./client";
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { readStoredSession } from "@/lib/auth-storage";
 import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
 
 // ── Typy ──
@@ -55,15 +55,8 @@ function getSupabase() {
 
 /** Get the stored access token from localStorage (bypasses supabase-js auth issues) */
 export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.access_token || null;
-    }
-  } catch {}
-  return null;
+  const session = readStoredSession();
+  return session?.access_token || null;
 }
 
 /** Vytvoří Supabase klienta s explicitním session tokenem pro obcházení "Invalid API key" */
@@ -81,15 +74,8 @@ function getAuthenticatedClient() {
 /** Získá aktuálně přihlášeného uživatele — z localStorage (rychlé, offline) */
 export async function getCurrentUser() {
   // Try localStorage first (set by callback page)
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(getSupabaseAuthTokenKey());
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed.user) return parsed.user;
-      } catch {}
-    }
-  }
+  const session = readStoredSession();
+  if (session?.user) return session.user;
 
   // Fallback: Supabase API
   const sb = getSupabase();
