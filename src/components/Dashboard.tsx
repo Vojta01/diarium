@@ -46,7 +46,18 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
         setEntries(data);
         setTodayEntry(entry);
         setUserEmail(user?.email ?? null);
-        setDebugInfo(`Entries: ${data.length}, User: ${user?.id?.slice(0,8)}..., Today entry: ${entry ? 'yes' : 'no'}`);
+        // Compute last7Days inline for debug
+        const l7d: string[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = d.toISOString().split("T")[0];
+          const e = data.find((x: any) => x.date === key);
+          l7d.push(e?.mood ? String(e.mood) : '-');
+        }
+        setDebugInfo(
+          `Loaded: ${data.length} entries | Last7: ${l7d.join(',')} | User: ${user?.id?.slice(0,8)}... | Today: ${entry ? (entry.mood ?? 'null') : 'none'}`,
+        );
       } catch (e) {
         console.error("Dashboard load error:", e);
       }
