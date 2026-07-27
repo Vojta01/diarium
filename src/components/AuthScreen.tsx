@@ -18,7 +18,8 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-        },
+          flowType: "implicit",
+        } as any,
       });
       if (error) throw error;
       // Přesměruje na Google OAuth → není potřeba volat onSignedIn
