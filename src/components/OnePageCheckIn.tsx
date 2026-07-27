@@ -231,7 +231,7 @@ function CompletedCard({
       </div>
 
       {/* Activities tags */}
-      {data.activities.length > 0 && (
+      {Array.isArray(data.activities) && data.activities.length > 0 && (
         <div className="glass-card">
           <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">{t("completedCard.activities_section")}</h3>
           <div className="flex flex-wrap gap-1.5">
