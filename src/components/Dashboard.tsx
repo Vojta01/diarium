@@ -419,7 +419,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
                   {recentEntry.note}
                 </p>
               </div>
-              {recentEntry.activities.length > 0 && (
+              {Array.isArray(recentEntry.activities) && recentEntry.activities.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {recentEntry.activities.slice(0, 4).map((a) => (
                     <span
