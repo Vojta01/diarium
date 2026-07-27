@@ -59,8 +59,8 @@ function dump(label, value) {
         user: JSON.parse(hashParams.get('user') || '{}'),
       }));
       log('Tokens stored in localStorage ✅', 'ok');
-      log('Redirecting to / ...', 'ok');
-      setTimeout(() => window.location.href = '/', 1000);
+      log('Redirecting to /debug.html ...', 'ok');
+      setTimeout(() => window.location.href = '/debug.html', 1000);
       return;
     }
   }
@@ -162,8 +162,8 @@ function dump(label, value) {
                 token_type: data.session.token_type,
                 user: data.session.user,
               }));
-              log('Redirecting to / ...', 'ok');
-              setTimeout(() => window.location.href = '/', 1000);
+              log('Redirecting to /debug.html ...', 'ok');
+              setTimeout(() => window.location.href = '/debug.html', 1000);
               return;
             }
           } else {
