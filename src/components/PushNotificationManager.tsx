@@ -177,19 +177,15 @@ export function PushNotificationManager() {
 
   // Small status indicator in bottom-right
   return (
-    <div className="fixed bottom-24 right-4 z-40">
+    <div className="fixed bottom-24 right-4 z-40 flex items-center gap-2">
       <div
-        className={`w-3 h-3 rounded-full ${
+        className={`w-3 h-3 rounded-full shrink-0 ${
           status === "granted" ? "bg-emerald-400" : "bg-red-400/50"
         }`}
-        title={
-          status === "granted"
-            ? "Notifikace aktivní ✅"
-            : error
-              ? `Chyba: ${error}`
-              : "Notifikace vypnuté ❌ — pro zapnutí obnov aplikaci"
-        }
       />
+      {error && (
+        <span className="text-[10px] text-red-400/70 max-w-[180px] leading-tight">{error}</span>
+      )}
     </div>
   );
 }
