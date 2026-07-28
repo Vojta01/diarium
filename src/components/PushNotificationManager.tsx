@@ -54,6 +54,7 @@ async function subscribeUser(): Promise<PushSubscription | null> {
 export function PushNotificationManager() {
   const [status, setStatus] = useState<"loading" | "granted" | "denied" | "unsupported">("loading");
   const [showPrompt, setShowPrompt] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const checkAndSubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -77,7 +78,8 @@ export function PushNotificationManager() {
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
         });
-      } catch {
+      } catch (e: any) {
+        setError("subscribe: " + (e.message || "unknown"));
         setStatus("denied");
         return;
       }
@@ -89,8 +91,11 @@ export function PushNotificationManager() {
           headers: authHeaders(),
           body: JSON.stringify({ subscription: sub }),
         });
-        if (!res.ok) console.error("[Push] Subscribe failed:", res.status, await res.text());
-        else console.log("[Push] Subscription stored OK");
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("[Push] Subscribe failed:", res.status, txt);
+          setError(`server: ${res.status} ${txt.substring(0, 80)}`);
+        } else console.log("[Push] Subscription stored OK");
       } catch (e) {
         console.error("[Push] Subscribe network error:", e);
       }
@@ -180,7 +185,9 @@ export function PushNotificationManager() {
         title={
           status === "granted"
             ? "Notifikace aktivní ✅"
-            : "Notifikace vypnuté ❌ — pro zapnutí obnov aplikaci"
+            : error
+              ? `Chyba: ${error}`
+              : "Notifikace vypnuté ❌ — pro zapnutí obnov aplikaci"
         }
       />
     </div>
