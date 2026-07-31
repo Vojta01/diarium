@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
-import { InstallPrompt } from "@/components/InstallPrompt";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -53,7 +52,6 @@ export default function RootLayout({
           {children}
           <PushNotificationManager />
           <UpdatePrompt />
-          <InstallPrompt />
         </I18nProvider>
       </body>
     </html>
