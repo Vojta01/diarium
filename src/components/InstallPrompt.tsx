@@ -28,13 +28,27 @@ export function InstallPrompt() {
       setDeferredPrompt(null);
     });
 
+    // On Android Chrome, show prompt after a few seconds even if beforeinstallprompt hasn't fired
+    const isAndroidChrome = /Android.*Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
+    let timer: any;
+    if (isAndroidChrome) {
+      timer = setTimeout(() => {
+        if (!deferredPrompt) setShowPrompt(true);
+      }, 5000);
+    }
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      // Fallback: show instructions for manual install
+      alert("Otevři menu Chrome (⋮) → 'Přidat na plochu' nebo 'Instalovat aplikaci'");
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
