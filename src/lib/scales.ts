@@ -181,10 +181,14 @@ const DEFAULT_SCALES: Omit<Scale, 'id' | 'user_id' | 'created_at'>[] = [
 export async function seedDefaultScales(): Promise<Scale[]> {
   const existing = await getScales();
   
-  // Delete old scales that don't match the new defaults
+  // Delete scales that don't match the new defaults (wrong name or wrong range)
   const allowedNames = new Set(DEFAULT_SCALES.map(s => s.name));
   for (const scale of existing) {
-    if (!allowedNames.has(scale.name)) {
+    const def = DEFAULT_SCALES.find(s => s.name === scale.name);
+    const needsReset = !def 
+      || def.min_value !== scale.min_value 
+      || def.max_value !== scale.max_value;
+    if (needsReset) {
       try { await deleteScale(scale.id); } catch {}
     }
   }
