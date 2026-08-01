@@ -144,7 +144,8 @@ export async function getGoalProgress(goalId: string, period: 'week' | 'month'):
     .select("date, activities")
     .eq("user_id", userId)
     .gte("date", startStr)
-    .lte("date", endStr);
+    .lte("date", endStr)
+    .limit(10000);
   
   if (entriesError) throw entriesError;
   
