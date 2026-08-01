@@ -127,7 +127,8 @@ export async function GET(request: NextRequest) {
       .from("entries")
       .select("date, mood, mood_emoji, sleep_quality, stress, activities, note")
       .eq("user_id", userId)
-      .order("date", { ascending: true });
+      .order("date", { ascending: true })
+      .limit(10000);
 
     if (from) query = query.gte("date", from);
     if (to) query = query.lte("date", to);

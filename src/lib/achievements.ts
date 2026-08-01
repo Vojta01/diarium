@@ -158,7 +158,8 @@ export async function checkAndUnlockAchievements(entryData: {
     .from("entries")
     .select("date, mood, created_at")
     .eq("user_id", userId)
-    .order("date", { ascending: true });
+    .order("date", { ascending: true })
+    .limit(10000);
   
   if (!entries || entries.length === 0) return unlocked;
   
