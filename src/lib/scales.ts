@@ -171,3 +171,26 @@ export async function getScaleAverage(scaleId: string, days: number = 30): Promi
   const sum = entries.reduce((acc, entry) => acc + entry.value, 0);
   return sum / entries.length;
 }
+
+// Seed default Daylio-inspired scales for new users
+const DEFAULT_SCALES: Omit<Scale, 'id' | 'user_id' | 'created_at'>[] = [
+  { name: "Energie", emoji: "⚡", min_value: 1, max_value: 10, color: "#eab308", sort_order: 0, is_active: true },
+  { name: "Stres", emoji: "😰", min_value: 1, max_value: 10, color: "#ef4444", sort_order: 1, is_active: true },
+  { name: "Produktivita", emoji: "💪", min_value: 1, max_value: 10, color: "#22c55e", sort_order: 2, is_active: true },
+  { name: "Kvalita spánku", emoji: "😴", min_value: 1, max_value: 10, color: "#8b5cf6", sort_order: 3, is_active: true },
+  { name: "Cvičení", emoji: "🏃", min_value: 0, max_value: 120, unit: "min", color: "#3b82f6", sort_order: 4, is_active: true },
+];
+
+export async function seedDefaultScales(): Promise<Scale[]> {
+  const existing = await getScales();
+  if (existing.length > 0) return existing;
+  
+  const created = [];
+  for (const scale of DEFAULT_SCALES) {
+    try {
+      const s = await createScale(scale);
+      created.push(s);
+    } catch {}
+  }
+  return created;
+}

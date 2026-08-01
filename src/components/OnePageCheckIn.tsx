@@ -11,7 +11,7 @@ import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
 import { ScaleSlider } from "@/components/ScaleSlider";
 import { TemplatePicker } from "@/components/TemplatePicker";
-import { getScales, type Scale } from "@/lib/scales";
+import { getScales, seedDefaultScales, type Scale } from "@/lib/scales";
 
 // ── Mood ──
 const MOODS = [
@@ -401,8 +401,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       if (session.user.id) setUserId(session.user.id);
     }
 
-    // Load scales
-    getScales().then(data => setScales(data)).catch(() => {});
+    // Load scales (seed defaults if none exist)
+    seedDefaultScales().then(data => setScales(data)).catch(() => {});
   }, []);
 
   // Load entry for current date
@@ -1119,12 +1119,12 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         </div>
 
         {/* ── SCALES ── */}
-        {scales.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-              <span className="text-sm font-medium text-white/80">{t("scales.title")}</span>
-            </div>
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span className="text-sm font-medium text-white/80">{t("scales.title")}</span>
+          </div>
+          {scales.length > 0 ? (
             <div className="space-y-1">
               {scales.map(scale => (
                 <ScaleSlider
@@ -1138,8 +1138,10 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
                 />
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-white/30 text-xs italic py-2">{t("scales.no_scales")}</p>
+          )}
+        </div>
 
         {/* ── GRATITUDE ── */}
         <div>
@@ -1290,7 +1292,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         open={showTemplatePicker}
         onClose={() => setShowTemplatePicker(false)}
         onSelect={(content) => {
-          setData(d => ({ ...d, note: d.note ? d.note + "\n\n" + content : content }));
+          // Replace the note content with the template (not append)
+          setData(d => ({ ...d, note: content }));
         }}
         currentNote={data.note}
       />
