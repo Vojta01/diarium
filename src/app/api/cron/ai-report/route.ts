@@ -244,7 +244,9 @@ export async function GET(request: NextRequest) {
     const querySecret = url.searchParams.get("secret");
     const isAuthorized = !cronSecret
       || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret;
+      || querySecret === cronSecret
+      // Vercel cron jobs are internal — trust the x-vercel-cron header
+      || request.headers.get("x-vercel-cron") === "1";
 
     if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
