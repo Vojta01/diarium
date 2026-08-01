@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = await req.json();
-    const { user_id, date, mood, mood_emoji, sleep_quality, stress, activities, habits, gratitude, note, weather, photo_path, phone_screen_time, phone_unlocks, phone_top_apps, ai_reflection } = payload;
+    const { user_id, date, mood, mood_emoji, sleep_quality, stress, activities, habits, gratitude, note, weather, photo_path, phone_screen_time, phone_unlocks, phone_top_apps, ai_reflection, scale_values } = payload;
 
     if (!user_id || !date) {
       return NextResponse.json({ error: 'Missing user_id or date' }, { status: 400 });
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       }
     }
     if (ai_reflection !== undefined && ai_reflection) row.ai_reflection = ai_reflection;
+    if (scale_values !== undefined) row.scale_values = scale_values;
 
     const { data, error } = await supabase
       .from('entries')
