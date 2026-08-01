@@ -43,7 +43,11 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
   async function loadActivities() {
     try {
       const data = await getActivities();
-      setActivities(data);
+      // Filter out categories that don't make sense as goals:
+      // počasí (weather) — can't set a goal for rain
+      // skryté (hidden) — user explicitly hid these
+      const goalCategories = new Set(["počasí", "skryté"]);
+      setActivities(data.filter(a => !goalCategories.has(a.category)));
     } catch {}
   }
 
