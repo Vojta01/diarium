@@ -55,10 +55,18 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const { t, lang } = useTranslation();
   const last7Days = useMemo(() => {
     const typed = entries as ScreenTimeEntry[];
-    const withData = typed.filter(e => e.phone_screen_time && e.phone_screen_time > 0);
+    // Deduplicate by date (keep last entry per day), then filter by screen time
+    const deduped = new Map<string, ScreenTimeEntry>();
+    for (const e of typed) {
+      if (!deduped.has(e.date) || (e.phone_screen_time || 0) > 0) {
+        deduped.set(e.date, e);
+      }
+    }
+    const withData = [...deduped.values()]
+      .filter(e => e.phone_screen_time && e.phone_screen_time > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
     if (withData.length === 0) return null;
-    const sorted = [...withData].sort((a, b) => b.date.localeCompare(a.date));
-    return sorted.slice(0, 7).reverse();
+    return withData.slice(-7);
   }, [entries]);
 
   // Data for unlocks (same 7-day window as screen time)

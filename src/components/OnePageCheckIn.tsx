@@ -401,8 +401,19 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       if (session.user.id) setUserId(session.user.id);
     }
 
-    // Load scales (seed defaults if none exist)
-    seedDefaultScales().then(data => setScales(data)).catch(() => {});
+    // Load scales — filter to only show Energie and Produktivita
+    getScales().then(data => {
+      const allowedNames = new Set(["Energie", "Produktivita"]);
+      const filtered = data.filter(s => allowedNames.has(s.name));
+      // Seed defaults if none of the allowed scales exist
+      if (filtered.length === 0) {
+        seedDefaultScales().then(d => {
+          setScales(d.filter(s => allowedNames.has(s.name)));
+        }).catch(() => {});
+      } else {
+        setScales(filtered);
+      }
+    }).catch(() => {});
   }, []);
 
   // Load entry for current date
