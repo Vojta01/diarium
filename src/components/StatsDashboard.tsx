@@ -6,6 +6,9 @@ import { CalendarView } from "@/components/CalendarView";
 import { ScreenTimeChart } from "@/components/ScreenTimeChart";
 import { ActivityMoodChart } from "@/components/ActivityMoodChart";
 import { PeriodicSummary } from "@/components/PeriodicSummary";
+import { AdvancedStats } from "@/components/AdvancedStats";
+import { AchievementsPanel } from "@/components/AchievementsPanel";
+import { ExportDialog } from "@/components/ExportDialog";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
@@ -16,6 +19,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"calendar" | "correlation" | "screentime" | "ai" | "year">("calendar");
+  const [showExport, setShowExport] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const flags = getFeatureFlags();
@@ -116,6 +120,23 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         {tab === "year" && <YearInPixels />}
       </div>
 
+      {/* Advanced stats — always visible below the fold */}
+      <div className="max-w-2xl mx-auto pb-16 mt-8">
+        <AdvancedStats />
+        <div className="mt-6">
+          <AchievementsPanel />
+        </div>
+        <div className="flex justify-center pt-4">
+          <button
+            onClick={() => setShowExport(true)}
+            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-colors text-sm"
+          >
+            📥 {t("export.export_button")}
+          </button>
+        </div>
+      </div>
+
+      <ExportDialog open={showExport} onClose={() => setShowExport(false)} />
     </div>
   );
 }

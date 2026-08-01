@@ -55,14 +55,17 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const { t, lang } = useTranslation();
   const last7Days = useMemo(() => {
     const typed = entries as ScreenTimeEntry[];
-    // Deduplicate by date (keep last entry per day), then filter by screen time
-    const deduped = new Map<string, ScreenTimeEntry>();
+    // Group by date, keep the entry with the highest screen time
+    const byDate = new Map<string, ScreenTimeEntry>();
     for (const e of typed) {
-      if (!deduped.has(e.date) || (e.phone_screen_time || 0) > 0) {
-        deduped.set(e.date, e);
+      const existing = byDate.get(e.date);
+      const eTime = e.phone_screen_time || 0;
+      const existingTime = existing?.phone_screen_time || 0;
+      if (!existing || eTime > existingTime) {
+        byDate.set(e.date, e);
       }
     }
-    const withData = [...deduped.values()]
+    const withData = [...byDate.values()]
       .filter(e => e.phone_screen_time && e.phone_screen_time > 0)
       .sort((a, b) => a.date.localeCompare(b.date));
     if (withData.length === 0) return null;
