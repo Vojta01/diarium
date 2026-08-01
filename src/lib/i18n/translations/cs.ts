@@ -454,6 +454,93 @@ export const cs = {
   layout: {
     description: 'Denní check-in do tvého Obsidian vaultu',
   },
+
+  // ── Goals (Daylio-style) ──
+  daylio_goals: {
+    title: 'Cíle',
+    add_goal: 'Přidat cíl',
+    edit_goal: 'Upravit cíl',
+    delete_goal: 'Smazat cíl',
+    goal_name: 'Název cíle',
+    target_count: 'Cílový počet',
+    frequency: 'Frekvence',
+    daily: 'Denně',
+    weekly: 'Týdně',
+    monthly: 'Měsíčně',
+    current_progress: 'Aktuální postup',
+    streak: 'V řadě',
+    target_met: 'Cíl splněn!',
+    no_goals: 'Zatím žádné cíle',
+    create_first: 'Vytvoř svůj první cíl',
+    activity: 'Aktivita',
+    times_per_week: 'krát týdně',
+    times_per_month: 'krát měsíčně',
+  },
+
+  // ── Scales ──
+  scales: {
+    title: 'Škály',
+    add_scale: 'Přidat škálu',
+    edit_scale: 'Upravit škálu',
+    delete_scale: 'Smazat škálu',
+    scale_name: 'Název škály',
+    min_value: 'Minimum',
+    max_value: 'Maximum',
+    unit: 'Jednotka',
+    today_value: 'Dnešní hodnota',
+    distribution: 'Rozložení',
+    average: 'Průměr',
+    no_scales: 'Zatím žádné škály',
+    create_first: 'Vytvoř svou první škálu',
+  },
+
+  // ── Templates ──
+  templates: {
+    title: 'Šablony',
+    use_template: 'Použít šablonu',
+    save_as_template: 'Uložit jako šablonu',
+    template_name: 'Název šablony',
+    template_content: 'Obsah šablony',
+    no_templates: 'Zatím žádné šablony',
+    create_first: 'Vytvoř svou první šablonu',
+    insert: 'Vložit',
+  },
+
+  // ── Achievements ──
+  achievements: {
+    title: 'Úspěchy',
+    unlocked: 'Odemčeno',
+    locked: 'Zamčeno',
+    progress: 'Postup',
+    no_achievements: 'Zatím žádné úspěchy',
+  },
+
+  // ── Export ──
+  export: {
+    title: 'Export dat',
+    date_range: 'Časové období',
+    from: 'Od',
+    to: 'Do',
+    format: 'Formát',
+    csv: 'CSV',
+    pdf: 'PDF',
+    export_button: 'Exportovat',
+    exporting: 'Exportuji...',
+    include_photos: 'Zahrnout fotky',
+  },
+
+  // ── Advanced Stats ──
+  advanced_stats: {
+    title: 'Pokročilé statistiky',
+    mood_distribution: 'Rozložení nálad',
+    activity_correlation: 'Aktivity vs nálada',
+    mood_trends: 'Trendy nálady',
+    scale_distribution: 'Rozložení škál',
+    best_worst: 'Nejlepší a nejhorší dny',
+    best_day: 'Nejlepší den',
+    worst_day: 'Nejhorší den',
+    moving_average: '7denní průměr',
+  },
 };
 
 export type CsTranslations = typeof cs;

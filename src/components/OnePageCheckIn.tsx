@@ -9,6 +9,9 @@ import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
+import { ScaleSlider } from "@/components/ScaleSlider";
+import { TemplatePicker } from "@/components/TemplatePicker";
+import { getScales, type Scale } from "@/lib/scales";
 
 // ── Mood ──
 const MOODS = [
@@ -97,6 +100,7 @@ const EMPTY_DATA: CheckInData = {
   mood: 0, moodEmoji: "", sleepQuality: 0, stress: 0,
   activities: [], habits: { ...EMPTY_HABITS },
   gratitude: ["", "", ""], note: "", photoDataUrl: null,
+  scaleValues: {},
 };
 
 // ── Goals ──
@@ -356,6 +360,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [newItemName, setNewItemName] = useState("");
   const [newItemIcon, setNewItemIcon] = useState("📌");
   const [newItemCategory, setNewItemCategory] = useState("vlastní");
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [scales, setScales] = useState<Scale[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const flags = getFeatureFlags();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -394,6 +400,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       if (session.user.email) setUserEmail(session.user.email);
       if (session.user.id) setUserId(session.user.id);
     }
+
+    // Load scales
+    getScales().then(data => setScales(data)).catch(() => {});
   }, []);
 
   // Load entry for current date
@@ -415,6 +424,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           gratitude: entry.gratitude ?? [],
           note: entry.note ?? "",
           photoDataUrl: entry.photo_path || null,
+          scaleValues: (entry as any).scale_values || {},
         });
         if (entry.ai_reflection) {
           setAiReflection(entry.ai_reflection);
@@ -620,6 +630,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       weather: [],
       date: dateRef.current,
       photoDataUrl: currentData.photoDataUrl,
+      scale_values: currentData.scaleValues,
     };
     saveEntry(payload as any).catch(() => {});
   }, []);
@@ -727,6 +738,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         weather: [],
         date: currentDate,
         photoDataUrl: data.photoDataUrl,
+        scale_values: data.scaleValues,
       } as any);
       setSaved(true);
       setEditing(false);
@@ -1106,6 +1118,29 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
           </div>
         </div>
 
+        {/* ── SCALES ── */}
+        {scales.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+              <span className="text-sm font-medium text-white/80">{t("scales.title")}</span>
+            </div>
+            <div className="space-y-1">
+              {scales.map(scale => (
+                <ScaleSlider
+                  key={scale.id}
+                  scale={scale}
+                  value={data.scaleValues[scale.id] || 0}
+                  onChange={(value) => setData(d => ({
+                    ...d,
+                    scaleValues: { ...d.scaleValues, [scale.id]: value },
+                  }))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── GRATITUDE ── */}
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -1129,9 +1164,17 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
 
         {/* ── NOTE ── */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-            <span className="text-sm font-medium text-white/80">{t("checkin.note_title")}</span>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+              <span className="text-sm font-medium text-white/80">{t("checkin.note_title")}</span>
+            </div>
+            <button
+              onClick={() => setShowTemplatePicker(true)}
+              className="text-xs text-indigo-400/60 hover:text-indigo-400 transition-colors flex items-center gap-1"
+            >
+              📋 {t("templates.use_template")}
+            </button>
           </div>
           <textarea
             value={data.note}
@@ -1241,6 +1284,16 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         </div>
       </div>
       )}
+
+      {/* Template Picker */}
+      <TemplatePicker
+        open={showTemplatePicker}
+        onClose={() => setShowTemplatePicker(false)}
+        onSelect={(content) => {
+          setData(d => ({ ...d, note: d.note ? d.note + "\n\n" + content : content }));
+        }}
+        currentNote={data.note}
+      />
 
       {/* Bottom area: Save button + Navigation — sits above the TabBar */}
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">

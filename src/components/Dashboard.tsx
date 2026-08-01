@@ -8,6 +8,8 @@ import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { GoalsWidget } from "@/components/GoalsWidget";
+import { GoalDialog } from "@/components/GoalDialog";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -29,6 +31,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
   const [todayEntry, setTodayEntry] = useState<Entry | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showGoalDialog, setShowGoalDialog] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -440,6 +443,18 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
           );
         })()
       )}
+
+      {/* ── Goals Widget ── */}
+      <div className="mb-4">
+        <GoalsWidget onAddGoal={() => setShowGoalDialog(true)} />
+      </div>
+
+      {/* Goal Dialog */}
+      <GoalDialog
+        open={showGoalDialog}
+        onClose={() => setShowGoalDialog(false)}
+        onSaved={() => {}}
+      />
     </div>
   );
 }

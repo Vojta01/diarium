@@ -8,4 +8,5 @@ export interface CheckInData {
   gratitude: string[];
   note: string;
   photoDataUrl: string | null;
+  scaleValues: Record<string, number>;
 }
