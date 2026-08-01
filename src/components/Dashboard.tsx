@@ -138,7 +138,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
     <div className="min-h-screen p-4 pt-8 pb-24">
       {/* Header */}
       <header className="text-center mb-6">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
           Diarium
         </h1>
         <p className="text-white/40 text-sm mt-1">{t("dashboard.subtitle")}</p>
