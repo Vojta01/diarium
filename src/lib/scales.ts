@@ -180,14 +180,29 @@ const DEFAULT_SCALES: Omit<Scale, 'id' | 'user_id' | 'created_at'>[] = [
 
 export async function seedDefaultScales(): Promise<Scale[]> {
   const existing = await getScales();
-  if (existing.length > 0) return existing;
   
-  const created = [];
-  for (const scale of DEFAULT_SCALES) {
-    try {
-      const s = await createScale(scale);
-      created.push(s);
-    } catch {}
+  // Delete old scales that don't match the new defaults
+  const allowedNames = new Set(DEFAULT_SCALES.map(s => s.name));
+  for (const scale of existing) {
+    if (!allowedNames.has(scale.name)) {
+      try { await deleteScale(scale.id); } catch {}
+    }
   }
-  return created;
+  
+  // Get remaining scales after cleanup
+  const remaining = await getScales();
+  if (remaining.length >= DEFAULT_SCALES.length) return remaining;
+  
+  // Create missing default scales
+  const created = [];
+  const existingNames = new Set(remaining.map(s => s.name));
+  for (const scale of DEFAULT_SCALES) {
+    if (!existingNames.has(scale.name)) {
+      try {
+        const s = await createScale(scale);
+        created.push(s);
+      } catch {}
+    }
+  }
+  return [...remaining, ...created];
 }
