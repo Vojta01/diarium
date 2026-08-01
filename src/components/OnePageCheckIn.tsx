@@ -11,7 +11,7 @@ import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
 import { ScaleSlider } from "@/components/ScaleSlider";
 import { TemplatePicker } from "@/components/TemplatePicker";
-import { getScales, seedDefaultScales, type Scale } from "@/lib/scales";
+import { seedDefaultScales, type Scale } from "@/lib/scales";
 
 // ── Mood ──
 const MOODS = [
@@ -401,19 +401,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       if (session.user.id) setUserId(session.user.id);
     }
 
-    // Load scales — filter to only show Energie and Produktivita
-    getScales().then(data => {
-      const allowedNames = new Set(["Energie", "Produktivita"]);
-      const filtered = data.filter(s => allowedNames.has(s.name));
-      // Seed defaults if none of the allowed scales exist
-      if (filtered.length === 0) {
-        seedDefaultScales().then(d => {
-          setScales(d.filter(s => allowedNames.has(s.name)));
-        }).catch(() => {});
-      } else {
-        setScales(filtered);
-      }
-    }).catch(() => {});
+    // Load scales — auto-clean old ones, seed defaults
+    seedDefaultScales().then(data => setScales(data)).catch(() => {});
   }, []);
 
   // Load entry for current date
