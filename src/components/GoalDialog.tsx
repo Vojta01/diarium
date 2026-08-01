@@ -47,7 +47,15 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
       // počasí (weather) — can't set a goal for rain
       // skryté (hidden) — user explicitly hid these
       const goalCategories = new Set(["počasí", "skryté"]);
-      setActivities(data.filter(a => !goalCategories.has(a.category)));
+      const filtered = data.filter(a => !goalCategories.has(a.category));
+      // Deduplicate by label (case-insensitive)
+      const seen = new Set<string>();
+      setActivities(filtered.filter(a => {
+        const lower = a.label.toLowerCase();
+        if (seen.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      }));
     } catch {}
   }
 

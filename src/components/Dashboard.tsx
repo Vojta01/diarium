@@ -10,6 +10,8 @@ import { useTranslation } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { GoalsWidget } from "@/components/GoalsWidget";
 import { GoalDialog } from "@/components/GoalDialog";
+import { ScalesWidget } from "@/components/ScalesWidget";
+import { AchievementsPanel } from "@/components/AchievementsPanel";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -447,6 +449,16 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
       {/* ── Goals Widget ── */}
       <div className="mb-4">
         <GoalsWidget onAddGoal={() => setShowGoalDialog(true)} />
+      </div>
+
+      {/* ── Scales Widget ── */}
+      <div className="mb-4">
+        <ScalesWidget userId={userEmail || ""} />
+      </div>
+
+      {/* ── Achievements ── */}
+      <div className="mb-4">
+        <AchievementsPanel />
       </div>
 
       {/* Goal Dialog */}

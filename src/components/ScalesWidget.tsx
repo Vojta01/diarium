@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getScales, getScaleEntries, getScaleAverage, type Scale, type ScaleEntry } from "@/lib/scales";
+import { getScaleEntries, getScaleAverage, seedDefaultScales, type Scale, type ScaleEntry } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
 
 interface ScalesWidgetProps {
@@ -22,7 +22,7 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
 
   async function loadScales() {
     try {
-      const data = await getScales();
+      const data = await seedDefaultScales();
       setScales(data);
 
       // Load recent entries for each scale
