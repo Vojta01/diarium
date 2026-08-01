@@ -12,6 +12,7 @@ import { readStoredSession } from "@/lib/auth-storage";
 import { ScaleSlider } from "@/components/ScaleSlider";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { seedDefaultScales, type Scale } from "@/lib/scales";
+import { checkAndUnlockAchievements } from "@/lib/achievements";
 
 // ── Mood ──
 const MOODS = [
@@ -746,6 +747,15 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       localStorage.removeItem(`diarium_draft_${currentDate}`);
       // Fetch AI reflection in background
       fetchAIReflection(data);
+      // Check achievements in background
+      checkAndUnlockAchievements({
+        mood: data.mood,
+        hasPhoto: !!data.photoDataUrl,
+        hasTemplate: false,
+        hasScale: Object.values(data.scaleValues || {}).some(v => v > 0),
+      }).then(unlocked => {
+        if (unlocked.length > 0) console.log("🏆 Unlocked:", unlocked);
+      }).catch(() => {});
     } catch {}
     setSaving(false);
   };
