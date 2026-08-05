@@ -37,10 +37,7 @@ export async function GET(req: NextRequest) {
 
     // Resolve effective user scope
     if (isCron) {
-      // Cron may backfill a specific user or all users
-      if (!targetUserId && !user) {
-        return NextResponse.json({ error: 'Missing user_id for full backfill' }, { status: 400 });
-      }
+      // Cron may backfill a specific user or all users (user_id omitted → all)
       // fall through with targetUserId (may be null → all users)
     } else {
       // Regular user: can only backfill their own data
