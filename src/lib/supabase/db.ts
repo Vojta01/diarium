@@ -191,6 +191,7 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   };
   if (photoPath) row.photo_path = photoPath;
   if ((payload as any).ai_reflection) row.ai_reflection = (payload as any).ai_reflection;
+  if ((payload as any).scale_values !== undefined) row.scale_values = (payload as any).scale_values;
 
   // Use our API endpoint which has the service_role key
   const token = getAccessToken();
