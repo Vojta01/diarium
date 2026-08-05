@@ -73,13 +73,13 @@ export async function GET(req: NextRequest) {
         .eq('is_active', true);
       const scaleDefs = new Map((scales || []).map((s: any) => [s.id, s]));
 
-      // Fetch entries that have scale_values
+      // Fetch entries that have scale_values — filter in code (JSONB not-is-null
+      // filters via PostgREST are unreliable), newest first, paginated.
       const { data: entries, error: entriesErr } = await supabase
         .from('entries')
         .select('date, scale_values')
         .eq('user_id', uid)
-        .not('scale_values', 'is', null)
-        .order('date', { ascending: true })
+        .order('date', { ascending: false })
         .limit(10000);
 
       if (entriesErr) {
@@ -89,11 +89,15 @@ export async function GET(req: NextRequest) {
 
       const rows: { user_id: string; scale_id: string; date: string; value: number }[] = [];
       let skippedUnknown = 0;
+      let entriesWithScales = 0;
 
       for (const entry of entries || []) {
         const sv = (entry as any).scale_values;
         if (!sv || typeof sv !== 'object') continue;
-        for (const [scaleId, rawValue] of Object.entries(sv)) {
+        const pairs = Object.entries(sv);
+        if (pairs.length === 0) continue;
+        entriesWithScales++;
+        for (const [scaleId, rawValue] of pairs) {
           const def = scaleDefs.get(scaleId);
           if (!def) {
             skippedUnknown++;
@@ -120,6 +124,7 @@ export async function GET(req: NextRequest) {
       results.push({
         userId: uid,
         entriesProcessed: (entries || []).length,
+        entriesWithScales,
         rowsUpserted: upserted,
         skippedUnknownScale: skippedUnknown,
         upsertError: upsertErrMsg,
