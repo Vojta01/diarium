@@ -166,6 +166,24 @@ export const en = {
     prompt_emoji: 'Emoji (e.g. 🏃):',
   },
 
+  // ── Scales ──
+  scales: {
+    title: 'Scales',
+    add_scale: 'Add scale',
+    edit_scale: 'Edit scale',
+    delete_scale: 'Delete scale',
+    scale_name: 'Scale name',
+    min_value: 'Minimum',
+    max_value: 'Maximum',
+    unit: 'Unit',
+    today_value: "Today's value",
+    distribution: 'Distribution',
+    average: 'Average',
+    last_7_days: 'Last 7 days',
+    no_scales: 'No scales yet',
+    create_first: 'Create your first scale',
+  },
+
   // ── Gratitude ──
   gratitude: {
     label: 'Gratitude',

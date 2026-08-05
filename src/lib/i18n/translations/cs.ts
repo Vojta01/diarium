@@ -490,6 +490,7 @@ export const cs = {
     today_value: 'Dnešní hodnota',
     distribution: 'Rozložení',
     average: 'Průměr',
+    last_7_days: 'Posledních 7 dní',
     no_scales: 'Zatím žádné škály',
     create_first: 'Vytvoř svou první škálu',
   },
