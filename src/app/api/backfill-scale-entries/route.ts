@@ -14,79 +14,126 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
  * This endpoint migrates the existing data. New saves mirror automatically
  * via /api/save-entry.
  *
- * GET /api/backfill-scale-entries?user_id=<uuid>
- *   user_id: optional — when omitted, backfills ALL users' entries.
+ * GET /api/backfill-scale-entries[?user_id=<uuid>]
+ *   user_id: optional — when omitted and the call is cron-authorized, backfills ALL users.
+ *
+ * Auth: Bearer token of the owner (backfills own data), OR cron fallback
+ * (CRON_SECRET / x-vercel-cron / ?secret=) which may backfill all users.
  */
 export async function GET(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const targetUserId = req.nextUrl.searchParams.get('user_id') || user.id;
-    // Only allow admin (self) or service-level calls; keep it simple: self or explicit user_id with auth match
-    if (targetUserId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden: can only backfill your own data' }, { status: 403 });
+    // Cron-style authorization (Vercel cron / manual with secret)
+    const cronSecret = process.env.CRON_SECRET || '';
+    const authHeader = req.headers.get('authorization');
+    const querySecret = req.nextUrl.searchParams.get('secret');
+    const isCron = !cronSecret
+      || authHeader === `Bearer ${cronSecret}`
+      || querySecret === cronSecret
+      || req.headers.get('x-vercel-cron') === '1';
+
+    const targetUserId = req.nextUrl.searchParams.get('user_id');
+
+    // Resolve effective user scope
+    if (isCron) {
+      // Cron may backfill a specific user or all users
+      if (!targetUserId && !user) {
+        return NextResponse.json({ error: 'Missing user_id for full backfill' }, { status: 400 });
+      }
+      // fall through with targetUserId (may be null → all users)
+    } else {
+      // Regular user: can only backfill their own data
+      if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      if (targetUserId && targetUserId !== user.id) {
+        return NextResponse.json({ error: 'Forbidden: can only backfill your own data' }, { status: 403 });
+      }
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Fetch valid scales for this user (id → min/max for range validation)
-    const { data: scales } = await supabase
-      .from('scales')
-      .select('id, min_value, max_value')
-      .eq('user_id', targetUserId)
-      .eq('is_active', true);
-    const scaleDefs = new Map((scales || []).map((s: any) => [s.id, s]));
-
-    // Fetch entries that have scale_values, newest last (they are ordered ascending by date)
-    const { data: entries, error: entriesErr } = await supabase
-      .from('entries')
-      .select('date, scale_values')
-      .eq('user_id', targetUserId)
-      .not('scale_values', 'is', null)
-      .order('date', { ascending: true })
-      .limit(10000);
-
-    if (entriesErr) {
-      return NextResponse.json({ error: entriesErr.message }, { status: 400 });
+    // Resolve user list: explicit user_id → that user; user auth → self; else all users
+    let userIds: string[] = [];
+    if (targetUserId) {
+      userIds = [targetUserId];
+    } else if (user) {
+      userIds = [user.id];
+    } else {
+      const { data: allUsers } = await supabase.from('entries').select('user_id').limit(10000);
+      userIds = Array.from(new Set((allUsers || []).map((r: any) => r.user_id)));
     }
 
-    const rows: { user_id: string; scale_id: string; date: string; value: number }[] = [];
-    let skippedUnknown = 0;
+    const results = [];
+    let totalUpserted = 0;
+    let totalEntries = 0;
 
-    for (const entry of entries || []) {
-      const sv = (entry as any).scale_values;
-      if (!sv || typeof sv !== 'object') continue;
-      for (const [scaleId, rawValue] of Object.entries(sv)) {
-        const def = scaleDefs.get(scaleId);
-        if (!def) {
-          skippedUnknown++;
-          continue;
-        }
-        const value = Number(rawValue);
-        if (!Number.isFinite(value) || value <= 0) continue; // 0 = not selected
-        rows.push({ user_id: targetUserId, scale_id: scaleId, date: (entry as any).date, value });
+    for (const uid of userIds) {
+      // Fetch valid scales for this user (id → definition)
+      const { data: scales } = await supabase
+        .from('scales')
+        .select('id, min_value, max_value')
+        .eq('user_id', uid)
+        .eq('is_active', true);
+      const scaleDefs = new Map((scales || []).map((s: any) => [s.id, s]));
+
+      // Fetch entries that have scale_values
+      const { data: entries, error: entriesErr } = await supabase
+        .from('entries')
+        .select('date, scale_values')
+        .eq('user_id', uid)
+        .not('scale_values', 'is', null)
+        .order('date', { ascending: true })
+        .limit(10000);
+
+      if (entriesErr) {
+        results.push({ userId: uid, error: entriesErr.message });
+        continue;
       }
-    }
 
-    let upserted = 0;
-    let upsertErrMsg: string | null = null;
-    if (rows.length > 0) {
-      const { error: upsertErr } = await supabase
-        .from('scale_entries')
-        .upsert(rows, { onConflict: 'user_id,scale_id,date' });
-      if (upsertErr) upsertErrMsg = upsertErr.message;
-      else upserted = rows.length;
+      const rows: { user_id: string; scale_id: string; date: string; value: number }[] = [];
+      let skippedUnknown = 0;
+
+      for (const entry of entries || []) {
+        const sv = (entry as any).scale_values;
+        if (!sv || typeof sv !== 'object') continue;
+        for (const [scaleId, rawValue] of Object.entries(sv)) {
+          const def = scaleDefs.get(scaleId);
+          if (!def) {
+            skippedUnknown++;
+            continue;
+          }
+          const value = Number(rawValue);
+          if (!Number.isFinite(value) || value <= 0) continue; // 0 = not selected
+          rows.push({ user_id: uid, scale_id: scaleId, date: (entry as any).date, value });
+        }
+      }
+
+      let upserted = 0;
+      let upsertErrMsg: string | null = null;
+      if (rows.length > 0) {
+        const { error: upsertErr } = await supabase
+          .from('scale_entries')
+          .upsert(rows, { onConflict: 'user_id,scale_id,date' });
+        if (upsertErr) upsertErrMsg = upsertErr.message;
+        else upserted = rows.length;
+      }
+
+      totalUpserted += upserted;
+      totalEntries += (entries || []).length;
+      results.push({
+        userId: uid,
+        entriesProcessed: (entries || []).length,
+        rowsUpserted: upserted,
+        skippedUnknownScale: skippedUnknown,
+        upsertError: upsertErrMsg,
+      });
     }
 
     return NextResponse.json({
-      userId: targetUserId,
-      entriesProcessed: (entries || []).length,
-      rowsUpserted: upserted,
-      skippedUnknownScale: skippedUnknown,
-      upsertError: upsertErrMsg,
+      users: results.length,
+      totalEntries,
+      totalRowsUpserted: totalUpserted,
+      results,
     });
   } catch (e: any) {
     console.error('backfill-scale-entries exception:', e);
