@@ -67,6 +67,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message, details: error }, { status: 400 });
     }
 
+    // Mirror scale values into scale_entries so the Scales widget has per-day rows.
+    // Values are keyed by scale_id → number; 0 means "not selected" and is skipped.
+    if (scale_values && typeof scale_values === 'object') {
+      try {
+        const scalePairs = Object.entries(scale_values as Record<string, number>)
+          .filter(([, v]) => typeof v === 'number' && v > 0);
+        if (scalePairs.length > 0) {
+          const { data: userScales } = await supabase
+            .from('scales')
+            .select('id')
+            .eq('user_id', user.id);
+          const validScaleIds = new Set((userScales || []).map((s: any) => s.id));
+          const scaleRows = scalePairs
+            .filter(([scaleId]) => validScaleIds.has(scaleId))
+            .map(([scaleId, value]) => ({
+              user_id: user.id,
+              scale_id: scaleId,
+              date,
+              value,
+            }));
+          if (scaleRows.length > 0) {
+            const { error: scaleErr } = await supabase
+              .from('scale_entries')
+              .upsert(scaleRows, { onConflict: 'user_id,scale_id,date' });
+            if (scaleErr) console.error('scale_entries upsert error:', scaleErr);
+          }
+        }
+      } catch (e) {
+        console.error('scale_entries mirror error:', e);
+      }
+    }
+
     return NextResponse.json(data);
   } catch (e: any) {
     console.error('save-entry exception:', e);

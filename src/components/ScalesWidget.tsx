@@ -9,6 +9,26 @@ interface ScalesWidgetProps {
   todayScaleValues?: Record<string, number>;
 }
 
+const DAYS = 7;
+
+function dateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function lastNDays(n: number): Date[] {
+  const days: Date[] = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    days.push(d);
+  }
+  return days;
+}
+
 export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
   const { t } = useTranslation();
   const [scales, setScales] = useState<Scale[]>([]);
@@ -18,6 +38,7 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
 
   useEffect(() => {
     loadScales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadScales() {
@@ -25,14 +46,13 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
       const data = await seedDefaultScales();
       setScales(data);
 
-      // Load recent entries for each scale
       const entriesMap: Record<string, ScaleEntry[]> = {};
       const avgMap: Record<string, number> = {};
 
       for (const scale of data) {
         try {
-          entriesMap[scale.id] = await getScaleEntries(scale.id, 7);
-          avgMap[scale.id] = await getScaleAverage(scale.id, 7);
+          entriesMap[scale.id] = await getScaleEntries(scale.id, DAYS);
+          avgMap[scale.id] = await getScaleAverage(scale.id, DAYS);
         } catch {}
       }
 
@@ -61,9 +81,12 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
     );
   }
 
+  const days = lastNDays(DAYS);
+
   return (
     <div className="glass-card p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">📊 {t("scales.title")}</h3>
+      <h3 className="text-lg font-semibold text-white mb-1">📊 {t("scales.title")}</h3>
+      <p className="text-xs text-white/40 mb-3">{t("scales.last_7_days")}</p>
 
       <div className="space-y-3">
         {scales.map((scale) => {
@@ -72,14 +95,15 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
           const todayValue = todayScaleValues?.[scale.id];
           const maxVal = scale.max_value;
           const minVal = scale.min_value;
-          const range = maxVal - minVal;
+          const range = maxVal - minVal || 1;
 
-          // Build distribution bars
-          const distribution: Record<number, number> = {};
+          // Build day → value map
+          const byDate: Record<string, number> = {};
           scaleEntries.forEach((e) => {
-            distribution[e.value] = (distribution[e.value] || 0) + 1;
+            byDate[e.date] = e.value;
           });
-          const maxCount = Math.max(1, ...Object.values(distribution));
+
+          const maxCount = 1;
 
           return (
             <div key={scale.id} className="rounded-xl bg-white/5 p-3">
@@ -92,7 +116,7 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {todayValue !== undefined && (
+                  {todayValue !== undefined && todayValue > 0 && (
                     <span
                       className="text-sm font-bold px-2 py-0.5 rounded-lg"
                       style={{
@@ -111,25 +135,50 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
                 </div>
               </div>
 
-              {/* Mini distribution bars */}
-              <div className="flex items-end gap-0.5 h-8">
-                {Array.from({ length: range + 1 }, (_, i) => {
-                  const val = minVal + i;
-                  const count = distribution[val] || 0;
-                  const height = Math.max(4, (count / maxCount) * 100);
-                  const isToday = todayValue === val;
+              {/* Last 7 days bar chart */}
+              <div className="flex items-end gap-1.5">
+                {days.map((day) => {
+                  const key = dateKey(day);
+                  const value = byDate[key];
+                  const hasValue = typeof value === "number" && value > 0;
+                  const normalized = hasValue ? (value - minVal) / range : 0;
+                  const height = hasValue ? Math.max(12, normalized * 100) : 8;
+                  const isToday = key === dateKey(new Date());
+                  const dayLabel = day.toLocaleDateString("cs-CZ", { weekday: "short" });
 
                   return (
                     <div
-                      key={val}
-                      className="flex-1 rounded-t transition-all duration-300"
-                      style={{
-                        height: `${height}%`,
-                        backgroundColor: isToday ? scale.color : `${scale.color}40`,
-                        opacity: count > 0 ? 1 : 0.3,
-                      }}
-                      title={`${val}: ${count}×`}
-                    />
+                      key={key}
+                      className="flex-1 flex flex-col items-center gap-1"
+                      title={`${key}: ${hasValue ? value : "—"}`}
+                    >
+                      <span
+                        className="text-[10px] font-bold leading-none"
+                        style={{ color: hasValue ? scale.color : "transparent" }}
+                      >
+                        {hasValue ? value : "·"}
+                      </span>
+                      <div
+                        className="w-full rounded-t transition-all duration-300"
+                        style={{
+                          height: `${height}px`,
+                          minHeight: 4,
+                          backgroundColor: hasValue
+                            ? isToday
+                              ? scale.color
+                              : `${scale.color}80`
+                            : "rgba(255,255,255,0.08)",
+                          boxShadow: isToday && hasValue ? `0 0 8px ${scale.color}60` : "none",
+                        }}
+                      />
+                      <span
+                        className={`text-[9px] leading-none ${
+                          isToday ? "text-white/80 font-semibold" : "text-white/30"
+                        }`}
+                      >
+                        {dayLabel}
+                      </span>
+                    </div>
                   );
                 })}
               </div>
