@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DailyEntry } from "@/lib/stats";
 import { useTranslation } from "@/lib/i18n";
+import { InfoPopover } from "@/components/InfoPopover";
 
 type Tab = "activities" | "habits" | "screentime" | "unlocks" | "trends";
 
@@ -133,6 +134,8 @@ interface BucketStats {
 export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("activities");
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
+  const [selectedHabit, setSelectedHabit] = useState<string | null>(null);
 
   // ── Overall stats for reference ──
   const overallMean = useMemo(() => {
@@ -501,8 +504,8 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
         <span className="px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-500/10 border border-yellow-500/20">{t("correlation.legend_significant")}</span>
         <span className="px-1.5 py-0.5 rounded text-orange-300 bg-orange-500/10 border border-orange-500/20">{t("correlation.legend_hint")}</span>
         <span className="px-1.5 py-0.5 rounded text-white/30 bg-white/5 border border-white/10">{t("correlation.legend_weak")}</span>
-        <span className="ml-auto text-white/25">
-          {t("correlation.activities_desc").split(".")[0]}
+        <span className="ml-auto">
+          <InfoPopover text={t("correlation.legend_popover")} />
         </span>
       </div>
 
@@ -523,7 +526,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                 const badge = significanceBadge(s.significance);
                 
                 return (
-                  <div key={s.name} className={`p-2 rounded-lg ${hasEffect ? "bg-white/5" : "bg-white/2"}`}>
+                  <div
+                    key={s.name}
+                    onClick={() => setSelectedActivity(selectedActivity === s.name ? null : s.name)}
+                    className={`p-2 rounded-lg cursor-pointer transition-all ${hasEffect ? "bg-white/5" : "bg-white/2"} ${selectedActivity === s.name ? "ring-1 ring-indigo-400/50 bg-white/10" : ""} ${selectedActivity !== null && selectedActivity !== s.name ? "opacity-30" : ""}`}
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs text-white/60 w-28 text-right truncate shrink-0" title={s.name}>
                         {s.name}
@@ -596,7 +603,11 @@ export function ActivityMoodChart({ entries }: { entries: DailyEntry[] }) {
                 const withoutLabel = isNegative ? t("correlation.habits_without_neg") : t("correlation.habits_without_pos");
 
                 return (
-                  <div key={s.name} className={`p-3 rounded-lg ${hasEffect ? "bg-white/5 border border-white/5" : "bg-white/2"}`}>
+                  <div
+                    key={s.name}
+                    onClick={() => setSelectedHabit(selectedHabit === s.name ? null : s.name)}
+                    className={`p-3 rounded-lg cursor-pointer transition-all ${hasEffect ? "bg-white/5 border border-white/5" : "bg-white/2"} ${selectedHabit === s.name ? "ring-1 ring-indigo-400/50 bg-white/10" : ""} ${selectedHabit !== null && selectedHabit !== s.name ? "opacity-30" : ""}`}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-white/70 font-medium">
                         {icon} {s.name}
