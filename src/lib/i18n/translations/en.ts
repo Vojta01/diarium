@@ -284,6 +284,7 @@ export const en = {
     legend_hint: '* p<0.1 (hint)',
     legend_weak: '~ p<0.2 (weak)',
     legend_cohens_d: 'd = Cohen\'s d (effect size)',
+    legend_popover: 'Significance: *** = strong (p<0.01), ** = significant (p<0.05), * = hint (p<0.1), ~ = weak (p<0.2). d = Cohen\'s d (effect size) — positive d means better mood. Click a row to highlight it.',
     activities_desc: 'Cohen\'s d compares mood on days with vs without the activity. Positive d = better mood with activity.',
     habits_desc: 'Cohen\'s d compares days with vs without the habit. <span class="text-emerald-400">Positive d</span> = better mood when value is <b>yes</b>.',
     habits_desc_neg: 'For negative habits (🍺 alcohol, 🔞 porn, etc.) "yes" means abstinence broken. For positive (🧘 meditation, 🏋️ exercise) "yes" means completed.',
@@ -471,6 +472,29 @@ export const en = {
   // ── Layout / Metadata ──
   layout: {
     description: 'Daily check-in for your Obsidian vault',
+  },
+
+  // ── Advanced Stats ──
+  advanced_stats: {
+    title: 'Advanced statistics',
+    mood_distribution: 'Mood distribution',
+    activity_correlation: 'Activities vs mood',
+    mood_trends: 'Mood trends',
+    scale_distribution: 'Scale distribution',
+    best_worst: 'Best and worst days',
+    best_day: 'Best day',
+    worst_day: 'Worst day',
+    moving_average: '7-day average',
+    legend_mood: 'Each bar shows how many of the last 30 days you had that mood. Click a bar for details.',
+    legend_activity: 'Average mood on days you did that activity. Green = better, yellow = neutral, red = worse. Click a row for details.',
+    legend_trends: 'Bars = daily mood, indigo dot = 7-day rolling average. Click a day for details.',
+    legend_scales: 'Distribution of each scale\'s values over the last 30 days. Click a scale to highlight it.',
+    days: '{count} days',
+    percent: '{pct}%',
+    avg_mood: 'Average mood',
+    best_day_with: 'Best day with activity',
+    worst_day_with: 'Worst day with activity',
+    no_activities: 'No activities in the last 30 days yet',
   },
 };
 
