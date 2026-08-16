@@ -362,6 +362,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [newItemIcon, setNewItemIcon] = useState("📌");
   const [newItemCategory, setNewItemCategory] = useState("vlastní");
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [usedTemplate, setUsedTemplate] = useState(false);
   const [scales, setScales] = useState<Scale[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const flags = getFeatureFlags();
@@ -751,7 +752,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
       checkAndUnlockAchievements({
         mood: data.mood,
         hasPhoto: !!data.photoDataUrl,
-        hasTemplate: false,
+        hasTemplate: usedTemplate,
         hasScale: Object.values(data.scaleValues || {}).some(v => v > 0),
       }).then(unlocked => {
         if (unlocked.length > 0) console.log("🏆 Unlocked:", unlocked);
@@ -1304,6 +1305,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
         onSelect={(content) => {
           // Replace the note content with the template (not append)
           setData(d => ({ ...d, note: content }));
+          setUsedTemplate(true);
         }}
         currentNote={data.note}
       />
