@@ -150,6 +150,32 @@ function hourOf(iso: string | null | undefined): number | null {
   return d.getHours();
 }
 
+/** Max number of (unique) dates falling within any window of `windowDays` calendar days. */
+function maxCountInWindow(dates: string[], windowDays: number): number {
+  const uniq = Array.from(new Set(dates)).sort();
+  let maxCount = 0;
+  for (let i = 0; i < uniq.length; i++) {
+    let count = 0;
+    for (let j = i; j < uniq.length; j++) {
+      if (dayDiff(uniq[j], uniq[i]) < windowDays) count++;
+      else break;
+    }
+    if (count > maxCount) maxCount = count;
+  }
+  return maxCount;
+}
+
+/** True if a goal's activity was done ≥ target_count times within a single frequency window, ever. */
+function goalEverCompleted(goal: any, entries: any[]): boolean {
+  const freq = goal.frequency;
+  const windowDays = freq === 'daily' ? 1 : freq === 'weekly' ? 7 : 30;
+  const target = goal.target_count;
+  const dates = entries
+    .filter((e) => Array.isArray(e.activities) && e.activities.includes(goal.activity_key))
+    .map((e) => e.date);
+  return maxCountInWindow(dates, windowDays) >= target;
+}
+
 /**
  * Compute the *true* progress for every achievement from the raw data.
  * Returns a map key → progress (0..target). Feature achievements are monotonic:
@@ -187,7 +213,7 @@ function computeProgress(
   p.set('add_photo', hasPhotoInDb || live.hasPhoto ? 1 : 0);
   p.set('use_template', live.hasTemplate ? 1 : 0);
   p.set('create_goal', goals.length >= 1 ? 1 : 0);
-  p.set('complete_goal', goals.some((g) => g.completed_at) ? 1 : 0);
+  p.set('complete_goal', goals.some((g) => goalEverCompleted(g, entries)) ? 1 : 0);
 
   // Moods — last 7 entries
   const last7 = entries.slice(-7);
@@ -250,7 +276,7 @@ export async function syncAchievements(
       .eq("user_id", userId)
       .order("date", { ascending: true })
       .limit(10000),
-    sb.from("goals").select("id, completed_at").eq("user_id", userId),
+    sb.from("goals").select("id, completed_at, activity_key, target_count, frequency").eq("user_id", userId),
     sb
       .from("achievements")
       .select("id, achievement_key, progress, unlocked_at")
