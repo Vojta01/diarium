@@ -34,7 +34,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { key: 'entries_365', name: 'Rok deníků', description: '365 záznamů', emoji: '📖', target: 365, category: 'count' },
 
   // Features
-  { key: 'use_template', name: 'Šablonový', description: 'Použij šablonu', emoji: '📋', target: 1, category: 'feature' },
   { key: 'add_photo', name: 'Fotograf', description: 'Přidej fotku', emoji: '📸', target: 1, category: 'feature' },
   { key: 'use_scale', name: 'Měřič', description: 'Použij škálu', emoji: '📊', target: 1, category: 'feature' },
   { key: 'create_goal', name: 'Cílový', description: 'Vytvoř cíl', emoji: '🎯', target: 1, category: 'feature' },
@@ -184,7 +183,7 @@ function goalEverCompleted(goal: any, entries: any[]): boolean {
 function computeProgress(
   entries: any[],
   goals: any[],
-  live: { hasPhoto?: boolean; hasTemplate?: boolean; hasScale?: boolean } = {}
+  live: { hasPhoto?: boolean; hasScale?: boolean } = {}
 ): Map<string, number> {
   const p = new Map<string, number>();
   const n = entries.length;
@@ -211,7 +210,6 @@ function computeProgress(
   const hasPhotoInDb = entries.some((e) => !!e.photo_path);
   p.set('use_scale', hasScaleInDb || live.hasScale ? 1 : 0);
   p.set('add_photo', hasPhotoInDb || live.hasPhoto ? 1 : 0);
-  p.set('use_template', live.hasTemplate ? 1 : 0);
   p.set('create_goal', goals.length >= 1 ? 1 : 0);
   p.set('complete_goal', goals.some((g) => goalEverCompleted(g, entries)) ? 1 : 0);
 
@@ -262,7 +260,7 @@ export async function getAchievements(): Promise<Achievement[]> {
  * (never decreases), so an unlocked achievement stays unlocked.
  */
 export async function syncAchievements(
-  live?: { hasPhoto?: boolean; hasTemplate?: boolean; hasScale?: boolean }
+  live?: { hasPhoto?: boolean; hasScale?: boolean }
 ): Promise<{ progress: Map<string, number>; newlyUnlocked: string[] }> {
   const userId = await getCurrentUserId();
   if (!userId) return { progress: new Map(), newlyUnlocked: [] };
@@ -331,13 +329,11 @@ export async function syncAchievements(
 export async function checkAndUnlockAchievements(entryData: {
   mood: number;
   hasPhoto: boolean;
-  hasTemplate: boolean;
   hasScale: boolean;
   createdAt?: string;
 }): Promise<string[]> {
   const { newlyUnlocked } = await syncAchievements({
     hasPhoto: entryData.hasPhoto,
-    hasTemplate: entryData.hasTemplate,
     hasScale: entryData.hasScale,
   });
   return newlyUnlocked;
