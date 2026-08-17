@@ -30,7 +30,8 @@ export async function GET(_request: NextRequest) {
     const querySecret = url.searchParams.get("secret");
     const isAuthorized = !cronSecret
       || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret;
+      || querySecret === cronSecret
+      || _request.headers.get("x-vercel-cron") === "1";
     if (!isAuthorized) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
