@@ -122,6 +122,12 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   if (payload.photoDataUrl && !photoPath) {
     try {
       const sb = getSupabase();
+      // Ensure the client has a valid session before upload — storage RLS checks
+      // auth.uid() against the folder name, so an unauthenticated client fails.
+      const token = getAccessToken();
+      if (token) {
+        await sb.auth.setSession({ access_token: token, refresh_token: '' }).catch(() => {});
+      }
       let imageBlob: Blob;
 
       if (payload.photoDataUrl.startsWith("data:")) {
