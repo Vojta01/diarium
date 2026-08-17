@@ -305,6 +305,18 @@ function CompletedCard({
         </div>
       )}
 
+      {/* Photo */}
+      {data.photoDataUrl && (
+        <div className="glass-card">
+          <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">📷 {t("photo.label")}</h3>
+          <img
+            src={data.photoDataUrl}
+            alt={t("photo.label")}
+            className="w-full rounded-xl object-cover max-h-96"
+          />
+        </div>
+      )}
+
       {/* AI Reflection */}
       {aiReflection && (
         <div className="glass-card bg-indigo-500/5 border-indigo-400/10">

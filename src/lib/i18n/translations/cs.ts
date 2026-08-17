@@ -247,10 +247,18 @@ export const cs = {
     subtitle: 'Statistiky',
     loading: 'Načítám statistiky...',
     tab_calendar: '🗓️ Kalendář',
+    tab_photos: '📷 Fotky',
     tab_correlation: '🔗 Korelace',
     tab_screentime: '📱 Screen',
     tab_ai: '🤖 AI',
     tab_pixels: '📅 Pixels',
+  },
+
+  // ── Photo Gallery ──
+  gallery: {
+    no_photos: 'Zatím žádné fotky',
+    no_photos_hint: 'Přidej fotku v check-inu a objeví se tady.',
+    count: '{count} fotek',
   },
 
   // ── ActivityMoodChart (korelace) ──

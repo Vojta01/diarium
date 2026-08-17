@@ -8,6 +8,7 @@ import { ActivityMoodChart } from "@/components/ActivityMoodChart";
 import { PeriodicSummary } from "@/components/PeriodicSummary";
 import { AdvancedStats } from "@/components/AdvancedStats";
 import { AchievementsPanel } from "@/components/AchievementsPanel";
+import { PhotoGallery } from "@/components/PhotoGallery";
 import { ExportDialog } from "@/components/ExportDialog";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 import { getFeatureFlags } from "@/lib/feature-flags";
@@ -18,7 +19,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   const { t } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"calendar" | "correlation" | "screentime" | "ai" | "year">("calendar");
+  const [tab, setTab] = useState<"calendar" | "photos" | "correlation" | "screentime" | "ai" | "year">("calendar");
   const [showExport, setShowExport] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
@@ -69,6 +70,16 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
           {t("statsDashboard.tab_calendar")}
         </button>
         <button
+          onClick={() => setTab("photos")}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+            tab === "photos"
+              ? "bg-indigo-500/20 text-white border border-indigo-400/30"
+              : "text-white/30 hover:text-white/50"
+          }`}
+        >
+          {t("statsDashboard.tab_photos")}
+        </button>
+        <button
           onClick={() => setTab("correlation")}
           className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
             tab === "correlation"
@@ -114,6 +125,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
 
       <div className="max-w-2xl mx-auto pb-16">
         {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
+        {tab === "photos" && <PhotoGallery entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "correlation" && <ActivityMoodChart entries={entries} />}
         {tab === "screentime" && flags.screenTime && <ScreenTimeChart entries={entries} />}
         {tab === "ai" && <PeriodicSummary userId={userId} />}
