@@ -41,7 +41,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { key: 'complete_goal', name: 'Splněno', description: 'Splň cíl', emoji: '✅', target: 1, category: 'feature' },
 
   // Moods
-  { key: 'all_moods_week', name: 'Emoční spektrum', description: 'Všechny nálady v týdnu', emoji: '🌈', target: 1, category: 'mood' },
+  { key: 'all_moods_week', name: 'Emoční spektrum', description: '3 různé nálady v týdnu', emoji: '🌈', target: 1, category: 'mood' },
   { key: 'perfect_week', name: 'Perfektní týden', description: '7 dní v řadě skvělá nálada', emoji: '✨', target: 1, category: 'mood' },
 
   // Special
@@ -218,7 +218,7 @@ function computeProgress(
   // Moods — last 7 entries
   const last7 = entries.slice(-7);
   const uniqueMoods = new Set(last7.map((e) => e.mood).filter((m) => m >= 1 && m <= 5));
-  p.set('all_moods_week', uniqueMoods.size >= 5 ? 1 : 0);
+  p.set('all_moods_week', uniqueMoods.size >= 3 ? 1 : 0);
   p.set('perfect_week', hasPerfectWeek(entries) ? 1 : 0);
 
   // Special
