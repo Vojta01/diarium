@@ -38,7 +38,7 @@ Napiš shrnutí uplynulého měsíce (4-6 odstavců v češtině):
 Tón: reflektivní, optimistický. Max 1200 znaků.`
 };
 
-function buildPeriodPrompt(entries: any[], type: string): string {
+function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<string, string>): string {
   const lines: string[] = [];
   lines.push(`Data za období: ${entries.length} dní\n`);
 
@@ -52,17 +52,34 @@ function buildPeriodPrompt(entries: any[], type: string): string {
   lines.push(`Průměrná nálada: ${avgMood}/5`);
   lines.push(`Rozložení: ${Object.entries(moodCounts).map(([k, v]) => `${k}: ${v}×`).join(", ")}`);
 
-  const stresses = entries.filter((e: any) => e.stress && e.stress > 0);
+  const stresses = entries.filter((e: any) => e.stress && e.stress > 0).map((e: any) => e.stress);
   if (stresses.length > 0) {
-    lines.push(`Průměrný stres: ${(stresses.reduce((a: number, e: any) => a + e.stress, 0) / stresses.length).toFixed(1)}/5`);
+    lines.push(`Průměrný stres: ${(stresses.reduce((a: number, b: number) => a + b, 0) / stresses.length).toFixed(1)}/5`);
   }
 
-  const sleeps = entries.filter((e: any) => e.sleep_quality && e.sleep_quality > 0);
+  const sleeps = entries.filter((e: any) => e.sleep_quality && e.sleep_quality > 0).map((e: any) => e.sleep_quality);
   if (sleeps.length > 0) {
     const sleepLabels: Record<number, string> = { 3: "skvělý", 2: "normální", 1: "špatný" };
     const sc: Record<string, number> = {};
     sleeps.forEach((s: number) => { const l = sleepLabels[s] || "?"; sc[l] = (sc[l] || 0) + 1; });
     lines.push(`Spánek: ${Object.entries(sc).map(([k, v]) => `${k}: ${v}×`).join(", ")}`);
+  }
+
+  // Scales (Energie, Produktivita) — from scale_values JSONB
+  const scaleSums: Record<string, { sum: number; count: number }> = {};
+  entries.forEach((e: any) => {
+    if (e.scale_values && typeof e.scale_values === "object") {
+      for (const [scaleId, val] of Object.entries(e.scale_values)) {
+        const name = scaleNameMap[scaleId];
+        if (!name || typeof val !== "number") continue;
+        if (!scaleSums[name]) scaleSums[name] = { sum: 0, count: 0 };
+        scaleSums[name].sum += val;
+        scaleSums[name].count++;
+      }
+    }
+  });
+  if (Object.keys(scaleSums).length > 0) {
+    lines.push(`Škály: ${Object.entries(scaleSums).map(([name, s]) => `${name}: průměr ${(s.sum / s.count).toFixed(1)}/5`).join(", ")}`);
   }
 
   const screenTimes = entries.filter((e: any) => e.phone_screen_time && e.phone_screen_time > 0);
@@ -100,6 +117,8 @@ function buildPeriodPrompt(entries: any[], type: string): string {
     lines.push(`\n─── Denní přehled ───`);
     entries.forEach((e: any) => {
       const parts = [`${e.date}: nálada ${e.mood}/5`];
+      if (e.sleep_quality > 0) parts.push(`spánek ${e.sleep_quality}/3`);
+      if (e.stress > 0) parts.push(`stres ${e.stress}/5`);
       if (e.activities?.length) parts.push(`aktivity: ${e.activities.join(", ")}`);
       if (e.note?.trim()) parts.push(`poznámka: "${e.note}"`);
       lines.push(parts.join(" | "));
@@ -132,7 +151,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
   // Fetch entries
   const { data: entries, error: dbError } = await supabase
     .from("entries")
-    .select("date, mood, mood_emoji, activities, stress, sleep_quality, habits, gratitude, note, phone_screen_time")
+    .select("date, mood, mood_emoji, activities, stress, sleep_quality, habits, gratitude, note, phone_screen_time, scale_values")
     .eq("user_id", userId)
     .gte("date", fromDate)
     .order("date", { ascending: true });
@@ -142,7 +161,19 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
     return null;
   }
 
-  const userPrompt = buildPeriodPrompt(entries, type);
+  // Fetch scales to map scale IDs → names (Energie, Produktivita)
+  const scaleNameMap: Record<string, string> = {};
+  try {
+    const { data: scales } = await supabase
+      .from("scales")
+      .select("id, name")
+      .eq("user_id", userId);
+    (scales || []).forEach((s: any) => { scaleNameMap[s.id] = s.name; });
+  } catch (e) {
+    console.error("Failed to fetch scales:", e);
+  }
+
+  const userPrompt = buildPeriodPrompt(entries, type, scaleNameMap);
 
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",

@@ -65,7 +65,7 @@ const sleepLabels: Record<number, string> = {
   3: "skvělý", 2: "normální", 1: "špatný"
 };
 
-function formatDay(entry: any, isToday: boolean): string {
+function formatDay(entry: any, isToday: boolean, scaleNameMap: Record<string, string>): string {
   const parts: string[] = [];
   const prefix = isToday ? "📅 DNEŠEK" : `📅 ${entry.date?.slice(5)}`;
 
@@ -91,6 +91,20 @@ function formatDay(entry: any, isToday: boolean): string {
   
   if (entry.stress > 0) {
     parts.push(`  Stres: ${stressLabels[entry.stress] || "?"}`);
+  }
+
+  // Scales (Energie, Produktivita)
+  if (entry.scale_values && typeof entry.scale_values === "object") {
+    const scaleParts: string[] = [];
+    for (const [scaleId, val] of Object.entries(entry.scale_values)) {
+      const name = scaleNameMap[scaleId];
+      if (name && typeof val === "number") {
+        scaleParts.push(`${name} ${val}/5`);
+      }
+    }
+    if (scaleParts.length > 0) {
+      parts.push(`  Škály: ${scaleParts.join(", ")}`);
+    }
   }
 
   // Habits — show only broken ones
@@ -175,6 +189,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch scales to map scale IDs → names (Energie, Produktivita)
+    const scaleNameMap: Record<string, string> = {};
+    try {
+      const supabaseForScales = createClient(SUPABASE_URL, SERVICE_KEY);
+      const { data: scales } = await supabaseForScales
+        .from("scales")
+        .select("id, name")
+        .eq("user_id", user_id);
+      (scales || []).forEach((s: any) => { scaleNameMap[s.id] = s.name; });
+    } catch (e) {
+      console.error("Failed to fetch scales:", e);
+    }
+
     // Build the prompt
     const promptParts: string[] = [];
     
@@ -186,13 +213,13 @@ export async function POST(request: NextRequest) {
 
     for (const entry of history) {
       const isToday = entry.date === date;
-      promptParts.push(formatDay(entry, isToday));
+      promptParts.push(formatDay(entry, isToday, scaleNameMap));
       promptParts.push("");
     }
 
     // If no history, fall back to just today
     if (history.length === 0) {
-      promptParts.push(formatDay({ ...todayData, date }, true));
+      promptParts.push(formatDay({ ...todayData, date }, true, scaleNameMap));
     }
 
     const userPrompt = promptParts.join("\n");
