@@ -126,8 +126,9 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
                 {day}
               </span>
               {entry && (
-                <span className="text-[14px] leading-none">
+                <span className="text-[14px] leading-none flex items-center gap-0.5">
                   {MOOD_EMOJIS[entry.mood]}
+                  {entry.photo_path && <span className="text-[8px]">📷</span>}
                 </span>
               )}
             </button>

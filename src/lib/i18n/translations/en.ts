@@ -265,10 +265,18 @@ export const en = {
     subtitle: 'Statistics',
     loading: 'Loading statistics...',
     tab_calendar: '🗓️ Calendar',
+    tab_photos: '📷 Photos',
     tab_correlation: '🔗 Correlation',
     tab_screentime: '📱 Screen',
     tab_ai: '🤖 AI',
     tab_pixels: '📅 Pixels',
+  },
+
+  // ── Photo Gallery ──
+  gallery: {
+    no_photos: 'No photos yet',
+    no_photos_hint: 'Add a photo in a check-in and it will appear here.',
+    count: '{count} photos',
   },
 
   // ── ActivityMoodChart (correlation) ──
