@@ -201,6 +201,7 @@ export default function Home() {
           setCheckinDate(null);
           setView("stats");
         }}
+        onBack={() => setView("dashboard")}
       />
 
       <TabBar />

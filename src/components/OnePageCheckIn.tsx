@@ -156,9 +156,9 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
 
 // ── COMPLETED DAY CARD ──
 function CompletedCard({
-  data, goals, aiReflection, onEdit, dateStr, habitDefs,
+  data, goals, aiReflection, onEdit, onPhotoClick, dateStr, habitDefs,
 }: {
-  data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; dateStr: string;
+  data: CheckInData; goals: Goal[]; aiReflection: string | null; onEdit: () => void; onPhotoClick?: (url: string) => void; dateStr: string;
   habitDefs: HabitDef[];
 }) {
   const { t, lang } = useTranslation();
@@ -312,7 +312,8 @@ function CompletedCard({
           <img
             src={data.photoDataUrl}
             alt={t("photo.label")}
-            className="w-full rounded-xl object-cover max-h-96"
+            className="w-full rounded-xl object-cover max-h-96 cursor-pointer transition-opacity hover:opacity-80"
+            onClick={() => onPhotoClick?.(data.photoDataUrl!)}
           />
         </div>
       )}
@@ -346,8 +347,57 @@ function CompletedCard({
   );
 }
 
+// ── PHOTO VIEWER ──
+function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col" onClick={() => setZoomed(!zoomed)}>
+      {/* Back button — always visible */}
+      <div className="absolute top-0 left-0 right-0 z-10 p-4" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white text-xl backdrop-blur-sm hover:bg-black/70 transition-colors"
+        >
+          ←
+        </button>
+      </div>
+
+      {/* Image — tap to toggle zoom */}
+      <div
+        className="flex-1 flex items-start justify-center overflow-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className={`transition-all duration-200 ${
+            zoomed
+              ? "w-auto h-auto max-w-none max-h-none"
+              : "max-w-full max-h-full object-contain"
+          }`}
+          style={zoomed ? { minWidth: "100%", minHeight: "100dvh" } : {}}
+        />
+      </div>
+
+      {/* Hint */}
+      {!zoomed && (
+        <div className="absolute bottom-8 left-0 right-0 text-center" onClick={e => e.stopPropagation()}>
+          <span className="inline-block text-white/30 text-xs bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+            Klepnutím přiblížíš
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN COMPONENT ──
-export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => void; initialDate?: string | null }) {
+export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
+  onSaveDone: () => void;
+  initialDate?: string | null;
+  onBack?: () => void;
+}) {
   const { t, lang } = useTranslation();
   const displayLabel = (item: { label: string; labelEn?: string }) =>
     lang === 'en' ? (item.labelEn || item.label) : item.label;
@@ -376,6 +426,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [scales, setScales] = useState<Scale[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const flags = getFeatureFlags();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>("");
@@ -793,7 +844,11 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
     return (
       <div className="pb-24">
         {/* Date nav */}
-        <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+        <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+          {onBack && (
+            <button onClick={onBack} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors shrink-0">←</button>
+          )}
+          <div className="flex items-center justify-center gap-4 flex-1">
           <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
           <button
             onClick={() => setCurrentDate(today)}
@@ -808,17 +863,26 @@ export function OnePageCheckIn({ onSaveDone, initialDate }: { onSaveDone: () => 
             disabled={currentDate === today}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors"
           >▶</button>
+          </div>
         </div>
         <CompletedCard
           data={data}
           goals={goals}
           aiReflection={aiReflection}
           onEdit={() => setEditing(true)}
+          onPhotoClick={(url) => setViewingPhoto(url)}
           dateStr={currentDate}
           habitDefs={habitDefs}
         />
         {aiLoading && (
           <div className="text-center text-white/20 text-sm py-4 animate-pulse">{t("checkin.ai_thinking")}</div>
+        )}
+        {viewingPhoto && (
+          <PhotoViewer
+            src={viewingPhoto}
+            alt={t("photo.label")}
+            onClose={() => setViewingPhoto(null)}
+          />
         )}
       </div>
     );
