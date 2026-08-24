@@ -63,13 +63,13 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
     date: e.date,
     mood: e.mood ?? 3,
     moodEmoji: e.mood_emoji ?? "😐",
-    activities: e.activities ?? [],
-    habits: e.habits ?? {},
-    gratitude: e.gratitude ?? [],
+    activities: Array.isArray(e.activities) ? e.activities : [],
+    habits: (e.habits && typeof e.habits === "object" && !Array.isArray(e.habits)) ? e.habits : {},
+    gratitude: Array.isArray(e.gratitude) ? e.gratitude : [],
     note: e.note ?? "",
     phone_screen_time: e.phone_screen_time,
     phone_unlocks: e.phone_unlocks,
-    phone_top_apps: e.phone_top_apps ?? undefined,
+    phone_top_apps: Array.isArray(e.phone_top_apps) ? e.phone_top_apps : undefined,
     photo_path: e.photo_path ?? null,
   }));
 }
