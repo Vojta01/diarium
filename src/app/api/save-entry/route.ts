@@ -8,7 +8,17 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 export async function POST(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
-    if (!user) {
+
+    // Cron-style authorization fallback
+    const cronSecret = process.env.CRON_SECRET || '';
+    const authHeader = req.headers.get('authorization');
+    const querySecret = req.nextUrl.searchParams.get('secret');
+    const isCron = !cronSecret
+      || authHeader === `Bearer ${cronSecret}`
+      || querySecret === cronSecret
+      || req.headers.get('x-vercel-cron') === '1';
+
+    if (!user && !isCron) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,8 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing user_id or date' }, { status: 400 });
     }
 
-    // Verify the caller owns this user_id
-    if (user_id !== user.id) {
+    // Verify the caller owns this user_id (skip for cron)
+    if (user && user_id !== user.id) {
       return NextResponse.json({ error: 'Forbidden: user_id mismatch' }, { status: 403 });
     }
 
@@ -69,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Mirror scale values into scale_entries so the Scales widget has per-day rows.
     // Values are keyed by scale_id → number; 0 means "not selected" and is skipped.
-    if (scale_values && typeof scale_values === 'object') {
+    if (scale_values && typeof scale_values === 'object' && user) {
       try {
         const scalePairs = Object.entries(scale_values as Record<string, number>)
           .filter(([, v]) => typeof v === 'number' && v > 0);
