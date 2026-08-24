@@ -10,11 +10,10 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const moodMap = useMemo(() => {
     const map: Record<string, DailyEntry> = {};
@@ -53,7 +52,6 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
     } else {
       setViewMonth(viewMonth - 1);
     }
-    setSelectedDate(null);
   };
 
   const nextMonth = () => {
@@ -63,16 +61,14 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
     } else {
       setViewMonth(viewMonth + 1);
     }
-    setSelectedDate(null);
   };
 
-  const selectedEntry = selectedDate ? moodMap[selectedDate] : null;
   const dayNames: string[] = Array.isArray(t("calendar.day_names"))
     ? (t("calendar.day_names") as unknown as string[])
-    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const monthNames: string[] = Array.isArray(t("calendar.month_names"))
     ? (t("calendar.month_names") as unknown as string[])
-    : ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    : ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   return (
     <div className="glass-card">
@@ -106,15 +102,13 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
           const entry = moodMap[dateStr];
           const day = parseInt(dateStr.split("-")[2]);
           const isToday = dateStr === new Date().toISOString().split("T")[0];
-          const isSelected = dateStr === selectedDate;
 
           return (
             <button
               key={dateStr}
-              onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+              onClick={() => onNavigateToDate?.(dateStr)}
               className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all
                 ${isToday ? "ring-1 ring-indigo-400/50" : ""}
-                ${isSelected ? "ring-2 ring-white/50 scale-110 z-10" : ""}
                 hover:bg-white/5`}
               style={{
                 background: entry
@@ -135,83 +129,6 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
           );
         })}
       </div>
-
-      {/* Day detail */}
-      {selectedEntry && (() => {
-        // Defensive: ensure safe types even if data has corrupted fields
-        const safe = {
-          mood: selectedEntry.mood || 0,
-          date: selectedEntry.date || "",
-          activities: Array.isArray(selectedEntry.activities) ? selectedEntry.activities : [],
-          habits: (selectedEntry.habits && typeof selectedEntry.habits === "object" && !Array.isArray(selectedEntry.habits)) ? selectedEntry.habits : {},
-          gratitude: Array.isArray(selectedEntry.gratitude) ? selectedEntry.gratitude : [],
-          note: selectedEntry.note || "",
-          photo_path: selectedEntry.photo_path || null,
-        };
-        return (
-        <div className="mt-4 p-4 bg-white/3 rounded-xl border border-white/5">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">{MOOD_EMOJIS[safe.mood] || (safe.mood > 0 ? "😐" : "—")}</span>
-            <span className="font-medium">
-              {safe.date ? new Date(safe.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              }) : ""}
-            </span>
-          </div>
-
-          {safe.activities.length > 0 && (
-            <div className="text-sm text-white/50 mb-2">
-              {safe.activities.join(", ")}
-            </div>
-          )}
-
-          {Object.keys(safe.habits).length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {Object.entries(safe.habits)
-                .filter(([, v]) => v)
-                .map(([k]) => (
-                  <span
-                    key={k}
-                    className="px-2 py-0.5 bg-indigo-400/10 rounded-full text-[10px] text-indigo-300"
-                  >
-                    {k}
-                  </span>
-                ))}
-            </div>
-          )}
-
-          {safe.gratitude.length > 0 && (
-            <div className="text-sm text-white/40">
-              <div className="text-[10px] uppercase text-white/20 mb-1">{t("calendar.gratitude")}</div>
-              {safe.gratitude.map((g, i) => (
-                <div key={i} className="text-xs">• {g}</div>
-              ))}
-            </div>
-          )}
-
-          {safe.note && (
-            <div className="text-sm text-white/40 mt-2 italic">
-              &ldquo;{safe.note}&rdquo;
-            </div>
-          )}
-
-          <button
-            onClick={() => {
-              if (onNavigateToDate) {
-                onNavigateToDate(safe.date);
-              } else {
-                window.location.href = "/?edit=" + safe.date;
-              }
-            }}
-            className="btn-glass text-sm w-full mt-3 py-2 text-center"
-          >
-            {t("calendar.edit_entry")}
-          </button>
-        </div>
-        );
-      })()}
     </div>
   );
 }
