@@ -246,14 +246,23 @@ export async function getEntry(date: string): Promise<Entry | null> {
   if (!user) return null;
 
   const sb = getAuthenticatedClient();
-  const { data } = await sb
+  const { data: rows } = await sb
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
     .eq("date", date)
-    .single();
+    .limit(2);
 
-  return data ?? null;
+  if (!rows || rows.length === 0) return null;
+  const entry = rows[0] as any;
+  // Defensive: ensure required fields have defaults
+  if (entry.mood == null) entry.mood = 0;
+  if (!entry.mood_emoji) entry.mood_emoji = "";
+  if (!Array.isArray(entry.activities)) entry.activities = [];
+  if (!entry.habits || typeof entry.habits !== "object") entry.habits = {};
+  if (!Array.isArray(entry.gratitude)) entry.gratitude = [];
+  if (entry.note == null) entry.note = "";
+  return entry as Entry;
 }
 
 // ── Aktivity & Návyky ──

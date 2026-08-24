@@ -118,7 +118,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
                 hover:bg-white/5`}
               style={{
                 background: entry
-                  ? `${MOOD_COLORS[entry.mood]}33`
+                  ? `${MOOD_COLORS[entry.mood] || "#6366f1"}33`
                   : "transparent",
               }}
             >
@@ -127,7 +127,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
               </span>
               {entry && (
                 <span className="text-[14px] leading-none flex items-center gap-0.5">
-                  {MOOD_EMOJIS[entry.mood]}
+                  {MOOD_EMOJIS[entry.mood] || (entry.mood > 0 ? MOOD_EMOJIS[3] : "—")}
                   {entry.photo_path && <span className="text-[8px]">📷</span>}
                 </span>
               )}
@@ -140,7 +140,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
       {selectedEntry && (
         <div className="mt-4 p-4 bg-white/3 rounded-xl border border-white/5">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">{MOOD_EMOJIS[selectedEntry.mood]}</span>
+            <span className="text-2xl">{MOOD_EMOJIS[selectedEntry.mood] || (selectedEntry.mood > 0 ? "😐" : "—")}</span>
             <span className="font-medium">
               {new Date(selectedEntry.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
                 weekday: "long",

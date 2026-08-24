@@ -478,23 +478,28 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
 
     getEntry(currentDate).then((entry) => {
       if (entry) {
-        setData({
-          mood: entry.mood,
-          moodEmoji: entry.mood_emoji,
-          sleepQuality: entry.sleep_quality ?? 0,
-          stress: entry.stress ?? 0,
-          activities: entry.activities ?? [],
-          habits: entry.habits ?? {},
-          gratitude: entry.gratitude ?? [],
-          note: entry.note ?? "",
-          photoDataUrl: entry.photo_path || null,
-          scaleValues: (entry as any).scale_values || {},
-        });
-        if (entry.ai_reflection) {
-          setAiReflection(entry.ai_reflection);
-        }
-        if (entry.mood > 0) {
-          setSaved(true);
+        try {
+          setData({
+            mood: entry.mood ?? 0,
+            moodEmoji: entry.mood_emoji ?? "",
+            sleepQuality: entry.sleep_quality ?? 0,
+            stress: entry.stress ?? 0,
+            activities: Array.isArray(entry.activities) ? entry.activities : [],
+            habits: (entry.habits && typeof entry.habits === "object") ? entry.habits : {},
+            gratitude: Array.isArray(entry.gratitude) ? entry.gratitude : [],
+            note: entry.note ?? "",
+            photoDataUrl: typeof entry.photo_path === "string" ? entry.photo_path : null,
+            scaleValues: (entry as any).scale_values && typeof (entry as any).scale_values === "object" ? (entry as any).scale_values : {},
+          });
+          if (entry.ai_reflection) {
+            setAiReflection(typeof entry.ai_reflection === "string" ? entry.ai_reflection : null);
+          }
+          if (entry.mood > 0) {
+            setSaved(true);
+          }
+        } catch (e) {
+          console.error("Failed to set entry data:", e);
+          setData({ ...EMPTY_DATA });
         }
       } else {
         // No DB entry — try to restore draft from localStorage
