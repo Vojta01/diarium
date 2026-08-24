@@ -137,28 +137,39 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
       </div>
 
       {/* Day detail */}
-      {selectedEntry && (
+      {selectedEntry && (() => {
+        // Defensive: ensure safe types even if data has corrupted fields
+        const safe = {
+          mood: selectedEntry.mood || 0,
+          date: selectedEntry.date || "",
+          activities: Array.isArray(selectedEntry.activities) ? selectedEntry.activities : [],
+          habits: (selectedEntry.habits && typeof selectedEntry.habits === "object" && !Array.isArray(selectedEntry.habits)) ? selectedEntry.habits : {},
+          gratitude: Array.isArray(selectedEntry.gratitude) ? selectedEntry.gratitude : [],
+          note: selectedEntry.note || "",
+          photo_path: selectedEntry.photo_path || null,
+        };
+        return (
         <div className="mt-4 p-4 bg-white/3 rounded-xl border border-white/5">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">{MOOD_EMOJIS[selectedEntry.mood] || (selectedEntry.mood > 0 ? "😐" : "—")}</span>
+            <span className="text-2xl">{MOOD_EMOJIS[safe.mood] || (safe.mood > 0 ? "😐" : "—")}</span>
             <span className="font-medium">
-              {new Date(selectedEntry.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
+              {safe.date ? new Date(safe.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
-              })}
+              }) : ""}
             </span>
           </div>
 
-          {selectedEntry.activities.length > 0 && (
+          {safe.activities.length > 0 && (
             <div className="text-sm text-white/50 mb-2">
-              {selectedEntry.activities.join(", ")}
+              {safe.activities.join(", ")}
             </div>
           )}
 
-          {Object.keys(selectedEntry.habits).length > 0 && (
+          {Object.keys(safe.habits).length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
-              {Object.entries(selectedEntry.habits)
+              {Object.entries(safe.habits)
                 .filter(([, v]) => v)
                 .map(([k]) => (
                   <span
@@ -171,27 +182,27 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
             </div>
           )}
 
-          {selectedEntry.gratitude.length > 0 && (
+          {safe.gratitude.length > 0 && (
             <div className="text-sm text-white/40">
               <div className="text-[10px] uppercase text-white/20 mb-1">{t("calendar.gratitude")}</div>
-              {selectedEntry.gratitude.map((g, i) => (
+              {safe.gratitude.map((g, i) => (
                 <div key={i} className="text-xs">• {g}</div>
               ))}
             </div>
           )}
 
-          {selectedEntry.note && (
+          {safe.note && (
             <div className="text-sm text-white/40 mt-2 italic">
-              &ldquo;{selectedEntry.note}&rdquo;
+              &ldquo;{safe.note}&rdquo;
             </div>
           )}
 
           <button
             onClick={() => {
               if (onNavigateToDate) {
-                onNavigateToDate(selectedEntry.date);
+                onNavigateToDate(safe.date);
               } else {
-                window.location.href = "/?edit=" + selectedEntry.date;
+                window.location.href = "/?edit=" + safe.date;
               }
             }}
             className="btn-glass text-sm w-full mt-3 py-2 text-center"
@@ -199,7 +210,8 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
             {t("calendar.edit_entry")}
           </button>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
