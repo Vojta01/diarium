@@ -43,6 +43,84 @@ const STRESS_LABELS: Record<number, string> = {
   1: "stress.stress_1", 2: "stress.stress_2", 3: "stress.stress_3", 4: "stress.stress_4", 5: "stress.stress_5",
 };
 
+// ── Activity catalog — key + label → icon mapping (for CompletedCard display) ──
+interface ActivityInfo { icon: string; displayLabel: string; color?: string; }
+const ACTIVITY_CATALOG: Record<string, ActivityInfo> = {
+  // Both keys and labels as keys so either format works
+  "rodina": { icon: "👨‍👩‍👧", displayLabel: "Rodina" },
+  "Rodina": { icon: "👨‍👩‍👧", displayLabel: "Rodina" },
+  "pratele": { icon: "👥", displayLabel: "Přátelé" },
+  "Přátelé": { icon: "👥", displayLabel: "Přátelé" },
+  "rande": { icon: "💑", displayLabel: "Rande" },
+  "Rande": { icon: "💑", displayLabel: "Rande" },
+  "party": { icon: "🎉", displayLabel: "Párty" },
+  "Párty": { icon: "🎉", displayLabel: "Párty" },
+  "office": { icon: "🏢", displayLabel: "Office" },
+  "Office": { icon: "🏢", displayLabel: "Office" },
+  "filmy_a_tv": { icon: "🎬", displayLabel: "Filmy a TV" },
+  "Filmy a TV": { icon: "🎬", displayLabel: "Filmy a TV" },
+  "cteni": { icon: "📖", displayLabel: "Čtení" },
+  "Čtení": { icon: "📖", displayLabel: "Čtení" },
+  "hrani_her": { icon: "🎮", displayLabel: "Hraní her" },
+  "Hraní her": { icon: "🎮", displayLabel: "Hraní her" },
+  "sport": { icon: "🏃", displayLabel: "Sport" },
+  "Sport": { icon: "🏃", displayLabel: "Sport" },
+  "relax": { icon: "😌", displayLabel: "Relax" },
+  "Relax": { icon: "😌", displayLabel: "Relax" },
+  "hudba": { icon: "🎵", displayLabel: "Hudba" },
+  "Hudba": { icon: "🎵", displayLabel: "Hudba" },
+  "jist_zdrave": { icon: "🥗", displayLabel: "Jíst zdravě" },
+  "Jíst zdravě": { icon: "🥗", displayLabel: "Jíst zdravě" },
+  "rychle_obcerstveni": { icon: "🍔", displayLabel: "Rychlé občerstvení" },
+  "Rychlé občerstvení": { icon: "🍔", displayLabel: "Rychlé občerstvení" },
+  "domaci_vyroba": { icon: "🍳", displayLabel: "Domácí výroba" },
+  "Domácí výroba": { icon: "🍳", displayLabel: "Domácí výroba" },
+  "restaurace": { icon: "🍽️", displayLabel: "Restaurace" },
+  "Restaurace": { icon: "🍽️", displayLabel: "Restaurace" },
+  "donaska": { icon: "📦", displayLabel: "Donáška" },
+  "Donáška": { icon: "📦", displayLabel: "Donáška" },
+  "den_bez_masa": { icon: "🥬", displayLabel: "Den bez masa" },
+  "zadne_sladkosti": { icon: "🚫🍰", displayLabel: "Žádné sladkosti" },
+  "zadne_limonady": { icon: "🚫🥤", displayLabel: "Žádné limonády" },
+  "trenink": { icon: "🏋️", displayLabel: "Trénink" },
+  "Trénink": { icon: "🏋️", displayLabel: "Trénink" },
+  "pit_vody": { icon: "💧", displayLabel: "Pít vodu" },
+  "chuze": { icon: "🚶", displayLabel: "Chůze" },
+  "Chůze": { icon: "🚶", displayLabel: "Chůze" },
+  "kolo": { icon: "🚴", displayLabel: "Kolo" },
+  "plavani": { icon: "🏊", displayLabel: "Plavání" },
+  "paddleboard": { icon: "🏄", displayLabel: "Paddleboard" },
+  "snooker": { icon: "🎱", displayLabel: "Snooker" },
+  "meditovat": { icon: "🧘", displayLabel: "Meditovat" },
+  "Meditovat": { icon: "🧘", displayLabel: "Meditovat" },
+  "laskavost": { icon: "💝", displayLabel: "Laskavost" },
+  "Laskavost": { icon: "💝", displayLabel: "Laskavost" },
+  "naslouchani": { icon: "👂", displayLabel: "Naslouchání" },
+  "darcovstvi": { icon: "💰", displayLabel: "Dárcovství" },
+  "dej_darek": { icon: "🎁", displayLabel: "Dej dárek" },
+  "terapie": { icon: "🛋️", displayLabel: "Terapie" },
+  "Terapie": { icon: "🛋️", displayLabel: "Terapie" },
+  "integrita": { icon: "⚖️", displayLabel: "Integrita" },
+  "nakupovani": { icon: "🛒", displayLabel: "Nakupování" },
+  "Nakupování": { icon: "🛒", displayLabel: "Nakupování" },
+  "uklizeni": { icon: "🧹", displayLabel: "Uklízení" },
+  "Uklízení": { icon: "🧹", displayLabel: "Uklízení" },
+  "vareni": { icon: "🍲", displayLabel: "Vaření" },
+  "Vaření": { icon: "🍲", displayLabel: "Vaření" },
+  "prani": { icon: "🧺", displayLabel: "Praní" },
+  "zehleni": { icon: "👕", displayLabel: "Žehlení" },
+  "slunecno": { icon: "☀️", displayLabel: "Slunečno" },
+  "Slunečno": { icon: "☀️", displayLabel: "Slunečno" },
+  "zatazeno": { icon: "☁️", displayLabel: "Zataženo" },
+  "dest": { icon: "🌧️", displayLabel: "Déšť" },
+  "Déšť": { icon: "🌧️", displayLabel: "Déšť" },
+  "snih": { icon: "❄️", displayLabel: "Sníh" },
+  "mraz": { icon: "🥶", displayLabel: "Mráz" },
+  "horko": { icon: "🌡️", displayLabel: "Horko" },
+  "bourka": { icon: "🌩️", displayLabel: "Bouřka" },
+  "vitr": { icon: "💨", displayLabel: "Vítr" },
+};
+
 // ── Mood-based quotes ──
 const MOOD_QUOTES: Record<number, string[]> = {
   5: [
@@ -235,14 +313,23 @@ function CompletedCard({
         </div>
       </div>
 
-      {/* Activities tags */}
+      {/* Activities tags — with icons */}
       {Array.isArray(data.activities) && data.activities.length > 0 && (
         <div className="glass-card">
           <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">{t("completedCard.activities_section")}</h3>
           <div className="flex flex-wrap gap-1.5">
-            {data.activities.map(a => (
-              <span key={a} className="px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-white/70">{a}</span>
-            ))}
+            {data.activities.map(a => {
+              const info = ACTIVITY_CATALOG[a] || ACTIVITY_CATALOG[a.toLowerCase().replace(/\s+/g, "_")];
+              return (
+                <span
+                  key={a}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-white/70"
+                >
+                  {info ? <span className="text-sm">{info.icon}</span> : null}
+                  <span>{info?.displayLabel || a}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
