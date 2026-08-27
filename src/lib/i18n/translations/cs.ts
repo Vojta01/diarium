@@ -324,6 +324,12 @@ export const cs = {
     apps: 'Appky:',
     other: 'Ostatní',
     weekdays: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
+    day_detail: '📅 Detail dne',
+    close: '✕',
+    no_apps: 'Žádná data o aplikacích pro tento den',
+    unlocks_label: 'Odemknutí',
+    screen_time_label: 'Čas na obrazovce',
+    click_hint: 'Klikni na sloupec/bod pro detail dne',
   },
 
   // ── CalendarView ──
