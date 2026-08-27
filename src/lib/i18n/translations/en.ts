@@ -342,6 +342,12 @@ export const en = {
     apps: 'Apps:',
     other: 'Other',
     weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    day_detail: '📅 Day detail',
+    close: '✕',
+    no_apps: 'No app data for this day',
+    unlocks_label: 'Unlocks',
+    screen_time_label: 'Screen time',
+    click_hint: 'Click a bar/point for that day\'s detail',
   },
 
   // ── CalendarView ──

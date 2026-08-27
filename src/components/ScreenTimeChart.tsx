@@ -1,12 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { DailyEntry } from "@/lib/stats";
 import { useTranslation } from "@/lib/i18n";
 
 interface ScreenTimeEntry extends DailyEntry {
   phone_screen_time?: number;
   phone_unlocks?: number;
+}
+
+/** A day slot in the 7-day window — either a real entry or an empty placeholder. */
+interface DaySlot {
+  date: string;
+  entry: ScreenTimeEntry | null;
 }
 
 function formatTime(seconds: number): string {
@@ -16,8 +22,10 @@ function formatTime(seconds: number): string {
   return m + "m";
 }
 
-function formatHours(seconds: number): string {
-  return (seconds / 3600).toFixed(1) + "h";
+/** Compact date label, e.g. "27. 8." */
+function formatDay(date: string): string {
+  const [, m, d] = date.split("-");
+  return `${Number(d)}. ${Number(m)}.`;
 }
 
 /** Barva podle počtu odemknutí — stejný princip jako screen time */
@@ -27,17 +35,11 @@ function getUnlockColor(unlocks: number): string {
   if (unlocks < 100) return "#eab308";   // žlutá — hodně
   return "#ef4444";                        // červená — extrém
 }
-function getBarColor(seconds: number): { bg: string; label: string } {
-  if (seconds < 1800) return { bg: "#22c55e", label: "🟢 <30m" };       // <30 min
-  if (seconds < 3600) return { bg: "#4ade80", label: "🟢 30m–1h" };      // 30m-1h
-  if (seconds < 7200) return { bg: "#3b82f6", label: "🔵 1–2h" };        // 1-2h
-  if (seconds < 14400) return { bg: "#eab308", label: "🟡 2–4h" };       // 2-4h
-  if (seconds < 21600) return { bg: "#f97316", label: "🟠 4–6h" };       // 4-6h
-  return { bg: "#ef4444", label: "🔴 6h+" };                              // >6h
-}
 
 /** Max height of bar area in pixels (Tailwind h-36 = 9rem = 144px) */
 const BAR_AREA_H = 144;
+/** Max height of unlock line chart in pixels */
+const UNLOCK_AREA_H = 100;
 
 /** App color palette for stacked bar segments */
 const APP_COLORS = [
@@ -52,8 +54,14 @@ const APP_COLORS = [
 ];
 
 export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
-  const { t, lang } = useTranslation();
-  const last7Days = useMemo(() => {
+  const { t } = useTranslation();
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+
+  // ── 7-day window over calendar days (not just days-with-data) ──
+  // This is the fix for "some days don't show": previously the window dropped
+  // days with no screen-time data, so the axis skipped them entirely. Now we
+  // always render 7 consecutive calendar days, filling empty days with placeholders.
+  const days = useMemo((): DaySlot[] | null => {
     const typed = entries as ScreenTimeEntry[];
     // Group by date, keep the entry with the highest screen time
     const byDate = new Map<string, ScreenTimeEntry>();
@@ -65,60 +73,51 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
         byDate.set(e.date, e);
       }
     }
-    const withData = [...byDate.values()]
-      .filter(e => e.phone_screen_time && e.phone_screen_time > 0)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    if (withData.length === 0) return null;
-    return withData.slice(-7);
+    const dates = [...byDate.keys()].sort();
+    if (dates.length === 0) return null;
+
+    // Anchor the window on the most recent date that has any data.
+    const anchor = dates[dates.length - 1];
+    const base = new Date(anchor + "T00:00:00");
+    const slots: DaySlot[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(base);
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split("T")[0];
+      slots.push({ date: ds, entry: byDate.get(ds) || null });
+    }
+    return slots;
   }, [entries]);
 
-  // Data for unlocks (same 7-day window as screen time)
-  const unlocksData = useMemo(() => {
-    if (!last7Days) return null;
-    const hasData = last7Days.some(d => (d as any).phone_unlocks && (d as any).phone_unlocks > 0);
-    if (!hasData) return null;
-    return last7Days;
-  }, [last7Days]);
+  // Only meaningful when there is at least some screen-time data.
+  const hasAnyUnlocks = days?.some(s => s.entry && s.entry.phone_unlocks! > 0) ?? false;
+  const showUnlocks = hasAnyUnlocks;
 
-  // Data for per-app breakdown
+  // Per-app breakdown (colors across all days in window)
   const appData = useMemo(() => {
-    if (!last7Days) return null;
-    // Get unique apps across all days for consistent colors
+    if (!days) return null;
     const allApps = new Map<string, number>();
-    for (const d of last7Days) {
-      let apps = d.phone_top_apps;
-      if (!apps) continue;
-      // Normalize: handle both array and legacy string format
-      if (typeof apps === 'string') {
-        // Old format: "App:minutes, App:minutes" — skip, already handled by API
-        continue;
-      }
-      if (!Array.isArray(apps)) continue;
+    for (const s of days) {
+      const apps = s.entry?.phone_top_apps;
+      if (!apps || !Array.isArray(apps)) continue;
       for (const a of apps) {
-        if (a && typeof a === 'object' && a.app && typeof a.time_sec === 'number') {
+        if (a && typeof a === "object" && a.app && typeof a.time_sec === "number") {
           allApps.set(a.app, (allApps.get(a.app) || 0) + a.time_sec);
         }
       }
     }
-    const hasData = allApps.size > 0;
-    if (!hasData) return null;
-
-    // Sort apps by total time, assign colors
-    const sortedApps = [...allApps.entries()]
-      .sort((a, b) => b[1] - a[1]);
+    if (allApps.size === 0) return null;
+    const sortedApps = [...allApps.entries()].sort((a, b) => b[1] - a[1]);
     const appColorMap = new Map<string, string>();
-    sortedApps.forEach(([app], i) => {
-      appColorMap.set(app, APP_COLORS[i % APP_COLORS.length]);
-    });
-
-    return { appColorMap, days: last7Days };
-  }, [last7Days]);
+    sortedApps.forEach(([app], i) => appColorMap.set(app, APP_COLORS[i % APP_COLORS.length]));
+    return { appColorMap };
+  }, [days]);
 
   const weekdays: string[] = Array.isArray(t("screenTime.weekdays"))
     ? (t("screenTime.weekdays") as unknown as string[])
-    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  if (!last7Days || last7Days.length === 0) {
+  if (!days || days.length === 0) {
     return (
       <div className="glass-card">
         <h2 className="text-lg font-semibold mb-2">{t("screenTime.title")}</h2>
@@ -131,19 +130,35 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     );
   }
 
-  const maxTime = Math.max(...last7Days.map(d => d.phone_screen_time || 0), 1);
-  const avgTime = last7Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / last7Days.length;
-  const totalHours = last7Days.reduce((s, d) => s + (d.phone_screen_time || 0), 0) / 3600;
+  const dayOf = (s: DaySlot) => (s.entry ? s.entry.date : s.date);
 
-  // Unlocks max
-  const maxUnlocks = unlocksData
-    ? Math.max(...unlocksData.map(d => (d as any).phone_unlocks || 0), 1)
+  // ── Screen time stats (only over days that actually have data) ──
+  const timed = days.filter(s => s.entry && s.entry.phone_screen_time! > 0);
+  const maxTime = timed.length > 0
+    ? Math.max(...timed.map(s => s.entry!.phone_screen_time!))
     : 0;
+  const avgTime = timed.length > 0
+    ? timed.reduce((sum, s) => sum + s.entry!.phone_screen_time!, 0) / timed.length
+    : 0;
+  const totalHours = days.reduce((s, d) => s + (d.entry?.phone_screen_time || 0), 0) / 3600;
+  const maxDay = timed.reduce<ScreenTimeEntry | null>(
+    (best, s) => (!best || s.entry!.phone_screen_time! > best.phone_screen_time!) ? s.entry! : best,
+    null
+  );
+
+  const maxUnlocks = showUnlocks
+    ? Math.max(...days.map(s => s.entry?.phone_unlocks || 0), 1)
+    : 0;
+
+  const selected = selectedIdx !== null ? days[selectedIdx] : null;
 
   return (
     <div className="glass-card">
       <h2 className="text-lg font-semibold mb-1">{t("screenTime.title")}</h2>
-      <p className="text-white/30 text-xs mb-4">{t("screenTime.last_7_days")}</p>
+      <p className="text-white/30 text-xs mb-4">
+        {t("screenTime.last_7_days")}
+        <span className="text-white/20 ml-1">({days[0]?.date.slice(8, 10)}.{days[0]?.date.slice(5, 7)} – {days[days.length - 1]?.date.slice(8, 10)}.{days[days.length - 1]?.date.slice(5, 7)})</span>
+      </p>
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -156,20 +171,19 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           <div className="text-[10px] text-white/30">{t("screenTime.total")}</div>
         </div>
         <div className="text-center p-3 rounded-xl bg-white/5">
-          <div className="text-xl font-bold" style={{ color: getBarColor(maxTime).bg }}>
-            {formatTime(maxTime)}
+          <div className="text-xl font-bold" style={{ color: maxDay ? getBarColor(maxDay.phone_screen_time!).bg : "#5b5b5b" }}>
+            {maxDay ? formatTime(maxDay.phone_screen_time!) : "—"}
           </div>
           <div className="text-[10px] text-white/30">{t("screenTime.max")}</div>
         </div>
       </div>
 
       {/* Screen time bar chart */}
-      <div className="mb-6">
+      <div className="mb-2">
         <h3 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-3">
           {t("screenTime.screen_time_chart")}
         </h3>
 
-        {/* Chart area with explicit height */}
         <div className="relative" style={{ height: BAR_AREA_H + 48 }}>
           {/* Grid lines */}
           {[0.25, 0.5, 0.75].map(fraction => (
@@ -181,133 +195,109 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           ))}
 
           {/* Average line */}
-          <div
-            className="absolute left-0 right-0 border-t border-dashed border-white/20 z-10"
-            style={{ bottom: (avgTime / maxTime) * BAR_AREA_H + 32 }}
-          >
-            <span className="absolute -top-3 right-0 text-[9px] text-white/20 bg-[#0f0f0f] px-1 rounded">
-              Ø {formatTime(Math.round(avgTime))}
-            </span>
-          </div>
+          {maxTime > 0 && (
+            <div
+              className="absolute left-0 right-0 border-t border-dashed border-white/20 z-10"
+              style={{ bottom: (avgTime / maxTime) * BAR_AREA_H + 32 }}
+            >
+              <span className="absolute -top-3 right-0 text-[9px] text-white/20 bg-[#0f0f0f] px-1 rounded">
+                Ø {formatTime(Math.round(avgTime))}
+              </span>
+            </div>
+          )}
 
-          {/* Bars — stacked when app data available, solid otherwise */}
+          {/* Bars */}
           <div className="absolute bottom-8 left-0 right-0 flex items-end gap-1.5" style={{ height: BAR_AREA_H }}>
-            {last7Days.map((d) => {
-              const seconds = d.phone_screen_time || 0;
+            {days.map((s, i) => {
+              const seconds = s.entry?.phone_screen_time || 0;
               const barH = seconds > 0 ? Math.max(4, (seconds / maxTime) * BAR_AREA_H) : 0;
-              const date = new Date(d.date);
-              const isToday = d.date === new Date().toISOString().split("T")[0];
-              const hasApps = appData && d.phone_top_apps && Array.isArray(d.phone_top_apps) && d.phone_top_apps.length > 0;
+              const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+              const isSelected = selectedIdx === i;
+              const hasApps = s.entry && s.entry.phone_top_apps && Array.isArray(s.entry.phone_top_apps) && s.entry.phone_top_apps.length > 0;
 
-              if (seconds === 0) {
-                return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1">
-                    <div className="w-full max-w-[48px] mx-auto h-0" />
-                    <span className="text-[9px] leading-none text-white/20">—</span>
-                  </div>
-                );
-              }
-
-              if (hasApps) {
-                // Stacked bar with app segments
-                const apps = d.phone_top_apps!;
-                const sorted = [...apps].sort((a, b) => b.time_sec - a.time_sec);
-                const top3 = sorted.slice(0, 3);
-                const otherSec = sorted.slice(3).reduce((s, a) => s + a.time_sec, 0);
-
-                const segments = [
-                  ...top3.map(a => ({
-                    name: a.app,
-                    seconds: a.time_sec,
-                    color: appData!.appColorMap.get(a.app) || "#6b7280",
-                  })),
-                  ...(otherSec > 0 ? [{ name: t("screenTime.other"), seconds: otherSec, color: "#374151" }] : []),
-                ].reverse(); // bottom to top
-
-                let cumH = 0;
-                return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
+              return (
+                <button
+                  key={s.date}
+                  onClick={() => seconds > 0 && setSelectedIdx(isSelected ? null : i)}
+                  disabled={seconds === 0}
+                  title={seconds > 0 ? `${formatDay(s.date)} — ${formatTime(seconds)}` : formatDay(s.date)}
+                  className={`flex-1 flex flex-col items-center gap-1 justify-end ${seconds > 0 ? "cursor-pointer" : "cursor-default"}`}
+                >
+                  {seconds === 0 ? (
+                    <div className="flex-1 w-full flex items-center justify-center">
+                      <span className="text-[9px] leading-none text-white/20">—</span>
+                    </div>
+                  ) : hasApps ? (
                     <div
-                      className="w-full max-w-[48px] mx-auto rounded-t-md relative group"
+                      className="w-full max-w-[48px] mx-auto rounded-t-md relative transition-all"
                       style={{
                         height: barH,
-                        opacity: isToday ? 1 : 0.7,
+                        opacity: isSelected ? 1 : isToday ? 0.9 : 0.65,
                         boxShadow: isToday ? "0 0 8px rgba(99,102,241,0.15)" : "none",
+                        filter: isSelected ? "brightness(1.25)" : "none",
                       }}
                     >
-                      {/* Tooltip */}
-                      <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[9px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10 flex flex-col gap-0.5">
-                        {[...top3, ...(otherSec > 0 ? [{ app: t("screenTime.other"), time_sec: otherSec }] : [])].map((a: any) => (
-                          <div key={a.app} className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: a.app === t("screenTime.other") ? "#374151" : appData!.appColorMap.get(a.app) }} />
-                            <span className="text-white/60 max-w-[80px] truncate">{a.app}</span>
-                            <span className="text-white/80 ml-auto">{formatTime(a.time_sec)}</span>
-                          </div>
-                        ))}
-                        <div className="border-t border-white/10 pt-0.5 mt-0.5 text-white/50">{t("screenTime.total")} {formatTime(seconds)}</div>
-                      </div>
-
-                      {/* Stacked segments */}
-                      {segments.map((seg, i) => {
-                        const segH = (seg.seconds / seconds) * barH;
-                        const prevCum = cumH;
-                        cumH += segH;
-                        return (
-                          <div
-                            key={i}
-                            className="absolute left-0 right-0"
-                            style={{
-                              bottom: prevCum,
-                              height: Math.max(1, segH),
-                              background: seg.color,
-                              ...(i === segments.length - 1 ? { borderTopLeftRadius: 4, borderTopRightRadius: 4 } : {}),
-                            }}
-                          />
-                        );
-                      })}
+                      {(() => {
+                        const apps = s.entry!.phone_top_apps!;
+                        const sorted = [...apps].sort((a, b) => b.time_sec - a.time_sec);
+                        const top3 = sorted.slice(0, 3);
+                        const otherSec = sorted.slice(3).reduce((sum, a) => sum + a.time_sec, 0);
+                        const segments = [
+                          ...top3.map(a => ({
+                            name: a.app,
+                            seconds: a.time_sec,
+                            color: appData!.appColorMap.get(a.app) || "#6b7280",
+                          })),
+                          ...(otherSec > 0 ? [{ name: t("screenTime.other"), seconds: otherSec, color: "#374151" }] : []),
+                        ].reverse(); // bottom to top
+                        let cumH = 0;
+                        return segments.map((seg, si) => {
+                          const segH = (seg.seconds / seconds) * barH;
+                          const prevCum = cumH;
+                          cumH += segH;
+                          return (
+                            <div
+                              key={si}
+                              className="absolute left-0 right-0"
+                              style={{
+                                bottom: prevCum,
+                                height: Math.max(1, segH),
+                                background: seg.color,
+                                ...(si === segments.length - 1 ? { borderTopLeftRadius: 4, borderTopRightRadius: 4 } : {}),
+                              }}
+                            />
+                          );
+                        });
+                      })()}
                     </div>
-                    <span className={`text-[9px] leading-none ${isToday ? "text-white font-semibold" : "text-white/40"}`}>
-                      {formatTime(seconds)}
-                    </span>
-                  </div>
-                );
-              }
-
-              // Fallback: solid bar (no per-app data) — bright enough to be visible
-              return (
-                <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
-                  <div
-                    className="w-full max-w-[48px] mx-auto rounded-t-md transition-all relative group"
-                    style={{
-                      height: barH,
-                      background: isToday
-                        ? `linear-gradient(180deg, #818cf8, #6366f1)`
-                        : "#818cf8",
-                      opacity: 0.85,
-                      boxShadow: "0 0 6px rgba(129,140,248,0.15)",
-                    }}
-                  >
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10">
-                      {formatTime(seconds)}
-                    </div>
-                  </div>
-                  <span className={`text-[9px] leading-none ${isToday ? "text-white font-semibold" : "text-white/40"}`}>
-                    {formatTime(seconds)}
+                  ) : (
+                    <div
+                      className="w-full max-w-[48px] mx-auto rounded-t-md transition-all"
+                      style={{
+                        height: barH,
+                        background: isToday ? "linear-gradient(180deg, #818cf8, #6366f1)" : "#818cf8",
+                        opacity: isSelected ? 1 : 0.85,
+                        filter: isSelected ? "brightness(1.25)" : "none",
+                      }}
+                    />
+                  )}
+                  <span className={`text-[9px] leading-none ${isSelected ? "text-white font-bold" : isToday ? "text-white font-semibold" : "text-white/40"}`}>
+                    {seconds > 0 ? formatTime(seconds) : "—"}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
 
-          {/* Day labels */}
+          {/* Day labels incl. date */}
           <div className="absolute bottom-0 left-0 right-0 flex gap-1.5">
-            {last7Days.map((d) => {
-              const date = new Date(d.date);
+            {days.map((s, i) => {
+              const date = new Date(s.date);
               const dayName = weekdays[(date.getDay() || 7) - 1];
-              const isToday = d.date === new Date().toISOString().split("T")[0];
+              const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
               return (
-                <div key={d.date} className={`flex-1 text-center text-[10px] ${isToday ? "text-white font-semibold" : "text-white/25"}`}>
-                  {dayName}
+                <div key={s.date} className={`flex-1 text-center ${selectedIdx === i ? "text-white font-semibold" : isToday ? "text-indigo-300" : "text-white/25"}`}>
+                  <div className="text-[10px]">{dayName}</div>
                 </div>
               );
             })}
@@ -335,14 +325,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
       ) : (
         <div className="flex items-center gap-2 mb-4 text-[9px] text-white/30 flex-wrap">
           <span className="text-white/40 mr-1">{t("screenTime.legend")}</span>
-          {[
-            { sec: 900, label: "<30m", color: "#22c55e" },
-            { sec: 2700, label: "30m–1h", color: "#4ade80" },
-            { sec: 5400, label: "1–2h", color: "#3b82f6" },
-            { sec: 10800, label: "2–4h", color: "#eab308" },
-            { sec: 18000, label: "4–6h", color: "#f97316" },
-            { sec: 25200, label: "6h+", color: "#ef4444" },
-          ].map(({ label, color }) => (
+          {getBarColorTotals().map(({ label, color }) => (
             <span key={label} className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
               {label}
@@ -352,27 +335,27 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
         </div>
       )}
 
-      {/* Phone Unlocks */}
-      {unlocksData && (
+      {/* Phone Unlocks — interactive line chart */}
+      {showUnlocks && (
         <div className="mt-4 pt-4 border-t border-white/5">
           <h3 className="text-xs font-medium text-white/40 uppercase tracking-wider mb-3">
             {t("screenTime.unlocks_chart")}
           </h3>
 
-          <div className="relative" style={{ height: 100 + 48 }}>
-            {/* Grid line at 50% */}
-            <div
-              className="absolute left-0 right-0 border-t border-white/5"
-              style={{ bottom: 50 + 32 }}
-            />
+          <div className="relative" style={{ height: UNLOCK_AREA_H + 48 }}>
+            {/* Grid lines */}
+            {[0.25, 0.5, 0.75].map(f => (
+              <div key={f} className="absolute left-0 right-0 border-t border-white/5"
+                style={{ bottom: f * UNLOCK_AREA_H + 32 }} />
+            ))}
 
             {/* Average line */}
             {(() => {
-              const avgU = unlocksData.reduce((s, d) => s + ((d as any).phone_unlocks || 0), 0) / unlocksData.length;
+              const avgU = days.reduce((s, d) => s + (d.entry?.phone_unlocks || 0), 0) / days.length;
               return (
                 <div
                   className="absolute left-0 right-0 border-t border-dashed border-white/20 z-10"
-                  style={{ bottom: maxUnlocks > 0 ? (avgU / maxUnlocks) * 100 + 32 : 32 }}
+                  style={{ bottom: maxUnlocks > 0 ? (avgU / maxUnlocks) * UNLOCK_AREA_H + 32 : 32 }}
                 >
                   <span className="absolute -top-3 right-0 text-[9px] text-white/20 bg-[#0f0f0f] px-1 rounded">
                     Ø {Math.round(avgU)}×
@@ -381,48 +364,85 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
               );
             })()}
 
-            {/* Bars */}
-            <div className="absolute bottom-8 left-0 right-0 flex items-end gap-1.5" style={{ height: 100 }}>
-              {unlocksData.map((d: any) => {
-                const unlocks = d.phone_unlocks || 0;
-                const barH = unlocks > 0 ? Math.max(3, (unlocks / maxUnlocks) * 100) : 0;
-                const date = new Date(d.date);
-                const isToday = d.date === new Date().toISOString().split("T")[0];
-                const color = getUnlockColor(unlocks);
+            {/* Line chart */}
+            <div className="absolute bottom-8 left-0 right-0" style={{ height: UNLOCK_AREA_H }}>
+              {/* SVG line connecting unlocked days. viewBox mirrors the flex columns:
+                  x in 0..n (column centers at i+0.5), y in 0..4 with value=0 at bottom. */}
+              <svg
+                className="absolute inset-0 overflow-visible pointer-events-none"
+                viewBox={`0 0 ${days.length} 4`}
+                preserveAspectRatio="none"
+              >
+                <polyline
+                  points={days
+                    .map((s, i) => (s.entry?.phone_unlocks || 0) > 0
+                      ? `${i + 0.5},${4 - (s.entry!.phone_unlocks! / maxUnlocks) * 4}`
+                      : null)
+                    .filter(Boolean)
+                    .join(" ")}
+                  fill="none"
+                  stroke="#a78bfa"
+                  strokeWidth="0.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity="0.9"
+                />
+              </svg>
 
-                return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 justify-end">
-                    <div
-                      className="w-full max-w-[48px] mx-auto rounded-t-sm transition-all relative group"
-                      style={{
-                        height: barH,
-                        background: isToday
-                          ? `linear-gradient(180deg, ${color}, ${color}88)`
-                          : color,
-                        opacity: isToday ? 1 : 0.6,
-                        boxShadow: isToday ? `0 0 8px ${color}44` : "none",
-                      }}
-                    >
-                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1a1a1a] text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none border border-white/10">
-                        {unlocks}×
+              {/* Clickable points — each unlock column is a button */}
+              <div className="absolute inset-0 flex items-end gap-1.5">
+                {days.map((s, i) => {
+                  const unlocks = s.entry?.phone_unlocks || 0;
+                  const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+                  const isSelected = selectedIdx === i;
+                  if (unlocks === 0) {
+                    return (
+                      <div key={s.date} className="flex-1 flex items-center justify-center h-full">
+                        <span className="text-[9px] text-white/20">—</span>
                       </div>
-                    </div>
-                    <span className={`text-[9px] leading-none ${isToday ? "text-purple-300 font-semibold" : "text-white/30"}`}>
-                      {unlocks || "—"}
-                    </span>
-                  </div>
-                );
-              })}
+                    );
+                  }
+                  const color = getUnlockColor(unlocks);
+                  const topPct = (1 - unlocks / maxUnlocks) * 100;
+                  return (
+                    <button
+                      key={s.date}
+                      onClick={() => setSelectedIdx(isSelected ? null : i)}
+                      title={`${formatDay(s.date)} — ${unlocks}×`}
+                      className="flex-1 relative h-full cursor-pointer"
+                    >
+                      {/* dot on the line */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all w-2.5 h-2.5"
+                        style={{
+                          top: `${topPct}%`,
+                          background: color,
+                          boxShadow: isSelected ? `0 0 0 3px ${color}55, 0 0 10px ${color}88` : isToday ? `0 0 8px ${color}66` : "none",
+                          filter: isSelected ? "brightness(1.25)" : "none",
+                        }}
+                      />
+                      {/* value above the point */}
+                      <span
+                        className={`absolute left-1/2 -translate-x-1/2 text-[9px] leading-none ${isSelected ? "text-white font-bold" : isToday ? "text-purple-200 font-semibold" : "text-white/40"}`}
+                        style={{ top: `${topPct - 14}%` }}
+                      >
+                        {unlocks}×
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
+            {/* Day labels */}
             <div className="absolute bottom-0 left-0 right-0 flex gap-1.5">
-              {unlocksData.map((d: any) => {
-                const date = new Date(d.date);
+              {days.map((s, i) => {
+                const date = new Date(s.date);
                 const dayName = weekdays[(date.getDay() || 7) - 1];
-                const isToday = d.date === new Date().toISOString().split("T")[0];
+                const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
                 return (
-                  <div key={d.date} className={`flex-1 text-center text-[10px] ${isToday ? "text-purple-300 font-semibold" : "text-white/25"}`}>
-                    {dayName}
+                  <div key={s.date} className={`flex-1 text-center ${selectedIdx === i ? "text-white font-semibold" : isToday ? "text-purple-300 font-semibold" : "text-white/25"}`}>
+                    <div className="text-[10px]">{dayName}</div>
                   </div>
                 );
               })}
@@ -447,6 +467,82 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
         </div>
       )}
 
+      {/* Hint */}
+      <p className="text-white/20 text-[9px] mt-3 text-center">{t("screenTime.click_hint")}</p>
+
+      {/* Day detail panel */}
+      {selected && (
+        <div className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10 animate-slide-up">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-white">
+              📅 {formatDay(selected.date)} ({weekdays[(new Date(selected.date).getDay() || 7) - 1]})
+            </span>
+            <button onClick={() => setSelectedIdx(null)} className="text-white/40 hover:text-white text-sm px-1" aria-label={t("screenTime.close")}>
+              {t("screenTime.close")}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="p-2 rounded-lg bg-white/3">
+              <div className="text-[9px] text-white/30 uppercase tracking-wider">{t("screenTime.screen_time_label")}</div>
+              <div className="text-base font-mono text-white">
+                {selected.entry?.phone_screen_time ? formatTime(selected.entry.phone_screen_time) : "—"}
+              </div>
+            </div>
+            <div className="p-2 rounded-lg bg-white/3">
+              <div className="text-[9px] text-white/30 uppercase tracking-wider">{t("screenTime.unlocks_label")}</div>
+              <div className="text-base font-mono" style={{ color: selected.entry?.phone_unlocks ? getUnlockColor(selected.entry.phone_unlocks) : "#fff" }}>
+                {selected.entry?.phone_unlocks ? `${selected.entry.phone_unlocks}×` : "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* Per-app breakdown */}
+          <div className="text-[10px] text-white/50 font-medium mb-1.5">{t("screenTime.apps")}</div>
+          {selected.entry?.phone_top_apps && selected.entry.phone_top_apps.length > 0 ? (
+            <div className="space-y-1">
+              {[...selected.entry.phone_top_apps]
+                .sort((a, b) => b.time_sec - a.time_sec)
+                .map((a) => {
+                  const share = selected.entry!.phone_screen_time ? (a.time_sec / selected.entry!.phone_screen_time) * 100 : 0;
+                  return (
+                    <div key={a.app} className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                        style={{ background: appData?.appColorMap.get(a.app) || "#6b7280" }}
+                      />
+                      <span className="flex-1 text-white/70 text-xs truncate">{a.app}</span>
+                      <span className="text-[9px] text-white/25 w-9 text-right shrink-0">{Math.round(share)}%</span>
+                      <span className="text-[10px] font-mono text-white/60 w-12 text-right shrink-0">{formatTime(a.time_sec)}</span>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div className="text-white/25 text-[10px]">{t("screenTime.no_apps")}</div>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+function getBarColor(seconds: number): { bg: string; label: string } {
+  if (seconds < 1800) return { bg: "#22c55e", label: "🟢 <30m" };
+  if (seconds < 3600) return { bg: "#4ade80", label: "🟢 30m–1h" };
+  if (seconds < 7200) return { bg: "#3b82f6", label: "🔵 1–2h" };
+  if (seconds < 14400) return { bg: "#eab308", label: "🟡 2–4h" };
+  if (seconds < 21600) return { bg: "#f97316", label: "🟠 4–6h" };
+  return { bg: "#ef4444", label: "🔴 6h+" };
+}
+
+function getBarColorTotals(): { label: string; color: string }[] {
+  return [
+    { label: "<30m", color: "#22c55e" },
+    { label: "30m–1h", color: "#4ade80" },
+    { label: "1–2h", color: "#3b82f6" },
+    { label: "2–4h", color: "#eab308" },
+    { label: "4–6h", color: "#f97316" },
+    { label: "6h+", color: "#ef4444" },
+  ];
 }
