@@ -224,7 +224,6 @@ export function AdvancedStats() {
           {moodTrend.map((point, i) => {
             const maxMood = 5;
             const moodH = (point.mood / maxMood) * 100;
-            const avgH = (movingAvg[i] / maxMood) * 100;
             const isSelected = selectedDay === i;
             const isDimmed = selectedDay !== null && !isSelected;
             return (
@@ -232,10 +231,21 @@ export function AdvancedStats() {
                 key={i}
                 onClick={() => setSelectedDay(isSelected ? null : i)}
                 title={`${point.date} — ${MOOD_LABELS[point.mood]}`}
-                className={`flex-1 flex flex-col items-center gap-0.5 h-full justify-end transition-opacity duration-300 ${isDimmed ? "opacity-25" : "opacity-100"}`}
+                className={`relative flex-1 flex items-end justify-center h-full transition-opacity duration-300 ${isDimmed ? "opacity-25" : "opacity-100"}`}
               >
-                <div className="w-full flex justify-center" style={{ marginBottom: `${avgH - moodH}%` }}>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#6366f1" }} />
+                {/* 7-day average dot — aligned to the same axis/scale as the bars */}
+                <div
+                  className="w-full flex justify-center pointer-events-none"
+                  style={{
+                    position: "absolute",
+                    bottom: `${(movingAvg[i] / maxMood) * 60}%`,
+                    transform: "translateY(50%)",
+                  }}
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: "#6366f1", boxShadow: "0 0 0 2px rgba(99,102,241,0.25)" }}
+                  />
                 </div>
                 <div
                   className={`w-full rounded-t transition-all ${isSelected ? "ring-1 ring-white/80" : ""}`}
