@@ -348,6 +348,8 @@ export const en = {
     unlocks_label: 'Unlocks',
     screen_time_label: 'Screen time',
     click_hint: 'Click a bar/point for that day\'s detail',
+    other_time: 'Other time',
+    other_time_hint: 'other apps and system',
   },
 
   // ── Notifications ──

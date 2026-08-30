@@ -330,6 +330,8 @@ export const cs = {
     unlocks_label: 'Odemknutí',
     screen_time_label: 'Čas na obrazovce',
     click_hint: 'Klikni na sloupec/bod pro detail dne',
+    other_time: 'Další čas',
+    other_time_hint: 'jiné aplikace a systém',
   },
 
   // ── Notifications ──

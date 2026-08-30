@@ -259,6 +259,11 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                         const sorted = [...apps].sort((a, b) => b.time_sec - a.time_sec);
                         const top3 = sorted.slice(0, 3);
                         const otherSec = sorted.slice(3).reduce((sum, a) => sum + a.time_sec, 0);
+                        const appsSum = sorted.reduce((sum, a) => sum + a.time_sec, 0);
+                        // Time not covered by the tracked apps — still part of the day.
+                        // Render it as a muted filler so the bar ALWAYS reflects the
+                        // true total screen time (not just the listed apps).
+                        const restSec = Math.max(0, seconds - appsSum);
                         const segments = [
                           ...top3.map(a => ({
                             name: a.app,
@@ -266,6 +271,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                             color: appData!.appColorMap.get(a.app) || "#6b7280",
                           })),
                           ...(otherSec > 0 ? [{ name: t("screenTime.other"), seconds: otherSec, color: "#374151" }] : []),
+                          ...(restSec > 60 ? [{ name: t("screenTime.other_time"), seconds: restSec, color: "#27272d" }] : []),
                         ].reverse(); // bottom to top
                         let cumH = 0;
                         return segments.map((seg, si) => {
@@ -336,6 +342,10 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#374151" }} />
             {t("screenTime.other")}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#27272d" }} />
+            {t("screenTime.other_time")}
           </span>
           <span className="ml-auto text-white/15">HA</span>
         </div>
@@ -549,6 +559,22 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     </div>
                   );
                 })}
+              {/* Filler: time not covered by the listed apps (other apps / system) */}
+              {(() => {
+                const total = selected.entry!.phone_screen_time || 0;
+                const appsSum = (selected.entry!.phone_top_apps || []).reduce((s, a) => s + a.time_sec, 0);
+                const rest = Math.max(0, total - appsSum);
+                if (rest <= 60) return null;
+                const share = total > 0 ? (rest / total) * 100 : 0;
+                return (
+                  <div className="flex items-center gap-2 opacity-80">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: "#27272d" }} />
+                    <span className="flex-1 text-white/50 text-xs truncate">{t("screenTime.other_time")}</span>
+                    <span className="text-[9px] text-white/25 w-9 text-right shrink-0">{Math.round(share)}%</span>
+                    <span className="text-[10px] font-mono text-white/40 w-12 text-right shrink-0">{formatTime(rest)}</span>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="text-white/25 text-[10px]">{t("screenTime.no_apps")}</div>
