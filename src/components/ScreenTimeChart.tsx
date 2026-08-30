@@ -44,10 +44,10 @@ function getUnlockColor(unlocks: number): string {
   return "#ef4444";                        // červená — extrém
 }
 
-/** Max height of bar area in pixels (Tailwind h-36 = 9rem = 144px) */
-const BAR_AREA_H = 220;
+/** Max height of bar area in pixels */
+const BAR_AREA_H = 176;
 /** Max height of unlock line chart in pixels */
-const UNLOCK_AREA_H = 160;
+const UNLOCK_AREA_H = 132;
 
 /** App color palette for stacked bar segments */
 const APP_COLORS = [
@@ -246,7 +246,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     </div>
                   ) : hasApps ? (
                     <div
-                      className="w-full max-w-[64px] mx-auto rounded-t-md relative transition-all"
+                      className="w-full max-w-[56px] mx-auto rounded-t-md relative transition-all"
                       style={{
                         height: barH,
                         opacity: isSelected ? 1 : isToday ? 0.9 : 0.65,
@@ -295,7 +295,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                     </div>
                   ) : (
                     <div
-                      className="w-full max-w-[64px] mx-auto rounded-t-md transition-all"
+                      className="w-full max-w-[56px] mx-auto rounded-t-md transition-all"
                       style={{
                         height: barH,
                         background: isToday ? "linear-gradient(180deg, #818cf8, #6366f1)" : "#818cf8",
