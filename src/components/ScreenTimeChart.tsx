@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import type { DailyEntry } from "@/lib/stats";
 import { useTranslation } from "@/lib/i18n";
-import { ScreenRefreshButton } from "@/components/ScreenRefreshButton";
 
 interface ScreenTimeEntry extends DailyEntry {
   phone_screen_time?: number;
@@ -172,16 +171,11 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
 
   return (
     <div className="glass-card">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold mb-1">{t("screenTime.title")}</h2>
-          <p className="text-white/30 text-xs mb-1">
-            {t("screenTime.last_7_days")}
-            <span className="text-white/20 ml-1">({days[0]?.date.slice(8, 10)}.{days[0]?.date.slice(5, 7)} – {days[days.length - 1]?.date.slice(8, 10)}.{days[days.length - 1]?.date.slice(5, 7)})</span>
-          </p>
-        </div>
-        <ScreenRefreshButton />
-      </div>
+      <h2 className="text-lg font-semibold mb-1">{t("screenTime.title")}</h2>
+      <p className="text-white/30 text-xs mb-4">
+        {t("screenTime.last_7_days")}
+        <span className="text-white/20 ml-1">({days[0]?.date.slice(8, 10)}.{days[0]?.date.slice(5, 7)} – {days[days.length - 1]?.date.slice(8, 10)}.{days[days.length - 1]?.date.slice(5, 7)})</span>
+      </p>
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
