@@ -222,70 +222,47 @@ const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
 async function sendPushNotification(userId: string, title: string, body: string, deepLink?: string) {
   try {
+    // Variant A: the Android app polls ai_reports itself and shows LOCAL
+    // notifications at user-chosen times. The server keeps web push only for
+    // PWA/browser users. (No FCM here anymore — avoids duplicates.)
     const redis = getRedis();
-    if (redis) {
-      const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
-      const subscriptions = rawSubs.map((s: any) => {
-        if (typeof s === "string") {
-          try { return JSON.parse(s); } catch { return null; }
-        }
-        return s;
-      }).filter(Boolean);
+    if (!redis) return;
 
-      if (subscriptions.length) {
-        const webpush = await import("web-push");
-        webpush.setVapidDetails(
-          VAPID_EMAIL,
-          VAPID_PUBLIC_KEY,
-          process.env.VAPID_PRIVATE_KEY || ""
-        );
+    const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
+    const subscriptions = rawSubs.map((s: any) => {
+      if (typeof s === "string") {
+        try { return JSON.parse(s); } catch { return null; }
+      }
+      return s;
+    }).filter(Boolean);
 
-        const payload = JSON.stringify({ title, body, icon: "/icon-192.png" });
+    if (!subscriptions.length) return;
 
-        const results = await Promise.allSettled(
-          subscriptions.map((sub: any) =>
-            webpush.sendNotification(sub, payload)
-          )
-        );
+    const webpush = await import("web-push");
+    webpush.setVapidDetails(
+      VAPID_EMAIL,
+      VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY || ""
+    );
 
-        // Clean up expired subscriptions
-        for (let i = 0; i < results.length; i++) {
-          const r = results[i];
-          if (r.status === "rejected") {
-            const err = (r as PromiseRejectedResult).reason;
-            if (err?.statusCode === 410 || err?.statusCode === 404) {
-              await redis.srem(SUBSCRIPTIONS_KEY, rawSubs[i]);
-            }
-          }
+    const payload = JSON.stringify({ title, body, icon: "/icon-192.png" });
+
+    const results = await Promise.allSettled(
+      subscriptions.map((sub: any) =>
+        webpush.sendNotification(sub, payload)
+      )
+    );
+
+    // Clean up expired subscriptions
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "rejected") {
+        const err = (r as PromiseRejectedResult).reason;
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          await redis.srem(SUBSCRIPTIONS_KEY, rawSubs[i]);
         }
       }
     }
-
-    // Native FCM push to the Diarium Android app (same user)
-    try {
-      const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-      const { data: fcmTokens, error: tokensError } = await supabase
-        .from("push_tokens")
-        .select("token")
-        .eq("user_id", userId);
-      if (!tokensError && fcmTokens) {
-        const { sendFcm } = await import("@/lib/fcm");
-        const dead: string[] = [];
-        for (const row of fcmTokens) {
-          const res = await sendFcm(row.token, {
-            title,
-            body,
-            data: deepLink ? { url: deepLink } : undefined,
-          });
-          if (!res.ok && (res.status === 404 || res.status === 410 || (res.error || "").includes("UNREGISTERED"))) {
-            dead.push(row.token);
-          }
-        }
-        if (dead.length) {
-          await supabase.from("push_tokens").delete().in("token", dead);
-        }
-      }
-    } catch {}
   } catch {}
 }
 

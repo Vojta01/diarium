@@ -2,8 +2,6 @@ import { NextRequest } from "next/server";
 import webpush from "web-push";
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
-import { createClient } from "@supabase/supabase-js";
-import { sendFcm } from "@/lib/fcm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,12 +43,12 @@ export async function GET(request: NextRequest) {
     const body = message.body || "Nezapomeň vyplnit dnešní záznam! 🖊️";
 
     let webSent = 0;
-    let fcmSent = 0;
     let webErrors = 0;
-    let fcmErrors: string[] = [];
-    let deadFcmTokens: string[] = [];
 
-    // ── 1. Web push (PWA/browser) via Redis subscriptions ──
+    // ── Web push (PWA/browser) via Redis subscriptions ──
+    // Variant A: Android notifications are scheduled LOCALLY in the app at
+    // user-chosen times; the server only keeps web push for PWA/browser users.
+    // (FCM is intentionally not used here anymore to avoid duplicates.)
     const redis = getRedis();
     if (redis && ensureVapid()) {
       const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
@@ -81,40 +79,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 2. Native FCM (Diarium Android) via Supabase push_tokens ──
-    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: fcmTokens, error: tokensError } = await supabase
-      .from("push_tokens")
-      .select("token");
-    if (!tokensError && fcmTokens) {
-      for (const row of fcmTokens) {
-        const res = await sendFcm(row.token, { title, body });
-        if (res.ok) {
-          fcmSent++;
-        } else {
-          fcmErrors.push(`${res.status || "?"}:${(res.error || "").slice(0, 80)}`);
-          const errMsg = res.error || "";
-          if (
-            res.status === 404 || res.status === 410 ||
-            errMsg.includes("UNREGISTERED") ||
-            errMsg.includes("registration token") || errMsg.includes("INVALID_ARGUMENT")
-          ) {
-            deadFcmTokens.push(row.token);
-          }
-        }
-      }
-      // Purge dead tokens so we don't keep hammering FCM
-      if (deadFcmTokens.length > 0) {
-        await supabase.from("push_tokens").delete().in("token", deadFcmTokens);
-      }
-    }
-
     return Response.json({
       webSent,
-      fcmSent,
       webErrors: webErrors > 0 ? webErrors : undefined,
-      fcmErrors: fcmErrors.length > 0 ? fcmErrors.slice(0, 5) : undefined,
-      deadFcmPurged: deadFcmTokens.length,
     });
   } catch (err) {
     console.error("Send error:", err);
