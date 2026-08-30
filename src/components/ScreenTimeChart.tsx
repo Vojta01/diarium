@@ -28,6 +28,14 @@ function formatDay(date: string): string {
   return `${Number(d)}. ${Number(m)}.`;
 }
 
+/** Local YYYY-MM-DD from a Date (avoids toISOString() UTC offset shifting the day). */
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Barva podle počtu odemknutí — stejný princip jako screen time */
 function getUnlockColor(unlocks: number): string {
   if (unlocks < 30) return "#22c55e";    // zelená — málo
@@ -58,9 +66,8 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   // ── 7-day window over calendar days (not just days-with-data) ──
-  // This is the fix for "some days don't show": previously the window dropped
-  // days with no screen-time data, so the axis skipped them entirely. Now we
-  // always render 7 consecutive calendar days, filling empty days with placeholders.
+  // Anchored on TODAY (local date) so the current day is always the last column,
+  // and missing days render as empty placeholders instead of being skipped.
   const days = useMemo((): DaySlot[] | null => {
     const typed = entries as ScreenTimeEntry[];
     // Group by date, keep the entry with the highest screen time
@@ -73,17 +80,15 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
         byDate.set(e.date, e);
       }
     }
-    const dates = [...byDate.keys()].sort();
-    if (dates.length === 0) return null;
+    if (byDate.size === 0) return null;
 
-    // Anchor the window on the most recent date that has any data.
-    const anchor = dates[dates.length - 1];
-    const base = new Date(anchor + "T00:00:00");
+    // Anchor the window on today (local), always showing the latest 7 calendar days.
+    const base = new Date();
     const slots: DaySlot[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(base);
       d.setDate(d.getDate() - i);
-      const ds = d.toISOString().split("T")[0];
+      const ds = toLocalDateStr(d);
       slots.push({ date: ds, entry: byDate.get(ds) || null });
     }
     return slots;
@@ -116,6 +121,8 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const weekdays: string[] = Array.isArray(t("screenTime.weekdays"))
     ? (t("screenTime.weekdays") as unknown as string[])
     : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const todayStr = toLocalDateStr(new Date());
 
   if (!days || days.length === 0) {
     return (
@@ -211,7 +218,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
             {days.map((s, i) => {
               const seconds = s.entry?.phone_screen_time || 0;
               const barH = seconds > 0 ? Math.max(4, (seconds / maxTime) * BAR_AREA_H) : 0;
-              const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+              const isToday = dayOf(s) === todayStr;
               const isSelected = selectedIdx === i;
               const hasApps = s.entry && s.entry.phone_top_apps && Array.isArray(s.entry.phone_top_apps) && s.entry.phone_top_apps.length > 0;
 
@@ -294,7 +301,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
             {days.map((s, i) => {
               const date = new Date(s.date);
               const dayName = weekdays[(date.getDay() || 7) - 1];
-              const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+              const isToday = dayOf(s) === todayStr;
               return (
                 <div key={s.date} className={`flex-1 text-center ${selectedIdx === i ? "text-white font-semibold" : isToday ? "text-indigo-300" : "text-white/25"}`}>
                   <div className="text-[10px]">{dayName}</div>
@@ -389,11 +396,13 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                 />
               </svg>
 
-              {/* Clickable points — each unlock column is a button */}
-              <div className="absolute inset-0 flex items-end gap-1.5">
+              {/* Clickable points — each unlock column is a button.
+                  NO gap: flush columns make each center sit at x=i+0.5,
+                  exactly matching the SVG line coordinates above. */}
+              <div className="absolute inset-0 flex items-end">
                 {days.map((s, i) => {
                   const unlocks = s.entry?.phone_unlocks || 0;
-                  const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+                  const isToday = dayOf(s) === todayStr;
                   const isSelected = selectedIdx === i;
                   if (unlocks === 0) {
                     return (
@@ -439,7 +448,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
               {days.map((s, i) => {
                 const date = new Date(s.date);
                 const dayName = weekdays[(date.getDay() || 7) - 1];
-                const isToday = dayOf(s) === new Date().toISOString().split("T")[0];
+                const isToday = dayOf(s) === todayStr;
                 return (
                   <div key={s.date} className={`flex-1 text-center ${selectedIdx === i ? "text-white font-semibold" : isToday ? "text-purple-300 font-semibold" : "text-white/25"}`}>
                     <div className="text-[10px]">{dayName}</div>

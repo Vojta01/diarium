@@ -69,7 +69,16 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
     note: e.note ?? "",
     phone_screen_time: e.phone_screen_time,
     phone_unlocks: e.phone_unlocks,
-    phone_top_apps: Array.isArray(e.phone_top_apps) ? e.phone_top_apps : undefined,
+    // Normalize phone_top_apps to a single time_sec format across all rows.
+    // Historical data stores either {app, time_sec} (older) or {app, minutes} (newer source).
+    // Always expose {app, time_sec} so downstream charts/components read one key.
+    phone_top_apps: Array.isArray(e.phone_top_apps)
+      ? e.phone_top_apps.map((a: any) =>
+          a && typeof a === "object" && typeof a.minutes === "number"
+            ? { app: a.app, time_sec: Math.round(a.minutes * 60) }
+            : { app: a?.app, time_sec: a?.time_sec }
+        )
+      : undefined,
     photo_path: e.photo_path ?? null,
   }));
 }
