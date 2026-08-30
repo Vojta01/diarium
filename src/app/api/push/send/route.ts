@@ -93,7 +93,12 @@ export async function GET(request: NextRequest) {
           fcmSent++;
         } else {
           fcmErrors.push(`${res.status || "?"}:${(res.error || "").slice(0, 80)}`);
-          if (res.status === 404 || res.status === 410 || (res.error || "").includes("UNREGISTERED")) {
+          const errMsg = res.error || "";
+          if (
+            res.status === 404 || res.status === 410 ||
+            errMsg.includes("UNREGISTERED") ||
+            errMsg.includes("registration token") || errMsg.includes("INVALID_ARGUMENT")
+          ) {
             deadFcmTokens.push(row.token);
           }
         }
