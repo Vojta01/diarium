@@ -149,22 +149,39 @@ Push tokeny: nová tabulka Supabase `push_tokens` (user_id, platform, token,
   (do app) + service account JSON (do Vercel env FIREBASE_SERVICE_ACCOUNT)
 - Bez něj FCM nejde — ale vše ostatní (usage-stats, auth, UI) funguje nezávisle
 
-## KROKY IMPLEMENTACE (po schválení finalního rozsahu)
-1. [ ] GitHub repo diarium-android + Kotlin projekt (Gradle, minSdk 26)
-2. [ ] MainActivity + WebView (settings: JS, DOM storage, file chooser, back gesta)
-3. [ ] UsageStatsBridge (permission check, readUsageStats, unlocks, labels)
-4. [ ] Auth: Custom Tabs + intent-filter diarium:// + session injection do WebView
-   (a/nebo WebView-only fallback s testem Google blokace)
-5. [ ] WorkManager: sync 21:00 (dnešek) + backfill 07:00 (včera) + upon-app-open check
-6. [ ] FCM: Firebase integrace, token registrace do Supabase push_tokens,
-   notifikační kanál, deep link pro AI reporty
-7. [ ] Server: push/subscribe rozšířit o platform (web|android), nová tabulka
-   push_tokens, push/send posílá i FCM (service account); ai-report → FCM akce
-8. [ ] Diarium web: detekce window.AndroidBridge → tlačítko „📊 Nasadit statistiky
-   z telefonu" → POST /api/save-entry (Bearer JWT; fallback CRON_SECRET)
-9. [ ] Build APK, kontrola že save-entry sedí s Digitální rovnováhou
-10. [ ] Zastavit Hermes cron e8085d86665e (HA sběr) — až ověřeno nativní push
-11. [ ] README (build + sideload + Firebase setup pro ostatní), commit
+## STAV IMPLEMENTACE (2026-08-30 ~09:20)
+### Hotovo ✅
+- [x] GitHub repo lokálně + git history (`/root/diarium-android`, remote připraven)
+- [x] Kotlin projekt (minSdk 26, targetSdk 34, AGP 8.3.2) — BUILD OK (8.1 MB APK s FCM)
+- [x] MainActivity + WebView (JS, DOM storage, file chooser, back gesta)
+- [x] UsageStatsBridge — readUsageStats / getUsageAccess / openUsageAccessSettings / getSession
+- [x] UsageStatsProvider — per-app foreground time, unlocks (queryEvents), labels přes PackageManager,
+      vyřazení launcher/sleep/systém; zdroj = UsageStatsManager (přesně jako Digitální rovnováha)
+- [x] Auth: Chrome Custom Tabs + intent-filter diarium:// + session injection do localStorage
+      (AuthManager + AuthCallbackActivity + SessionStore)
+- [x] WorkManager: 21:00 snapshot, 07:00 backfill, one-time 7-dní backfill po instalaci
+- [x] UsageSyncWorker → POST /api/save-entry s user JWT + user_id z JWT sub
+- [x] FCM: DiariumFirebaseMessagingService, token registrace do /api/push/subscribe,
+      notifikační kanál, ic_stat_diarium, manifest service
+- [x] google-services.json vloženo, Firebase dependency aktivní
+- [x] Server: push/subscribe (platform android → push_tokens), push/send (FCM v1 + purge dead),
+      ai-report (FCM + deep link), lib/fcm.ts (OAuth2 JWT exchange, bez firebase-admin)
+- [x] Migrace `push_tokens` spuštěna (přímé DB připojení, MIGRATION OK, REST 200 [])
+
+### Čeká na uživatele 🔴
+1. **Založit GitHub repo** `Vojta01/diarium-android` (New repository → Public) →
+   pak já pushnu (remote je nastavený na SSH, funguje)
+2. **Vercel env:** přidat `FIREBASE_SERVICE_ACCOUNT` = obsah
+   `diarium-android-firebase-adminsdk-...json` (Project Settings → Environment Variables
+   → Production → Redeploy). Bez něj FCM pošle 0 notifikací; web push běží dál
+3. **Supabase Redirect URL:** Authentication → URL Configuration → přidat `diarium://auth-callback`
+4. **Po ověření nativní app:** zastavit Hermes cron e8085d86665e (HA sběr) — jinak
+   nepřesná HA data přepisují přesná nativní
+
+### Zbývá (po Firebase souborech)
+- [ ] Otestovat přihlášení (Custom Tab → deep link → session)
+- [ ] Otestovat push včerejška → kontrola dat v Supabase vs Digitální rovnováha
+- [ ] README finalizace
 
 ## RIZIKA
 | Riziko | Dopad | Mitigace |
