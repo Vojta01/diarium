@@ -332,6 +332,11 @@ export const cs = {
     click_hint: 'Klikni na sloupec/bod pro detail dne',
   },
 
+  // ── Notifications ──
+  notifications: {
+    settings_title: 'Nastavení notifikací',
+  },
+
   // ── CalendarView ──
   calendar: {
     edit_entry: '✏️ Upravit tento záznam',

@@ -350,6 +350,11 @@ export const en = {
     click_hint: 'Click a bar/point for that day\'s detail',
   },
 
+  // ── Notifications ──
+  notifications: {
+    settings_title: 'Notification settings',
+  },
+
   // ── CalendarView ──
   calendar: {
     edit_entry: '✏️ Edit this entry',
