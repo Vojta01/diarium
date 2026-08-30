@@ -66,8 +66,11 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   // ── 7-day window over calendar days (not just days-with-data) ──
-  // Anchored on TODAY (local date) so the current day is always the last column,
-  // and missing days render as empty placeholders instead of being skipped.
+  // Anchor on the most recent day that actually has screen-time/unlock data,
+  // and always show 7 consecutive calendar days ending there. This skips an
+  // empty trailing day (e.g. today with no data yet) so we never render a
+  // pointless empty current-day column. Missing interior days still show as
+  // placeholders.
   const days = useMemo((): DaySlot[] | null => {
     const typed = entries as ScreenTimeEntry[];
     // Group by date, keep the entry with the highest screen time
@@ -82,8 +85,15 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     }
     if (byDate.size === 0) return null;
 
-    // Anchor the window on today (local), always showing the latest 7 calendar days.
-    const base = new Date();
+    // Most recent date that has real data (screen time or unlocks)
+    const lastDataDate = [...byDate.entries()]
+      .filter(([, e]) => (e.phone_screen_time || 0) > 0 || (e.phone_unlocks || 0) > 0)
+      .map(([d]) => d)
+      .sort()
+      .pop();
+    if (!lastDataDate) return null;
+
+    const base = new Date(lastDataDate + "T00:00:00");
     const slots: DaySlot[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(base);
@@ -373,13 +383,14 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
 
             {/* Line chart */}
             <div className="absolute bottom-8 left-0 right-0" style={{ height: UNLOCK_AREA_H }}>
-              {/* SVG line connecting unlocked days. viewBox mirrors the flex columns:
-                  x in 0..n (column centers at i+0.5), y in 0..4 with value=0 at bottom. */}
+              {/* SVG line + dots drawn IN THE SAME COORDINATE SPACE so each dot
+                  sits exactly on the connecting line (no HTML/SVG drift). */}
               <svg
                 className="absolute inset-0 overflow-visible pointer-events-none"
                 viewBox={`0 0 ${days.length} 4`}
                 preserveAspectRatio="none"
               >
+                {/* Connecting line */}
                 <polyline
                   points={days
                     .map((s, i) => (s.entry?.phone_unlocks || 0) > 0
@@ -394,11 +405,34 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                   strokeLinejoin="round"
                   opacity="0.9"
                 />
+                {/* Dots at the same vertices as the line */}
+                {days.map((s, i) => {
+                  if ((s.entry?.phone_unlocks || 0) <= 0) return null;
+                  const color = getUnlockColor(s.entry!.phone_unlocks!);
+                  const isSelected = selectedIdx === i;
+                  const isToday = dayOf(s) === todayStr;
+                  const cx = i + 0.5;
+                  const cy = 4 - (s.entry!.phone_unlocks! / maxUnlocks) * 4;
+                  return (
+                    <g key={s.date}>
+                      {isSelected && <circle cx={cx} cy={cy} r="0.42" fill={color} opacity="0.25" />}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r="0.22"
+                        fill={color}
+                        stroke={isSelected ? "#fff" : "#none"}
+                        strokeWidth={isSelected ? 0.06 : 0}
+                        opacity={isSelected ? 1 : isToday ? 1 : 0.8}
+                      />
+                    </g>
+                  );
+                })}
               </svg>
 
               {/* Clickable points — each unlock column is a button.
                   NO gap: flush columns make each center sit at x=i+0.5,
-                  exactly matching the SVG line coordinates above. */}
+                  matching the SVG line coordinates above. */}
               <div className="absolute inset-0 flex items-end">
                 {days.map((s, i) => {
                   const unlocks = s.entry?.phone_unlocks || 0;
@@ -411,7 +445,6 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                       </div>
                     );
                   }
-                  const color = getUnlockColor(unlocks);
                   const topPct = (1 - unlocks / maxUnlocks) * 100;
                   return (
                     <button
@@ -420,20 +453,10 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
                       title={`${formatDay(s.date)} — ${unlocks}×`}
                       className="flex-1 relative h-full cursor-pointer"
                     >
-                      {/* dot on the line */}
-                      <div
-                        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all w-2.5 h-2.5"
-                        style={{
-                          top: `${topPct}%`,
-                          background: color,
-                          boxShadow: isSelected ? `0 0 0 3px ${color}55, 0 0 10px ${color}88` : isToday ? `0 0 8px ${color}66` : "none",
-                          filter: isSelected ? "brightness(1.25)" : "none",
-                        }}
-                      />
                       {/* value above the point */}
                       <span
                         className={`absolute left-1/2 -translate-x-1/2 text-[9px] leading-none ${isSelected ? "text-white font-bold" : isToday ? "text-purple-200 font-semibold" : "text-white/40"}`}
-                        style={{ top: `${topPct - 14}%` }}
+                        style={{ top: `${Math.max(2, topPct - 14)}%` }}
                       >
                         {unlocks}×
                       </span>
