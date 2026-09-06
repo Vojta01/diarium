@@ -47,7 +47,7 @@
 
 Built for anyone who wants to understand their emotional well-being through data, Diarium combines the simplicity of a daily diary with the analytical power of AI — all wrapped in an installable, offline-capable PWA.
 
-This project demonstrates full-stack Next.js development: Supabase Auth & Storage, push notifications via Upstash Redis, cron jobs, PWA service workers, AI-powered analysis, and feature-flag-driven architecture.
+This project demonstrates full-stack Next.js development: Supabase Auth & Storage, PWA service workers, AI-powered analysis, and feature-flag-driven architecture. Push notifications and AI report generation are **triggered by the Android app itself** (no server crons) — the server only exposes the endpoints.
 
 ---
 
@@ -61,8 +61,8 @@ This project demonstrates full-stack Next.js development: Supabase Auth & Storag
 | **📊 Dashboard** | Streak counter, weekly mood trend, last 7 days at a glance with emoji row |
 | **📅 Stats & Analytics** | Calendar heatmap, **Year in Pixels**, screen-time charts, activity–mood correlations |
 | **🤖 AI Reflections** | Daily DeepSeek-powered reflections based on your last 7 days of entries |
-| **📄 AI Reports** | Weekly, monthly & yearly AI-generated summaries delivered to your inbox |
-| **🔔 Push Notifications** | Daily reminder via Web Push (VAPID) — powered by Upstash Redis + Vercel Cron |
+| **📄 AI Reports** | Weekly & monthly AI-generated summaries — generated on demand by the Android app |
+| **🔔 Push Notifications** | Daily reminder & report alerts — scheduled and shown locally by the Android app |
 | **📸 Photo Storage** | Diary photos uploaded to Supabase Storage with client-side preview |
 | **📱 PWA** | Install on homescreen, works offline, service worker with cache-first strategy |
 | **🔐 Google OAuth** | Seamless authentication via Supabase Auth + Google provider |
@@ -84,7 +84,7 @@ This project demonstrates full-stack Next.js development: Supabase Auth & Storag
 | **Push Storage** | [Upstash Redis](https://upstash.com) |
 | **AI** | [DeepSeek API](https://deepseek.com) (chat completions) |
 | **Push Protocol** | [web-push](https://github.com/web-push-libs/web-push) (VAPID) |
-| **Hosting** | [Vercel](https://vercel.com) (with Cron Jobs) |
+| **Hosting** | [Vercel](https://vercel.com) |
 | **Linting** | ESLint 9 + `eslint-config-next` |
 
 ---
@@ -139,12 +139,11 @@ This project demonstrates full-stack Next.js development: Supabase Auth & Storag
 │  │ai_reports│  │ │  SET /keys/user:*  │ │  completions       │
 │  └────────┘   │ │  DELETE /keys/*     │ │                    │
 │               │ │                    │ │  Model: deepseek-  │
-│  ┌────────┐   │ │  Used by:          │ │  chat / deepseek-  │
-│  │ Storage │   │ │  /api/push/send   │ │  reasoner          │
-│  │ diary-  │   │ │                    │ │                    │
-│  │ photos  │   │ │  Vercel Cron       │ │  Prompt: 7-day     │
-│  └────────┘   │ │  (daily 19:00 UTC)  │ │  history context   │
-│               │ └────────────────────┘ └────────────────────┘
+│  ┌────────┐   │ │  Used by:          │ │  v4-flash          │
+│  │ Storage │   │ │  /api/push/send   │ │                    │
+│  │ diary-  │   │ │  (web PWA,        │ │  Prompt: 7-day     │
+│  │ photos  │   │ │  on-demand only)  │ │  history context   │
+│  └────────┘   │ └────────────────────┘ └────────────────────┘
 │  RLS policies  │
 │  per-user data │
 └────────────────┘
@@ -156,8 +155,8 @@ This project demonstrates full-stack Next.js development: Supabase Auth & Storag
 2. **Daily check-in** data is written client-side via the Supabase JS client (RLS-protected), or server-side via `/api/save-entry`
 3. **Dashboard & stats** read from `entries` table, aggregated client-side in `@/lib/stats.ts`
 4. **AI reflection** (`/api/ai/reflect`) fetches last 7 days with the `service_role` key, sends to DeepSeek, returns a markdown-formatted insight
-5. **AI reports** (`/api/cron/ai-report`) runs on Vercel Cron (daily), generates periodic summaries, stores in `ai_reports` table
-6. **Push notifications** (`/api/push/send`) queries Upstash Redis for active subscriptions, sends VAPID-signed pushes daily at 19:00 UTC
+5. **AI reports** (`/api/cron/ai-report`) are generated **on demand — triggered by the Android app** with the user's JWT at its scheduled weekly/monthly time; summaries are stored in `ai_reports` table
+6. **Push notifications** are scheduled and shown locally by the Android app (AlarmManager + native notifications) — no server push crons
 
 ---
 
@@ -227,7 +226,7 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be prompted to si
 | `VAPID_EMAIL` | ⚠️ | Contact email for VAPID push details (e.g. `mailto:you@example.com`) |
 | `UPSTASH_REDIS_REST_URL` | ⚠️ | Upstash Redis REST URL for storing push subscriptions |
 | `UPSTASH_REDIS_REST_TOKEN` | ⚠️ | Upstash Redis REST token |
-| `CRON_SECRET` | ⚠️ | Secret to authenticate Vercel Cron Job requests |
+| `CRON_SECRET` | ⚠️ | Secret to authenticate manual/legacy AI report triggers |
 | `NEXT_PUBLIC_FEATURES` | ❌ | Feature flags (defaults to `core`; set `personal` for full version) |
 
 > 📄 See [`.env.example`](./.env.example) for a complete template with annotations.
@@ -248,22 +247,19 @@ npm i -g vercel
 vercel --prod
 ```
 
-### Setting Up Cron Jobs
+### Scheduling & notifications (no server crons)
 
-Diarium includes a daily push notification via Vercel Cron. The schedule is defined in [`vercel.json`](./vercel.json):
+Diarium has **no server-side cron jobs**. `vercel.json` contains an empty `crons` list —
+all scheduling lives in the Android app:
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/push/send",
-      "schedule": "0 19 * * *"
-    }
-  ]
-}
-```
+- **Daily check-in reminder, weekly & monthly AI report generation, screen-time sync**
+  are triggered by the Android app at user-configurable times (Settings in the app).
+- The server exposes `/api/cron/ai-report` which the app calls with the **user's own
+  JWT** (`Authorization: Bearer`); it generates the report and stores it in
+  `ai_reports`. The `?secret=` / `x-vercel-cron` auth paths still work for manual
+  or legacy triggers.
 
-This runs every day at 19:00 UTC. Make sure these env vars are set in your Vercel project:
+Make sure these env vars are set in your Vercel project:
 
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL
@@ -329,7 +325,7 @@ diarium/
 │   │       │   └── vapid-public-key/route.ts  # GET VAPID public key
 │   │       │
 │   │       └── cron/
-│   │           └── ai-report/route.ts  # Vercel Cron: generate AI reports
+│   │           └── ai-report/route.ts  # Generate AI reports (app-triggered, user JWT)
 │   │
 │   ├── components/
 │   │   ├── AuthScreen.tsx             # Google OAuth sign-in
@@ -357,7 +353,7 @@ diarium/
 │           ├── client.ts             # Supabase browser client
 │           └── db.ts                 # Supabase server-side client
 │
-├── vercel.json                        # Vercel config + cron schedule
+├── vercel.json                        # Vercel config (no cron jobs — app-driven)
 ├── next.config.ts                     # Next.js configuration
 ├── postcss.config.mjs                 # PostCSS config (Tailwind 4)
 ├── tsconfig.json                      # TypeScript strict mode config
