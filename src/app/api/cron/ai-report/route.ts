@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAuth } from '@/lib/auth';
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
 import { guardAIUser } from "@/lib/ai-guard";
@@ -281,13 +282,18 @@ export async function GET(request: NextRequest) {
 
     // Cron jobs can't send custom headers — allow ?secret= query param
     const querySecret = url.searchParams.get("secret");
-    const isAuthorized = !cronSecret
+    const isCron = !cronSecret
       || authHeader === `Bearer ${cronSecret}`
       || querySecret === cronSecret
       // Vercel cron jobs are internal — trust the x-vercel-cron header
       || request.headers.get("x-vercel-cron") === "1";
 
-    if (!isAuthorized) {
+    // The Android app triggers report generation itself (no server crons):
+    // it authenticates with the user's own JWT. In that case we generate
+    // ONLY that user's report.
+    const user = await verifyAuth(request);
+
+    if (!user && !isCron) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -300,19 +306,25 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Get all users who have entries
-    const { data: users } = await supabase
-      .from("entries")
-      .select("user_id")
-      .order("created_at", { ascending: false })
-      .limit(100);
+    let uniqueUsers: string[];
+    if (user) {
+      // App-triggered: only the authenticated user
+      uniqueUsers = [user.id];
+    } else {
+      // Server cron: all users who have entries
+      const { data: users } = await supabase
+        .from("entries")
+        .select("user_id")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-    if (!users?.length) {
-      return NextResponse.json({ message: "No users found" });
+      if (!users?.length) {
+        return NextResponse.json({ message: "No users found" });
+      }
+
+      // Deduplicate
+      uniqueUsers = [...new Set(users.map(u => u.user_id))];
     }
-
-    // Deduplicate
-    const uniqueUsers = [...new Set(users.map(u => u.user_id))];
 
     const results: any[] = [];
     for (const userId of uniqueUsers) {
