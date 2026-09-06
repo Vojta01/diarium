@@ -157,7 +157,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
     .order("date", { ascending: true });
 
   if (dbError || !entries || entries.length < 2) {
-    console.log(`Not enough entries for ${type} report (user ${userId}): ${entries?.length || 0} days`);
+    console.log(`Not enough entries for ${type} report (user ${userId}): ${entries?.length || 0} days, dbError=${JSON.stringify(dbError)}`);
     return null;
   }
 
@@ -194,10 +194,17 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
 
   if (!resp.ok) throw new Error(`DeepSeek error: ${await resp.text()}`);
 
-  const json = await resp.json();
-  const analysis = json.choices?.[0]?.message?.content?.trim() || "";
+  const raw = await resp.text();
+  let analysis = "";
+  try {
+    const json = JSON.parse(raw);
+    analysis = json.choices?.[0]?.message?.content?.trim() || "";
+  } catch (_) {}
 
-  if (!analysis) return null;
+  if (!analysis) {
+    console.log(`AI returned empty analysis for ${type} (user ${userId}), resp status ${resp.status}, raw head: ${raw.slice(0, 300)}`);
+    return null;
+  }
 
   // Save to DB
   const { error: insertError } = await supabase
