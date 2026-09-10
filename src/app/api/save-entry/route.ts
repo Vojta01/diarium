@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyAuth } from '@/lib/auth';
+import { isCronAuthorized } from '@/lib/cron-auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -11,17 +12,8 @@ export async function POST(req: NextRequest) {
 
     // Server-to-server fallback (CRON_SECRET). Client traffic authenticates with the
     // user's JWT above — no client sends this secret.
-    // SECURITY: the previous `!cronSecret || ...` form treated *every* request as cron
-    // whenever CRON_SECRET was unset, bypassing authentication entirely.
-    // `x-vercel-cron` is dropped as well: it is a caller-supplied header that Vercel
-    // does not authenticate, and this project has no crons (vercel.json: {"crons": []}).
-    const cronSecret = process.env.CRON_SECRET || '';
-    const authHeader = req.headers.get('authorization');
-    const querySecret = req.nextUrl.searchParams.get('secret');
-    const isCron = cronSecret.length > 0 && (
-      authHeader === `Bearer ${cronSecret}` ||
-      querySecret === cronSecret
-    );
+    // See src/lib/cron-auth.ts for why header-based trust was removed (2026-09-10).
+    const isCron = isCronAuthorized(req);
 
     if (!user && !isCron) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
