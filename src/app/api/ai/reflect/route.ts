@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
 import { guardAIUser, guardDailyReflection } from "@/lib/ai-guard";
+import { getAIModel } from "@/lib/ai-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -231,7 +232,7 @@ export async function POST(request: NextRequest) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-v4-flash",
+        model: await getAIModel(),
         messages: [
           { role: "system", content: lang === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
