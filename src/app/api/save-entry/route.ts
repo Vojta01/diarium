@@ -9,14 +9,19 @@ export async function POST(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
 
-    // Cron-style authorization fallback
+    // Server-to-server fallback (CRON_SECRET). Client traffic authenticates with the
+    // user's JWT above — no client sends this secret.
+    // SECURITY: the previous `!cronSecret || ...` form treated *every* request as cron
+    // whenever CRON_SECRET was unset, bypassing authentication entirely.
+    // `x-vercel-cron` is dropped as well: it is a caller-supplied header that Vercel
+    // does not authenticate, and this project has no crons (vercel.json: {"crons": []}).
     const cronSecret = process.env.CRON_SECRET || '';
     const authHeader = req.headers.get('authorization');
     const querySecret = req.nextUrl.searchParams.get('secret');
-    const isCron = !cronSecret
-      || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret
-      || req.headers.get('x-vercel-cron') === '1';
+    const isCron = cronSecret.length > 0 && (
+      authHeader === `Bearer ${cronSecret}` ||
+      querySecret === cronSecret
+    );
 
     if (!user && !isCron) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,14 +11,16 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
-    const authHeader = request.headers.get("authorization");
-    const userId = url.searchParams.get("user_id");
+    // SECURITY: this route reads through the service_role key, so the user MUST come
+    // from a verified JWT. It previously took `user_id` from the query string and never
+    // checked the Authorization header, letting any caller export any user's diary.
+    const user = await verifyAuth(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = user.id;
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
-
-    if (!userId) {
-      return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
-    }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
