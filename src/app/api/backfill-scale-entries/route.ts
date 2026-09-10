@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyAuth } from '@/lib/auth';
+import { isCronAuthorized } from '@/lib/cron-auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -17,21 +18,18 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
  * GET /api/backfill-scale-entries[?user_id=<uuid>]
  *   user_id: optional — when omitted and the call is cron-authorized, backfills ALL users.
  *
- * Auth: Bearer token of the owner (backfills own data), OR cron fallback
- * (CRON_SECRET / x-vercel-cron / ?secret=) which may backfill all users.
+ * Auth: Bearer token of the owner (backfills own data), OR the CRON_SECRET
+ * (Bearer or ?secret=) which may backfill all users. The `x-vercel-cron` header
+ * is NOT accepted — see src/lib/cron-auth.ts.
  */
 export async function GET(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
 
-    // Cron-style authorization (Vercel cron / manual with secret)
-    const cronSecret = process.env.CRON_SECRET || '';
-    const authHeader = req.headers.get('authorization');
-    const querySecret = req.nextUrl.searchParams.get('secret');
-    const isCron = !cronSecret
-      || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret
-      || req.headers.get('x-vercel-cron') === '1';
+    // Cron-style authorization (manual, shared secret only).
+    // See src/lib/cron-auth.ts — the caller-supplied `x-vercel-cron` header is
+    // no longer trusted; a forged one reached this handler on production.
+    const isCron = isCronAuthorized(req);
 
     const targetUserId = req.nextUrl.searchParams.get('user_id');
 

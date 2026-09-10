@@ -5,6 +5,7 @@ import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
 import { guardAIUser } from "@/lib/ai-guard";
 import { getAIModel } from "@/lib/ai-config";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -278,16 +279,10 @@ async function sendPushNotification(userId: string, title: string, body: string,
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    // Cron jobs can't send custom headers — allow ?secret= query param
-    const querySecret = url.searchParams.get("secret");
-    const isCron = !cronSecret
-      || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret
-      // Vercel cron jobs are internal — trust the x-vercel-cron header
-      || request.headers.get("x-vercel-cron") === "1";
+    // See src/lib/cron-auth.ts — only a matching, non-empty secret counts.
+    // (The caller-supplied `x-vercel-cron` header used to be trusted here; a
+    // forged one reached this handler on production.)
+    const isCron = isCronAuthorized(request);
 
     // The Android app triggers report generation itself (no server crons):
     // it authenticates with the user's own JWT. In that case we generate

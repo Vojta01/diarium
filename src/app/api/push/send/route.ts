@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import webpush from "web-push";
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,16 +26,11 @@ function ensureVapid() {
 
 export async function GET(request: NextRequest) {
   try {
-    // Server-only — require CRON_SECRET bearer token or ?secret= query param
+    // Server-only — requires the CRON_SECRET (Bearer or ?secret=). See
+    // src/lib/cron-auth.ts: the caller-supplied `x-vercel-cron` header used to
+    // be trusted here, which let anyone trigger a push to all subscribers.
     const url = new URL(request.url);
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-    const querySecret = url.searchParams.get("secret");
-    const isAuthorized = !cronSecret
-      || authHeader === `Bearer ${cronSecret}`
-      || querySecret === cronSecret
-      || request.headers.get("x-vercel-cron") === "1";
-    if (!isAuthorized) {
+    if (!isCronAuthorized(request)) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
