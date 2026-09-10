@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth';
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
 import { guardAIUser } from "@/lib/ai-guard";
+import { getAIModel } from "@/lib/ai-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -183,7 +184,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "deepseek-v4-flash",
+      model: await getAIModel(),
       messages: [
         { role: "system", content: SYSTEM_PROMPTS[type] },
         { role: "user", content: userPrompt },
