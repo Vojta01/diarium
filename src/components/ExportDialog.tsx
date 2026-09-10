@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
+import { getAccessToken } from "@/lib/supabase/db";
 
 interface ExportDialogProps {
   open: boolean;
@@ -25,7 +26,13 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
-      const resp = await fetch(`/api/export/${format}?${params}`);
+      // The export routes derive the user from the verified JWT (they no longer accept
+      // a user_id query param), so the access token must be sent.
+      const token = getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const resp = await fetch(`/api/export/${format}?${params}`, { headers });
       
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Export failed" }));
