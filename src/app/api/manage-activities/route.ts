@@ -32,12 +32,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing key or label" }, { status: 400 });
     }
 
+    // Trim, and merge case/whitespace variants of an existing label, so typing
+    // "hacking " (or "hacking") next to an existing "Hacking" updates that activity
+    // instead of inserting a second row. The database enforces the same rule with a
+    // unique index on (user_id, lower(btrim(label))) — see
+    // database/activities_label_dedupe_2026-09-11.sql
+    const normLabel = (value: unknown) =>
+      String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+    const cleanLabel = String(label).trim().replace(/\s+/g, " ");
+    let cleanKey = String(key).trim();
+
+    const { data: existingRows } = await sb
+      .from("user_activities")
+      .select("key,label")
+      .eq("user_id", userId);
+
+    const twin = (existingRows || []).find(
+      (row: { key: string; label: string }) => normLabel(row.label) === normLabel(cleanLabel)
+    );
+    if (twin?.key) {
+      cleanKey = twin.key;
+    }
+
     const { error } = await sb.from("user_activities").upsert(
       {
         user_id: userId,
-        key,
-        label,
-        icon: icon || "📌",
+        key: cleanKey,
+        label: cleanLabel,
+        icon: String(icon || "").trim() || "📌",
         category: category || "vlastní",
         is_active: true,
       },
@@ -48,7 +70,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, action: "add", key });
+    return NextResponse.json({ ok: true, action: "add", key: cleanKey });
   }
 
   if (action === "remove") {
