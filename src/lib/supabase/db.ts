@@ -460,11 +460,40 @@ export async function getHabits(): Promise<HabitDef[]> {
   // Default habits ALWAYS show (no filtering). User custom habits show in addition.
   const defaultKeys = new Set(defaults.map(d => d.key));
   
-  // Auto-clean: delete any user_habit entries that collide with defaults (they're redundant/stale)
+  // Rows that collide with a default habit are normally stale duplicates → delete.
+  // Exception: an ACTIVE row whose label/icon/is_negative differs from the catalog
+  // entry means the user customised that habit (own icon or renamed). Keep it and
+  // apply it as an override, otherwise the customisation would be wiped on load.
+  const overridesByKey = new Map<string, any>();
   for (const uh of userHabits) {
-    if (defaultKeys.has(uh.key)) {
+    if (!defaultKeys.has(uh.key)) continue;
+
+    const def = defaults.find(d => d.key === uh.key);
+    const customised =
+      !!uh.is_active &&
+      !!def &&
+      ((uh.icon && uh.icon !== def.icon) ||
+        (uh.label && uh.label !== def.label) ||
+        (typeof uh.is_negative === "boolean" && uh.is_negative !== def.is_negative));
+
+    if (customised) {
+      overridesByKey.set(uh.key, uh);
+    } else {
       try { await sb.from("user_habits").delete().eq("id", uh.id); } catch {}
     }
+  }
+
+  if (overridesByKey.size > 0) {
+    defaults = defaults.map(d => {
+      const o = overridesByKey.get(d.key);
+      if (!o) return d;
+      return {
+        ...d,
+        label: o.label || d.label,
+        icon: o.icon || d.icon,
+        is_negative: typeof o.is_negative === "boolean" ? o.is_negative : d.is_negative,
+      };
+    });
   }
   
   // Add user's custom active habits (not in defaults)

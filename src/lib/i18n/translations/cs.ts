@@ -20,6 +20,21 @@ export const cs = {
     no_data: '—',
   },
 
+  // ── Emoji picker ──
+  emojiPicker: {
+    label: 'Ikona',
+    custom_placeholder: 'Vlastní emoji (napiš nebo vlož)',
+    use: 'Použít',
+    groups: {
+      sport: 'Sport',
+      zdravi: 'Zdraví',
+      jidlo: 'Jídlo a pití',
+      prace: 'Práce a učení',
+      relax: 'Relax a lidé',
+      ostatni: 'Ostatní',
+    },
+  },
+
   // ── Auth Screen ──
   auth: {
     title: 'Diarium',
@@ -154,7 +169,16 @@ export const cs = {
     remove_btn: '✕ Odebrat',
     prompt_name: 'Název návyku (např. běhání):',
     prompt_emoji: 'Emoji (např. 🏃):',
-    prompt_negative: "Je to 'abstinenční' návyk? (tj. zelená = dnes jsem to NEdělal)\nOK = Ano (např. alkohol, kouření), Zrušit = Ne (např. cvičení)",
+    prompt_negative: "Je to 'abstinenční' návyk? (tj. zelená = dnes jsem to NEdělal)\\nOK = Ano (např. alkohol, kouření), Zrušit = Ne (např. cvičení)",
+    edit_tooltip: 'Upravit návyk (název, ikona)',
+    new_title: 'Nový návyk',
+    edit_title: 'Upravit návyk',
+    name_label: 'Název návyku',
+    name_placeholder: 'Např. Krátké cvičení',
+    negative_label: 'Abstinenční návyk',
+    negative_hint: 'Zeleně = dnes jsem to NEdělal (alkohol, kouření, sladké).',
+    key_note: 'Historie zůstává — mění se jen název a ikona.',
+    error_name: 'Zadej název návyku',
   },
 
   // ── Goals ──
@@ -164,6 +188,13 @@ export const cs = {
     add_goal: '+ Přidat cíl',
     prompt_name: 'Název cíle:',
     prompt_emoji: 'Emoji (např. 🏃):',
+    new_title: 'Nový cíl',
+    edit_title: 'Upravit cíl',
+    name_label: 'Název cíle',
+    name_placeholder: 'Např. Krátké cvičení',
+    edit_btn: 'Upravit cíl (název, ikona)',
+    error_name: 'Zadej název cíle',
+    confirm_delete: 'Smazat cíl „{name}“? Historie splněných dnů se ztratí.',
   },
 
   // ── Gratitude ──

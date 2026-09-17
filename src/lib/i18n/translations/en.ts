@@ -154,7 +154,16 @@ export const en = {
     remove_btn: '✕ Remove',
     prompt_name: 'Habit name (e.g. running):',
     prompt_emoji: 'Emoji (e.g. 🏃):',
-    prompt_negative: "Is it an 'abstinence' habit? (i.e. green = I did NOT do it today)\nOK = Yes (e.g. alcohol, smoking), Cancel = No (e.g. exercise)",
+    prompt_negative: "Is it an 'abstinence' habit? (i.e. green = I did NOT do it today)\\nOK = Yes (e.g. alcohol, smoking), Cancel = No (e.g. exercise)",
+    edit_tooltip: 'Edit habit (name, icon)',
+    new_title: 'New habit',
+    edit_title: 'Edit habit',
+    name_label: 'Habit name',
+    name_placeholder: 'E.g. Short workout',
+    negative_label: 'Abstinence habit',
+    negative_hint: 'Green = I did NOT do it today (alcohol, smoking, sweets).',
+    key_note: 'History is kept — only the name and icon change.',
+    error_name: 'Enter a habit name',
   },
 
   // ── Goals ──
@@ -164,6 +173,13 @@ export const en = {
     add_goal: '+ Add goal',
     prompt_name: 'Goal name:',
     prompt_emoji: 'Emoji (e.g. 🏃):',
+    new_title: 'New goal',
+    edit_title: 'Edit goal',
+    name_label: 'Goal name',
+    name_placeholder: 'E.g. Short workout',
+    edit_btn: 'Edit goal (name, icon)',
+    error_name: 'Enter a goal name',
+    confirm_delete: 'Delete goal “{name}”? Its completed-day history will be lost.',
   },
 
   // ── Scales ──
