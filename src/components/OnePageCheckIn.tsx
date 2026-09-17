@@ -11,6 +11,8 @@ import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
 import { ScaleSlider } from "@/components/ScaleSlider";
 import { TemplatePicker } from "@/components/TemplatePicker";
+import { GoalEditorDialog } from "@/components/GoalEditorDialog";
+import { HabitEditDialog } from "@/components/HabitEditDialog";
 import { seedDefaultScales, type Scale } from "@/lib/scales";
 import { checkAndUnlockAchievements } from "@/lib/achievements";
 
@@ -507,6 +509,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   const [userId, setUserId] = useState("");
   const [showAddActivity, setShowAddActivity] = useState(false);
   const [showAddHabit, setShowAddHabit] = useState(false);
+  const [goalDialog, setGoalDialog] = useState<{ open: boolean; goal: Goal | null }>({ open: false, goal: null });
+  const [habitDialog, setHabitDialog] = useState<{ open: boolean; habit: HabitDef | null }>({ open: false, habit: null });
   const [newItemName, setNewItemName] = useState("");
   const [newItemIcon, setNewItemIcon] = useState("📌");
   const [newItemCategory, setNewItemCategory] = useState("vlastní");
@@ -622,13 +626,23 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     }));
   };
 
-  const addGoal = () => {
-    const name = prompt(t("goals.prompt_name"));
-    if (!name) return;
-    const emoji = prompt(t("goals.prompt_emoji")) || "✅";
-    setGoals(prev => [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]);
+  // Goals — created/edited through the visual editor (window.prompt() made
+  // picking an emoji on a phone practically impossible)
+  const addGoal = () => setGoalDialog({ open: true, goal: null });
+  const editGoal = (goal: Goal) => setGoalDialog({ open: true, goal });
+
+  const saveGoal = ({ id, name, emoji }: { id?: string; name: string; emoji: string }) => {
+    setGoals(prev =>
+      id
+        ? prev.map(g => (g.id === id ? { ...g, name, emoji } : g))
+        : [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]
+    );
   };
-  const removeGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
+
+  const removeGoal = (goal: Goal) => {
+    if (!confirm(t("goals.confirm_delete", { name: goal.name }))) return;
+    setGoals(prev => prev.filter(g => g.id !== goal.id));
+  };
 
   // Add custom activity (persisted to DB)
   const addCustomActivity = async () => {
@@ -725,27 +739,44 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     }
   };
 
-  // Add custom habit (persisted to DB)
-  const addCustomHabit = async () => {
-    const name = prompt(t("habits.prompt_name"));
-    if (!name) return;
-    const icon = prompt(t("habits.prompt_emoji")) || "✅";
-    const isNegative = confirm(t("habits.prompt_negative"));
-    
+  // Add custom habit — via the visual editor (icon picker + typed confirmation
+  // of the negative flag, instead of three chained window.prompt()/confirm())
+  const addCustomHabit = () => setHabitDialog({ open: true, habit: null });
+  const editHabit = (habit: HabitDef) => setHabitDialog({ open: true, habit });
+
+  const persistHabit = (
+    action: "add" | "update",
+    key: string,
+    label: string,
+    icon: string,
+    isNegative: boolean
+  ) => {
+    if (!userId) return;
+    const tok = getAccessToken();
+    fetch("/api/manage-habits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
+      body: JSON.stringify({ action, userId, key, label, icon, is_negative: isNegative }),
+    }).catch(() => {});
+  };
+
+  const saveHabit = ({ name, icon, isNegative }: { name: string; icon: string; isNegative: boolean }) => {
+    const existing = habitDialog.habit;
+
+    if (existing) {
+      // Keep the key stable so days already recorded still point at this habit
+      setHabitDefs(prev =>
+        prev.map(h => (h.key === existing.key ? { ...h, label: name, icon, is_negative: isNegative } : h))
+      );
+      persistHabit("update", existing.key, name, icon, isNegative);
+      return;
+    }
+
     const key = name.toLowerCase().replace(/\s+/g, "_");
     const newHabit: HabitDef = { key, label: name, icon, category: "vlastní", color: "#6366f1", is_negative: isNegative, source: "custom" };
     setHabitDefs(prev => [...prev, newHabit]);
     setData(d => ({ ...d, habits: { ...d.habits, [key]: false } }));
-    
-    // Persist to DB
-    if (userId) {
-      const tok = getAccessToken();
-      fetch("/api/manage-habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
-        body: JSON.stringify({ action: "add", userId, key, label: name, icon, is_negative: isNegative }),
-      }).catch(() => {});
-    }
+    persistHabit("add", key, name, icon, isNegative);
   };
 
   // Remove habit (local + DB)
@@ -1104,12 +1135,22 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
                     <span className="text-sm text-white/80">{displayLabel(h)}</span>
                     <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">{t("habits.not_today")}</span>
                   </div>
-                  <button
-                    onClick={() => setData(d => ({ ...d, habits: { ...d.habits, [h.key]: !isOn } }))}
-                    className={`w-12 h-7 rounded-full relative transition-colors ${isGreen ? "bg-emerald-500/60" : "bg-white/10"}`}
-                  >
-                    <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${isGreen ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => editHabit(h)}
+                      title={t("habits.edit_tooltip")}
+                      aria-label={t("habits.edit_tooltip")}
+                      className="w-8 h-8 rounded-lg text-white/25 hover:text-indigo-300 hover:bg-white/10 text-sm transition-colors"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => setData(d => ({ ...d, habits: { ...d.habits, [h.key]: !isOn } }))}
+                      className={`w-12 h-7 rounded-full relative transition-colors ${isGreen ? "bg-emerald-500/60" : "bg-white/10"}`}
+                    >
+                      <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${isGreen ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1227,12 +1268,22 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
                           {h.source === "default" ? t("habits.default_badge") : ""}
                         </span>
                       </span>
-                      <button
-                        onClick={() => removeHabit(h.key)}
-                        className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
-                      >
-                        {t("habits.remove_btn")}
-                      </button>
+                      <span className="flex items-center gap-1">
+                        <button
+                          onClick={() => editHabit(h)}
+                          title={t("habits.edit_tooltip")}
+                          aria-label={t("habits.edit_tooltip")}
+                          className="text-indigo-400/60 hover:text-indigo-300 text-xs px-2 py-0.5 rounded hover:bg-indigo-500/10 transition-colors"
+                        >
+                          ✏️ {t("common.edit")}
+                        </button>
+                        <button
+                          onClick={() => removeHabit(h.key)}
+                          className="text-red-400/50 hover:text-red-400 text-xs px-2 py-0.5"
+                        >
+                          {t("habits.remove_btn")}
+                        </button>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1265,7 +1316,24 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
                       {streak > 0 && <span className="text-[10px] text-indigo-400">{t("goals.streak", { streak })}</span>}
                     </div>
                   </button>
-                  <button onClick={() => removeGoal(g.id)} className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 text-sm transition-all ml-2">✕</button>
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      onClick={() => editGoal(g)}
+                      title={t("goals.edit_btn")}
+                      aria-label={t("goals.edit_btn")}
+                      className="w-8 h-8 rounded-lg text-white/30 hover:text-indigo-300 hover:bg-white/10 text-sm transition-colors"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => removeGoal(g)}
+                      title={t("common.remove")}
+                      aria-label={t("common.remove")}
+                      className="w-8 h-8 rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 text-sm transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1462,6 +1530,24 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Goal editor — add / edit a goal (name + icon) */}
+      {goalDialog.open && (
+        <GoalEditorDialog
+          goal={goalDialog.goal}
+          onClose={() => setGoalDialog({ open: false, goal: null })}
+          onSave={saveGoal}
+        />
+      )}
+
+      {/* Habit editor — add / edit a habit (name + icon + negative flag) */}
+      {habitDialog.open && (
+        <HabitEditDialog
+          habit={habitDialog.habit}
+          onClose={() => setHabitDialog({ open: false, habit: null })}
+          onSave={saveHabit}
+        />
       )}
 
       {/* Template Picker */}

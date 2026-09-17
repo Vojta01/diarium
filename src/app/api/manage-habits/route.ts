@@ -46,6 +46,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, action: "add", key });
   }
 
+  if (action === "update") {
+    // Rename / re-icon an existing habit. For a *default* habit this row becomes an
+    // override that getHabits() layers on top of the built-in catalog entry.
+    const { error } = await sb.from("user_habits").upsert(
+      {
+        user_id: userId,
+        key,
+        label: label || key,
+        icon: icon || "✅",
+        is_negative: is_negative ?? false,
+        is_active: true,
+      },
+      { onConflict: "user_id,key" }
+    );
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, action: "update", key });
+  }
+
   if (action === "remove") {
     // Mark as inactive (soft delete)
     const { error } = await sb.from("user_habits").upsert(
