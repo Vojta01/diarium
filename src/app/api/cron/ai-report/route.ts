@@ -41,7 +41,9 @@ Napiš shrnutí uplynulého měsíce (4-6 odstavců v češtině):
 Tón: reflektivní, optimistický. Max 1200 znaků.`
 };
 
-function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<string, string>): string {
+type HabitInfo = { label: string; negative: boolean; order: number };
+
+function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<string, string>, habitMap: Record<string, HabitInfo>): string {
   const lines: string[] = [];
   lines.push(`Data za období: ${entries.length} dní\n`);
 
@@ -96,18 +98,30 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
   const top = Object.entries(activityCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
   if (top.length > 0) lines.push(`\nNejčastější aktivity: ${top.map(([a, c]) => `${a} (${c}×)`).join(", ")}`);
 
-  const habitKeys = ["alkohol", "koureni", "studena_sprcha"];
-  const habitStats: Record<string, { good: number; bad: number }> = {};
-  habitKeys.forEach(k => { habitStats[k] = { good: 0, bad: 0 }; });
+  // Habits: only the user's effective active set (catalogue defaults merged with
+  // the active user rows — an inactive row hides the habit), and only those with
+  // recorded days. A negative habit counts value=true as a slip; a positive one
+  // counts value=true as done.
+  const habitCounts: Record<string, { yes: number; no: number }> = {};
   entries.forEach((e: any) => {
-    habitKeys.forEach(k => {
-      if (e.habits && k in e.habits) {
-        if (e.habits[k]) habitStats[k].bad++;
-        else habitStats[k].good++;
-      }
-    });
+    if (!e.habits || typeof e.habits !== "object") return;
+    for (const [key, value] of Object.entries(e.habits)) {
+      if (!(key in habitMap)) continue;
+      if (!habitCounts[key]) habitCounts[key] = { yes: 0, no: 0 };
+      if (value) habitCounts[key].yes++;
+      else habitCounts[key].no++;
+    }
   });
-  lines.push(`\nNávyky: ${habitKeys.map(k => `${k}: ${habitStats[k].good}d OK / ${habitStats[k].bad}d NE`).join("; ")}`);
+  const habitParts = Object.entries(habitMap)
+    .sort((a, b) => a[1].order - b[1].order)
+    .filter(([key]) => habitCounts[key])
+    .map(([key, info]) => {
+      const c = habitCounts[key];
+      const good = info.negative ? c.no : c.yes;
+      const bad = info.negative ? c.yes : c.no;
+      return `${info.label}: ${good}d OK / ${bad}d NE`;
+    });
+  if (habitParts.length > 0) lines.push(`\nNávyky: ${habitParts.join("; ")}`);
 
   const allGratitude: string[] = [];
   entries.forEach((e: any) => e.gratitude?.forEach((g: string) => { if (g.trim()) allGratitude.push(g.trim()); }));
@@ -176,36 +190,70 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
     console.error("Failed to fetch scales:", e);
   }
 
-  const userPrompt = buildPeriodPrompt(entries, type, scaleNameMap);
-
-  const resp = await fetch(DEEPSEEK_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: await getAIModel(),
-      messages: [
-        { role: "system", content: SYSTEM_PROMPTS[type] },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: type === "monthly" ? 3072 : 2048,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!resp.ok) throw new Error(`DeepSeek error: ${await resp.text()}`);
-
-  const raw = await resp.text();
-  let analysis = "";
+  // Fetch the user's effective habit set — catalogue defaults merged with the
+  // active user rows (an inactive row hides the habit). Same merge the app shows.
+  const habitMap: Record<string, HabitInfo> = {};
+  let habitOrder = 0;
   try {
-    const json = JSON.parse(raw);
-    analysis = json.choices?.[0]?.message?.content?.trim() || "";
-  } catch (_) {}
+    const { data: cat } = await supabase
+      .from("habit_catalog")
+      .select("key, label, is_negative")
+      .eq("is_default", true);
+    (cat || []).forEach((h: any) => {
+      habitMap[h.key] = { label: h.label || h.key, negative: !!h.is_negative, order: habitOrder++ };
+    });
+    const { data: mine } = await supabase
+      .from("user_habits")
+      .select("key, label, is_negative, is_active")
+      .eq("user_id", userId);
+    (mine || []).forEach((h: any) => {
+      if (!h.is_active) { delete habitMap[h.key]; return; }
+      const known = habitMap[h.key];
+      habitMap[h.key] = { label: h.label || h.key, negative: !!h.is_negative, order: known ? known.order : habitOrder++ };
+    });
+  } catch (e) {
+    console.error("Failed to fetch habits:", e);
+  }
+
+  const userPrompt = buildPeriodPrompt(entries, type, scaleNameMap, habitMap);
+
+  // The model occasionally returns an empty content (finish_reason stop/length)
+  // even on a 200 — a repeated call usually succeeds, so retry before giving up.
+  let analysis = "";
+  for (let attempt = 1; attempt <= 3 && !analysis; attempt++) {
+    const resp = await fetch(DEEPSEEK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: await getAIModel(),
+        messages: [
+          { role: "system", content: SYSTEM_PROMPTS[type] },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: type === "monthly" ? 4096 : 3072,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!resp.ok) throw new Error(`DeepSeek error: ${await resp.text()}`);
+
+    const raw = await resp.text();
+    try {
+      const json = JSON.parse(raw);
+      analysis = json.choices?.[0]?.message?.content?.trim() || "";
+    } catch (_) {}
+
+    if (!analysis) {
+      console.log(`AI returned empty analysis for ${type} (user ${userId}), attempt ${attempt}, resp status ${resp.status}, raw head: ${raw.slice(0, 300)}`);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 4000));
+    }
+  }
 
   if (!analysis) {
-    console.log(`AI returned empty analysis for ${type} (user ${userId}), resp status ${resp.status}, raw head: ${raw.slice(0, 300)}`);
+    console.log(`AI stayed empty after 3 attempts for ${type} (user ${userId})`);
     return null;
   }
 
