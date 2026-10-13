@@ -178,21 +178,22 @@ function buildPeriodPrompt(entries: DayEntry[], type: string, scaleNameMap: Reco
     lines.push(`\nNejčastější aktivity: ${topActivities.map(([a, c]) => `${a} (${c}×)`).join(", ")}`);
   }
 
-  // Habits
+  // Habits — 2026-10-13 owner decision: the stored value means "fulfilled" for
+  // every habit (a ticked avoid habit = the user avoided it that day = good).
   const habitKeys = ["alkohol", "koureni", "studena_sprcha"];
   const habitStats: Record<string, { good: number; bad: number }> = {};
   habitKeys.forEach(k => { habitStats[k] = { good: 0, bad: 0 }; });
   entries.forEach(e => {
     habitKeys.forEach(k => {
       if (e.habits && k in e.habits) {
-        if (e.habits[k]) habitStats[k].bad++;
-        else habitStats[k].good++;
+        if (e.habits[k]) habitStats[k].good++;
+        else habitStats[k].bad++;
       }
     });
   });
   lines.push(`\nNávyky: ${habitKeys.map(k => {
     const s = habitStats[k];
-    return `${k}: ${s.good} dní OK / ${s.bad} dní NE`;
+    return `${k}: splněno ${s.good}d / nesplněno ${s.bad}d`;
   }).join("; ")}`);
 
   // Gratitude themes

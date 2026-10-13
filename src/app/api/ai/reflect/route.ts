@@ -21,6 +21,7 @@ Tvůj úkol: napiš krátkou, osobní reflexi (3-5 vět v češtině):
    - Návratu k aktivitám: "konečně jsi po 4 dnech zase cvičil a hned je nálada lepší"
    - Zhoršení: "všiml jsem si, že když špatně spíš, druhý den máš vyšší stres"
    - Splněných cílů: "tenhle týden jsi meditoval 5 ze 7 dní!"
+   - Zvládnuté návyky: "návyk splněn 5 ze 7 dní — super!"
    - Screen time patternů: "screen time ti klesá — super trend!"
 3. Návaznost na předchozí reflexe — pokud historie obsahuje 🤖 Včerejší reflexe, můžeš na ni navázat: "včera jsem ti psal, že... a dneska..."
 4. Povzbuzení — krátké, osobní. Když je co chválit, chval. Když je zle, podpoř.
@@ -44,6 +45,7 @@ Your task: write a short, personal reflection (3-5 sentences in English):
    - Return to activities: "you finally worked out after 4 days and your mood is already better"
    - Deterioration: "I noticed that when you sleep poorly, the next day your stress is higher"
    - Goals achieved: "you meditated 5 out of 7 days this week!"
+   - Habits kept: "you kept a habit 5 out of 7 days — nice!"
    - Screen time patterns: "your screen time is trending down — nice!"
 3. Continuity with previous reflections — if the history contains 🤖 Previous reflection, you can build on it: "yesterday I mentioned that... and today..."
 4. Encouragement — short, personal. When there's something to praise, praise. When things are rough, be supportive.
@@ -108,15 +110,16 @@ function formatDay(entry: any, isToday: boolean, scaleNameMap: Record<string, st
     }
   }
 
-  // Habits — show only broken ones
+  // Habits — 2026-10-13 owner decision: the value means "fulfilled" for every
+  // habit (a negative habit fulfilled = the user avoided it that day).
   if (entry.habits) {
-    const broken: string[] = [];
+    const kept: string[] = [];
+    const missed: string[] = [];
     for (const [k, v] of Object.entries(entry.habits)) {
-      if (v) broken.push(k);
+      (v ? kept : missed).push(k);
     }
-    if (broken.length > 0) {
-      parts.push(`  Narušené návyky: ${broken.join(", ")}`);
-    }
+    if (kept.length > 0) parts.push(`  Splněné návyky: ${kept.join(", ")}`);
+    if (missed.length > 0) parts.push(`  Nesplněné návyky: ${missed.join(", ")}`);
   }
 
   if (entry.phone_screen_time) {
@@ -153,7 +156,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userName, user_id, date, lang, ...todayData } = body;
+    const { userName, birthYear, user_id, date, lang, ...todayData } = body;
 
     // Verify the caller owns this user_id
     if (user_id && user_id !== user.id) {
@@ -207,7 +210,7 @@ export async function POST(request: NextRequest) {
     const promptParts: string[] = [];
     
     if (userName) {
-      promptParts.push(`👤 Uživatel: ${userName}`);
+      promptParts.push(`👤 Uživatel: ${userName}${birthYear ? ` (narozen ${birthYear})` : ""}`);
     }
     promptParts.push(`Historický kontext (posledních ${history.length} dní včetně dneška):`);
     promptParts.push("");

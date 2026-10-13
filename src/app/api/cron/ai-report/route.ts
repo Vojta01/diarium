@@ -43,8 +43,13 @@ Tón: reflektivní, optimistický. Max 1200 znaků.`
 
 type HabitInfo = { label: string; negative: boolean; order: number };
 
-function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<string, string>, habitMap: Record<string, HabitInfo>): string {
+type ReportUserInfo = { userName?: string; birthYear?: string };
+
+function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<string, string>, habitMap: Record<string, HabitInfo>, goals: any[] = [], userInfo?: ReportUserInfo): string {
   const lines: string[] = [];
+  if (userInfo?.userName) {
+    lines.push(`👤 Uživatel: ${userInfo.userName}${userInfo.birthYear ? ` (narozen ${userInfo.birthYear})` : ""}`);
+  }
   lines.push(`Data za období: ${entries.length} dní\n`);
 
   const moods = entries.filter((e: any) => e.mood > 0).map((e: any) => e.mood);
@@ -100,8 +105,8 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
 
   // Habits: only the user's effective active set (catalogue defaults merged with
   // the active user rows — an inactive row hides the habit), and only those with
-  // recorded days. A negative habit counts value=true as a slip; a positive one
-  // counts value=true as done.
+  // recorded days. 2026-10-13 owner decision: value=true means "fulfilled" for
+  // EVERY habit — a ticked negative (avoid) habit means the user avoided it.
   const habitCounts: Record<string, { yes: number; no: number }> = {};
   entries.forEach((e: any) => {
     if (!e.habits || typeof e.habits !== "object") return;
@@ -117,11 +122,21 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
     .filter(([key]) => habitCounts[key])
     .map(([key, info]) => {
       const c = habitCounts[key];
-      const good = info.negative ? c.no : c.yes;
-      const bad = info.negative ? c.yes : c.no;
-      return `${info.label}: ${good}d OK / ${bad}d NE`;
+      const good = c.yes;
+      const bad = c.no;
+      return `${info.label}${info.negative ? " (nežádoucí)" : ""}: splněno ${good}d / nesplněno ${bad}d`;
     });
   if (habitParts.length > 0) lines.push(`\nNávyky: ${habitParts.join("; ")}`);
+
+  // Goals — progress counted from the same report-window entries (simple, no
+  // streak/history server-side). Only shown when the user has active goals.
+  if (goals.length > 0) {
+    lines.push("\n🎯 Cíle:");
+    for (const goal of goals) {
+      const count = entries.filter((e: any) => e.activities?.includes(goal.activity_key)).length;
+      lines.push(`- ${goal.name}: ${count}/${goal.target_count} (${type === "weekly" ? "tento týden" : "tento měsíc"}) — ${count >= goal.target_count ? "splněno ✅" : `zbývá ${goal.target_count - count}`}`);
+    }
+  }
 
   const allGratitude: string[] = [];
   entries.forEach((e: any) => e.gratitude?.forEach((g: string) => { if (g.trim()) allGratitude.push(g.trim()); }));
@@ -145,7 +160,7 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
   return lines.join("\n");
 }
 
-async function generateAndSaveReport(userId: string, type: string, userEmail?: string) {
+async function generateAndSaveReport(userId: string, type: string, userEmail?: string, userInfo?: ReportUserInfo) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
 
@@ -215,7 +230,21 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
     console.error("Failed to fetch habits:", e);
   }
 
-  const userPrompt = buildPeriodPrompt(entries, type, scaleNameMap, habitMap);
+  // Fetch the user's active goals — progress is counted from the same report
+  // window entries already fetched above (no extra data needed).
+  let goals: any[] = [];
+  try {
+    const { data: goalRows } = await supabase
+      .from("goals")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("is_active", true);
+    goals = goalRows || [];
+  } catch (e) {
+    console.error("Failed to fetch goals:", e);
+  }
+
+  const userPrompt = buildPeriodPrompt(entries, type, scaleNameMap, habitMap, goals, userInfo);
 
   // The model occasionally returns an empty content (finish_reason stop/length)
   // even on a 200 — a repeated call usually succeeds, so retry before giving up.
@@ -348,6 +377,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
 
+    // Optional personalisation for the prompt header — callers may pass
+    // userName/birthYear as query params; a JSON body is also tolerated
+    // (existing callers send only ?type and no body, so parsing must not throw).
+    let userName = url.searchParams.get("userName") || "";
+    let birthYear = url.searchParams.get("birthYear") || "";
+    try {
+      const body = await request.json();
+      if (body && typeof body === "object") {
+        if (!userName && typeof body.userName === "string") userName = body.userName;
+        if (!birthYear && body.birthYear != null) birthYear = String(body.birthYear);
+      }
+    } catch {
+      // no body / not JSON — fine, established callers send none
+    }
+
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     let uniqueUsers: string[];
@@ -380,7 +424,9 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        const result = await generateAndSaveReport(userId, type);
+        // Personalise only the authenticated caller's own report — a cron run
+        // over many users must not stamp one caller's name onto everyone.
+        const result = await generateAndSaveReport(userId, type, undefined, user ? { userName, birthYear } : undefined);
         if (result) {
           results.push({ userId, success: true });
           // Send push notification
