@@ -2,15 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
 
-// Default habits: only alkohol is shown to all users
-// Sensitive habits are kept in the user_habits table, not here
+// Standard habits shown to all users (owner decision 2026-10-13). Personal
+// sensitive habits (e.g. porno, masturbace) stay in the user_habits table only.
 const DEFAULT_HABITS = [
   { key: "alkohol", label: "Alkohol", icon: "🍺", category: "zdraví", is_negative: true, sort_order: 1 },
+  { key: "koureni", label: "Kouření", icon: "🚬", category: "zdraví", is_negative: true, sort_order: 2 },
+  { key: "sladkosti", label: "Sladkosti", icon: "🍬", category: "zdraví", is_negative: true, sort_order: 3 },
+  { key: "bez_kafe", label: "Bez kafe", icon: "☕", category: "zdraví", is_negative: true, sort_order: 4 },
+  { key: "cviceni", label: "Cvičení", icon: "🏋️", category: "pohyb", is_negative: false, sort_order: 5 },
+  { key: "pit_vodu", label: "Pít vodu", icon: "💧", category: "zdraví", is_negative: false, sort_order: 6 },
+  { key: "cteni", label: "Čtení", icon: "📖", category: "mysl", is_negative: false, sort_order: 7 },
+  { key: "meditace", label: "Meditace", icon: "🧘", category: "mysl", is_negative: false, sort_order: 8 },
 ];
 
+// Legacy keys that must never be catalogue defaults. The standard set above is
+// NOT on this list any more (it used to remove koureni/cviceni/meditace).
 const HABITS_TO_REMOVE = [
-  "cviceni", "cist", "meditace", "zdrave_jidlo", "piti_vody",
-  "koureni", "studena_sprcha",
+  "cist", "zdrave_jidlo", "studena_sprcha", "piti_vody",
 ];
 
 export async function POST(request: NextRequest) {
