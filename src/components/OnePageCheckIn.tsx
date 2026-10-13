@@ -259,7 +259,7 @@ function CompletedCard({
     : habitDefs.filter(h => !SENSITIVE_HABIT_KEYS.includes(h.key));
   const habitStatus = displayHabitDefs.map(h => ({
     ...h,
-    kept: h.is_negative ? !data.habits[h.key] : data.habits[h.key],
+    kept: data.habits[h.key],
   }));
 
   return (
@@ -1127,13 +1127,18 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
               : habitDefs.filter(h => !SENSITIVE_HABIT_KEYS.includes(h.key))
             ).map(h => {
               const isOn = data.habits[h.key] ?? false;
-              const isGreen = h.is_negative ? !isOn : isOn;
               return (
                 <div key={h.key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{h.icon}</span>
                     <span className="text-sm text-white/80">{displayLabel(h)}</span>
-                    <span className="text-[10px] text-white/25 px-1.5 py-0.5 rounded-full border border-white/10">{t("habits.not_today")}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                      isOn
+                        ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
+                        : "text-white/25 border-white/10"
+                    }`}>
+                      {isOn ? t("habits.done_badge") : t("habits.not_today")}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -1146,9 +1151,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
                     </button>
                     <button
                       onClick={() => setData(d => ({ ...d, habits: { ...d.habits, [h.key]: !isOn } }))}
-                      className={`w-12 h-7 rounded-full relative transition-colors ${isGreen ? "bg-emerald-500/60" : "bg-white/10"}`}
+                      className={`w-12 h-7 rounded-full relative transition-colors ${isOn ? "bg-emerald-500/60" : "bg-white/10"}`}
                     >
-                      <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${isGreen ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
+                      <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${isOn ? "translate-x-[22px]" : "translate-x-[2px]"}`} />
                     </button>
                   </div>
                 </div>

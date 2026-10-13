@@ -54,15 +54,8 @@ const ORIGINAL_ACTIVITIES = [
   { key: "prani", label: "Praní", icon: "🧺", category: "domácí práce", sort_order: 53 },
   { key: "zehleni", label: "Žehlení", icon: "👕", category: "domácí práce", sort_order: 54 },
 
-  // ── Počasí ──
-  { key: "slunecno", label: "Slunečno", icon: "☀️", category: "počasí", sort_order: 60 },
-  { key: "zatazeno", label: "Zataženo", icon: "☁️", category: "počasí", sort_order: 61 },
-  { key: "dest", label: "Déšť", icon: "🌧️", category: "počasí", sort_order: 62 },
-  { key: "snih", label: "Sníh", icon: "❄️", category: "počasí", sort_order: 63 },
-  { key: "mraz", label: "Mráz", icon: "🥶", category: "počasí", sort_order: 64 },
-  { key: "horko", label: "Horko", icon: "🌡️", category: "počasí", sort_order: 65 },
-  { key: "bourka", label: "Bouřka", icon: "🌩️", category: "počasí", sort_order: 66 },
-  { key: "vitr", label: "Vítr", icon: "💨", category: "počasí", sort_order: 67 },
+  // Weather is deliberately NOT an activity (owner decision, 2026-10-13): it renders
+  // in the check-in's own weather section, never among the pickable activities.
 ];
 
 export async function POST(request: NextRequest) {

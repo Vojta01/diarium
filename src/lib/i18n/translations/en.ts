@@ -148,6 +148,7 @@ export const en = {
     your_habits: '🎯 Your habits',
     add_habit: '➕ Add habit',
     not_today: 'not today',
+    done_badge: '✓ done',
     negative_badge: '(abstinence)',
     positive_badge: '(positive)',
     default_badge: ' · default',

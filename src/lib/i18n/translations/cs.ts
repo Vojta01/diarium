@@ -163,6 +163,7 @@ export const cs = {
     your_habits: '🎯 Tvoje návyky',
     add_habit: '➕ Přidat návyk',
     not_today: 'dnes ne',
+    done_badge: '✓ splněno',
     negative_badge: '(abstinenční)',
     positive_badge: '(pozitivní)',
     default_badge: ' · výchozí',
