@@ -1,0 +1,15 @@
+-- Drop the 2026-10-14 data-repair backup table after archiving it.
+--
+-- Decision (Vojta) 2026-10-20: export the backup out of the database
+-- and remove it from `public`.
+--   * Archived to Google Drive (vojta1@gmail.com), folder "Diarium zálohy":
+--     entries_backup_20261014.csv + entries_backup_20261014.sql
+--   * The SQL archive is restore-tested: 1249 rows, md5(to_jsonb) fingerprint
+--     4a6c265a535f70e141b0525437a457aa — identical to the live table before drop.
+--   * Production `entries` was NOT touched by this change.
+--
+-- Applied to production 2026-10-20 with explicit user approval.
+-- (The table was first locked down the same day — see
+--  database/secure_entries_backup_2026-10-20.sql — after the Supabase
+--  security advisor flagged it as publicly accessible.)
+drop table if exists public.entries_backup_20261014;
