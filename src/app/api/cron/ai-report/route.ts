@@ -160,24 +160,45 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
   return lines.join("\n");
 }
 
-async function generateAndSaveReport(userId: string, type: string, userEmail?: string, userInfo?: ReportUserInfo) {
+async function generateAndSaveReport(userId: string, type: string, userEmail?: string, userInfo?: ReportUserInfo, requestedEnd?: string) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
   const now = new Date();
+  // The caller may name the period it is responsible for (the app's safety net on
+  // the 2nd belongs to the month that ended on the 1st). Without it, "today".
+  const periodEnd: string =
+    requestedEnd && /^\d{4}-\d{2}-\d{2}$/.test(requestedEnd)
+      ? requestedEnd
+      : now.toISOString().split("T")[0];
   let fromDate: string;
-  let periodEnd: string = now.toISOString().split("T")[0];
 
-  if (type === "weekly") {
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - 7);
+  {
+    const end = new Date(`${periodEnd}T00:00:00Z`);
+    const cutoff = new Date(end);
+    // Both windows are inclusive, exactly like the app's generator: 7 days for a
+    // week, 30 for a month. The old `- 7` / `- 30` produced 8 and 31 days, so the
+    // same period had a different start depending on who generated it.
+    cutoff.setDate(cutoff.getDate() - (type === "weekly" ? 6 : 29));
     fromDate = cutoff.toISOString().split("T")[0];
-  } else {
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - 30);
-    fromDate = cutoff.toISOString().split("T")[0];
+  }
+
+  // One report per period. The app can run its safety net on several days inside
+  // the same window (the 1st late and the 2nd); without this check each run wrote
+  // its own row for the same month (reported 2026-11-02).
+  const { data: already } = await supabase
+    .from("ai_reports")
+    .select("id, period_start, period_end, content, created_at")
+    .eq("user_id", userId)
+    .eq("type", type)
+    .eq("period_end", periodEnd)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (already && already.length > 0) {
+    return { analysis: already[0].content, fromDate: already[0].period_start, periodEnd, existing: true as const };
   }
 
   // Fetch entries
@@ -382,6 +403,9 @@ export async function GET(request: NextRequest) {
     // (existing callers send only ?type and no body, so parsing must not throw).
     let userName = url.searchParams.get("userName") || "";
     let birthYear = url.searchParams.get("birthYear") || "";
+    // Optional period the caller is responsible for. The app's safety net sends it
+    // so a rescue run describes the same month/week as the alarm did.
+    const periodEnd = url.searchParams.get("periodEnd") || undefined;
     try {
       const body = await request.json();
       if (body && typeof body === "object") {
@@ -426,15 +450,18 @@ export async function GET(request: NextRequest) {
 
         // Personalise only the authenticated caller's own report — a cron run
         // over many users must not stamp one caller's name onto everyone.
-        const result = await generateAndSaveReport(userId, type, undefined, user ? { userName, birthYear } : undefined);
+        const result = await generateAndSaveReport(userId, type, undefined, user ? { userName, birthYear } : undefined, periodEnd);
         if (result) {
-          results.push({ userId, success: true });
-          // Send push notification
-          const title = type === "weekly" ? "📊 Týdenní přehled" : "🗓️ Měsíční přehled";
-          const body = type === "weekly"
-            ? "Tvůj týdenní AI report je připraven! Otevři Diarium."
-            : "Tvůj měsíční AI report je připraven! Otevři Diarium.";
-          await sendPushNotification(userId, title, body).catch(() => {});
+          results.push({ userId, success: true, existing: "existing" in result });
+          // A period that already had its report is not news: the integrity check
+          // above found it, so pushing again would announce a duplicate.
+          if (!("existing" in result)) {
+            const title = type === "weekly" ? "📊 Týdenní přehled" : "🗓️ Měsíční přehled";
+            const body = type === "weekly"
+              ? "Tvůj týdenní AI report je připraven! Otevři Diarium."
+              : "Tvůj měsíční AI report je připraven! Otevři Diarium.";
+            await sendPushNotification(userId, title, body).catch(() => {});
+          }
         } else {
           results.push({ userId, success: false, reason: "not_enough_data" });
         }
