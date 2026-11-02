@@ -160,29 +160,39 @@ function buildPeriodPrompt(entries: any[], type: string, scaleNameMap: Record<st
   return lines.join("\n");
 }
 
-async function generateAndSaveReport(userId: string, type: string, userEmail?: string, userInfo?: ReportUserInfo, requestedEnd?: string) {
+async function generateAndSaveReport(userId: string, type: string, userEmail?: string, userInfo?: ReportUserInfo, requestedEnd?: string, requestedStart?: string) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
   const now = new Date();
-  // The caller may name the period it is responsible for (the app's safety net on
-  // the 2nd belongs to the month that ended on the 1st). Without it, "today".
-  const periodEnd: string =
-    requestedEnd && /^\d{4}-\d{2}-\d{2}$/.test(requestedEnd)
-      ? requestedEnd
-      : now.toISOString().split("T")[0];
-  let fromDate: string;
+  const isWeekly = type === "weekly";
+  const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
 
+  // A monthly report always describes one whole calendar month — the one that just
+  // ended (1st .. last day). The caller may name that period (the app's safety net
+  // on the 2nd must still describe the month that ended on the 1st); without it we
+  // take the month before today. Weekly keeps rolling 7 days ending on the
+  // scheduled day, because a week has no calendar boundary the user reads.
+  const fallbackEnd = isWeekly
+    ? now.toISOString().split("T")[0]
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().split("T")[0];
+  const periodEnd: string = valid(requestedEnd) ?? fallbackEnd;
+
+  let fromDate: string;
   {
-    const end = new Date(`${periodEnd}T00:00:00Z`);
-    const cutoff = new Date(end);
-    // Both windows are inclusive, exactly like the app's generator: 7 days for a
-    // week, 30 for a month. The old `- 7` / `- 30` produced 8 and 31 days, so the
-    // same period had a different start depending on who generated it.
-    cutoff.setDate(cutoff.getDate() - (type === "weekly" ? 6 : 29));
-    fromDate = cutoff.toISOString().split("T")[0];
+    const explicitStart = valid(requestedStart);
+    if (explicitStart) {
+      fromDate = explicitStart;
+    } else if (!isWeekly) {
+      // periodEnd is the last day of the covered month, so day 01 belongs to it.
+      fromDate = `${periodEnd.slice(0, 7)}-01`;
+    } else {
+      const cutoff = new Date(`${periodEnd}T00:00:00Z`);
+      cutoff.setUTCDate(cutoff.getUTCDate() - 6);
+      fromDate = cutoff.toISOString().split("T")[0];
+    }
   }
 
   // One report per period. The app can run its safety net on several days inside
@@ -406,6 +416,7 @@ export async function GET(request: NextRequest) {
     // Optional period the caller is responsible for. The app's safety net sends it
     // so a rescue run describes the same month/week as the alarm did.
     const periodEnd = url.searchParams.get("periodEnd") || undefined;
+    const periodStart = url.searchParams.get("periodStart") || undefined;
     try {
       const body = await request.json();
       if (body && typeof body === "object") {
@@ -450,7 +461,7 @@ export async function GET(request: NextRequest) {
 
         // Personalise only the authenticated caller's own report — a cron run
         // over many users must not stamp one caller's name onto everyone.
-        const result = await generateAndSaveReport(userId, type, undefined, user ? { userName, birthYear } : undefined, periodEnd);
+        const result = await generateAndSaveReport(userId, type, undefined, user ? { userName, birthYear } : undefined, periodEnd, periodStart);
         if (result) {
           results.push({ userId, success: true, existing: "existing" in result });
           // A period that already had its report is not news: the integrity check
