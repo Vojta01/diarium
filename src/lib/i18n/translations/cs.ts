@@ -20,6 +20,14 @@ export const cs = {
     no_data: '—',
   },
 
+  // ── External links ──
+  links: {
+    github: 'GitHub',
+    android_app: 'Android aplikace',
+    download_apk: 'Stáhnout APK',
+    opens_in_new_tab: '{label} (otevře se v nové kartě)',
+  },
+
   // ── Emoji picker ──
   emojiPicker: {
     label: 'Ikona',

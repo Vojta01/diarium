@@ -10,6 +10,32 @@
   --color-mood-3: #facc15;
   --color-mood-2: #fb923c;
   --color-mood-1: #ef4444;
+
+  /* Android 2.0.0-beta5 shared foundations. Additive: the legacy accent and
+     mood tokens above keep their current values so existing utilities render
+     exactly as before until screens migrate to these tokens. */
+  --color-ink: #0a0a0f;
+  --color-ink-deep: #07070b;
+  --color-indigo: #6366f1;
+  --color-mood-chart-1: #ef4444;
+  --color-mood-chart-2: #f97316;
+  --color-mood-chart-3: #fbbf24;
+  --color-mood-chart-4: #34d399;
+  --color-mood-chart-5: #22d3ee;
+  --radius-card: 20px;
+  --spacing-card: 18px;
+}
+
+:root {
+  /* Canonical beta5 tokens; the @theme entries above expose the Tailwind
+     utilities (bg-ink, rounded-card, p-card, …). */
+  --ink: #0a0a0f;
+  --ink-deep: #07070b;
+  --indigo: #6366f1;
+  --cyan: #22d3ee;
+  --grid-size: 34px;
+  --pad-card: 18px;
+  --mood-chart-none: #6e6e85;
 }
 
 /* Grid background pattern */

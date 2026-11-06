@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { fetchDailyEntries, MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
+import { averageMood, recordedMoods } from "@/lib/mood";
 import { useTranslation } from "@/lib/i18n";
 
 export function YearInPixels() {
@@ -87,9 +88,9 @@ export function YearInPixels() {
 
   const stats = useMemo(() => {
     const yearEntries = entries.filter(e => e.date.startsWith(String(selectedYear)));
-    if (yearEntries.length === 0) return null;
-    const avg = yearEntries.reduce((s, e) => s + e.mood, 0) / yearEntries.length;
-    return { avg: avg.toFixed(1), total: yearEntries.length };
+    const avg = averageMood(yearEntries);
+    if (avg === null) return null;
+    return { avg: avg.toFixed(1), total: recordedMoods(yearEntries).length };
   }, [entries, selectedYear]);
 
   const today = new Date().toISOString().split("T")[0];

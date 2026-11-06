@@ -20,6 +20,14 @@ export const en = {
     no_data: '—',
   },
 
+  // ── External links ──
+  links: {
+    github: 'GitHub',
+    android_app: 'Android app',
+    download_apk: 'Download APK',
+    opens_in_new_tab: '{label} (opens in a new tab)',
+  },
+
   // ── Auth Screen ──
   auth: {
     title: 'Diarium',

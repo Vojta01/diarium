@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchDailyEntries, type DailyEntry, MOOD_COLORS, MOOD_EMOJIS, MOOD_LABELS } from "@/lib/stats";
+import { isRecordedMood, moodCounts as countRecordedMoods } from "@/lib/mood";
 import { getScales, getScaleDistribution, type Scale } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
 import { InfoPopover } from "@/components/InfoPopover";
@@ -53,12 +54,13 @@ export function AdvancedStats() {
     );
   }
 
-  const last30 = entries.slice(-30);
+  // Only answered days enter mood statistics: 0 / missing moods are not a
+  // neutral 3 and must never inflate a denominator or an average.
+  const last30 = entries.slice(-30).filter((e) => isRecordedMood(e.mood));
 
   // ── Mood distribution ──
-  const moodCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  last30.forEach((e) => { if (e.mood >= 1 && e.mood <= 5) moodCounts[e.mood]++; });
-  const totalMoods = Object.values(moodCounts).reduce((a, b) => a + b, 0);
+  const moodCounts = countRecordedMoods(last30);
+  const totalMoods = last30.length;
 
   // ── Activity correlation (with best/worst day per activity) ──
   const activityStats: Record<string, { count: number; totalMood: number; best: DailyEntry | null; worst: DailyEntry | null }> = {};

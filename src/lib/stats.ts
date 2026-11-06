@@ -2,9 +2,11 @@
 
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { readStoredSession } from "@/lib/auth-storage";
+import { recordedMood } from "@/lib/mood";
 
 export interface DailyEntry {
   date: string;
+  /** Recorded mood 1..5; 0 means the day has no recorded mood. */
   mood: number;
   moodEmoji: string;
   activities: string[];
@@ -61,8 +63,9 @@ export async function fetchDailyEntries(): Promise<DailyEntry[]> {
 
   return (data ?? []).reverse().map((e: any) => ({
     date: e.date,
-    mood: e.mood ?? 3,
-    moodEmoji: e.mood_emoji ?? "😐",
+    // Never invent a neutral 3 for an unanswered day; 0 means "not recorded".
+    mood: recordedMood(e.mood) ?? 0,
+    moodEmoji: e.mood_emoji ?? "",
     activities: Array.isArray(e.activities) ? e.activities : [],
     habits: (e.habits && typeof e.habits === "object" && !Array.isArray(e.habits)) ? e.habits : {},
     gratitude: Array.isArray(e.gratitude) ? e.gratitude : [],
