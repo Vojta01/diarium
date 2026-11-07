@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
 import { csvFileName } from "@/lib/export-csv";
 import { fetchAllExportPages } from "@/lib/export-query";
+import { pragueDateKey } from "@/lib/date";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -161,7 +162,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${csvFileName(
-          new Date().toISOString().slice(0, 10)
+          pragueDateKey()
         ).replace(/\.csv$/, ".pdf")}"`,
         "X-Diarium-Entry-Count": String(entries.length),
         "Cache-Control": "no-store",

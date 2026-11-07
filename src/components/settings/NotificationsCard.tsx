@@ -181,10 +181,15 @@ export function NotificationsCard() {
   const statusKey =
     state === "checking"
       ? "settings.notifications_status_checking"
-      : pushStatusCopyKey(support);
+      : support === "permitted" && !subscribed
+        ? "settings.notifications_status_off"
+        : pushStatusCopyKey(support);
 
   return (
     <div className="space-y-3">
+      <p className="text-sm leading-6 text-[color:var(--text-2)]">
+        {t("settings.notifications_hint")}
+      </p>
       <p
         className="text-sm leading-6 text-[color:var(--text-2)]"
         role="status"

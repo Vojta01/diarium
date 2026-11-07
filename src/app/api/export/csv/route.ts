@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
-import { CSV_HEADERS, buildCsv, csvFileName } from "@/lib/export-csv";
+import { buildCsv, CSV_HEADERS, csvFileName } from "@/lib/export-csv";
 import { fetchAllExportPages } from "@/lib/export-query";
+import { pragueDateKey } from "@/lib/date";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${csvFileName(
-          new Date().toISOString().slice(0, 10)
+          pragueDateKey()
         )}"`,
         // The dialog reads this so its success state can name the real row count.
         "X-Diarium-Entry-Count": String(entries.length),

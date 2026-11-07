@@ -36,6 +36,11 @@
 }
 
 :root {
+  /* Diarium is dark-only on the web and on Android (`Theme.kt`). Declaring the
+     scheme makes native date inputs, scrollbars and form controls render dark
+     in Safari/Firefox instead of light-on-dark. */
+  color-scheme: dark;
+
   /* Canonical beta5 tokens; the @theme entries above expose the Tailwind
      utilities (bg-ink, rounded-card, p-card, …). */
   --ink: #0a0a0f;

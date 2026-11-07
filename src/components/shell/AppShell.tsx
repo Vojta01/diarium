@@ -369,7 +369,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     nav.tab === "overview"
       ? todayLabel
       : nav.tab === "settings"
-        ? user.email || t("settings.subtitle")
+        ? t("settings.subtitle")
         : t(`${nav.tab}.subtitle`);
 
   const headerActions = (
@@ -420,7 +420,11 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         }`}
       >
         {nav.sub === null && nav.tab !== "today" ? (
-          <ScreenHeader title={t(TAB_LABEL_KEYS[nav.tab])} subtitle={subtitle} trailing={headerActions} />
+          <ScreenHeader
+            title={t(TAB_LABEL_KEYS[nav.tab])}
+            subtitle={subtitle}
+            trailing={nav.tab === "overview" ? headerActions : undefined}
+          />
         ) : null}
 
         <main className="relative z-[1]">
@@ -447,6 +451,11 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
             "settings",
             <SettingsView
               email={user.email}
+              provider={
+                typeof user.app_metadata?.provider === "string"
+                  ? user.app_metadata.provider
+                  : null
+              }
               onLogout={onLogout}
               onOpenSub={handleOpenSub}
             />

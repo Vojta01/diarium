@@ -40,13 +40,19 @@ export function ScreenHeader({ title, subtitle, trailing }: ScreenHeaderProps) {
 export function SectionHeader({
   title,
   trailing,
+  id,
 }: {
   title: string;
   trailing?: ReactNode;
+  /** Set when a card points at this heading with `aria-labelledby`. */
+  id?: string;
 }) {
   return (
     <div className="mb-2 flex items-center justify-between gap-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[1.2px] text-[color:var(--text-2)]">
+      <h2
+        id={id}
+        className="text-[11px] font-semibold uppercase tracking-[1.2px] text-[color:var(--text-2)]"
+      >
         {title}
       </h2>
       {trailing ? <div className="shrink-0">{trailing}</div> : null}
