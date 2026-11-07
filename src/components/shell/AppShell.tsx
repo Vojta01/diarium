@@ -162,6 +162,11 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
       const next = nav.sub
         ? closeSub(nav)
         : normalizeNav(parseNavFromSearch(window.location.search), IMPLEMENTED_SUBS);
+      // Drop stale/unimplemented query state (e.g. ?sub=goals) so the URL and
+      // the rendered destination cannot disagree after Back/Forward.
+      if (!nav.sub && navToSearch(next) !== window.location.search) {
+        writeHistory(next, "replace");
+      }
       if (nav.sub !== null && next.sub === null) scheduleFocusRestore();
       markVisited(next.tab);
       setNav(next);
@@ -169,7 +174,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [markVisited, nav, scheduleFocusRestore]);
+  }, [markVisited, nav, scheduleFocusRestore, writeHistory]);
 
   // Restore focus after the parent panel is visible again. Waiting one frame
   // avoids focusing an element that is still inside the hidden tab panel.
@@ -282,6 +287,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     weekday: "long",
     day: "numeric",
     month: "long",
+    timeZone: "Europe/Prague",
   });
 
   const subtitle =

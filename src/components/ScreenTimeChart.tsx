@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DailyEntry } from "@/lib/stats";
 import { useTranslation } from "@/lib/i18n";
+import { weekdayNames } from "@/lib/calendar-labels";
 
 interface ScreenTimeEntry extends DailyEntry {
   phone_screen_time?: number;
@@ -62,7 +63,7 @@ const APP_COLORS = [
 ];
 
 export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   // ── 7-day window over calendar days (not just days-with-data) ──
@@ -128,9 +129,7 @@ export function ScreenTimeChart({ entries }: { entries: DailyEntry[] }) {
     return { appColorMap };
   }, [days]);
 
-  const weekdays: string[] = Array.isArray(t("screenTime.weekdays"))
-    ? (t("screenTime.weekdays") as unknown as string[])
-    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekdays = weekdayNames(lang);
 
   const todayStr = toLocalDateStr(new Date());
 

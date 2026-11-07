@@ -152,10 +152,10 @@ export function PushNotificationManager() {
             <span className="text-2xl shrink-0">🔔</span>
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium">
-                Denní připomenutí
+                {t("pushNotification.title")}
               </p>
               <p className="text-white/40 text-xs mt-0.5">
-                Dostávej upozornění ve 21:00, ať nezapomeneš na check-in
+                {t("pushNotification.description")}
               </p>
             </div>
           </div>
@@ -164,7 +164,7 @@ export function PushNotificationManager() {
               onClick={handleEnable}
               className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer"
             >
-              Povolit notifikace
+              {t("pushNotification.enable")}
             </button>
             <button
               onClick={handleDismiss}
@@ -183,6 +183,7 @@ export function PushNotificationManager() {
   return (
     <div className="fixed bottom-[calc(88px+env(safe-area-inset-bottom))] right-4 z-40 flex items-center gap-2">
       <div
+        title={t(status === "granted" ? "pushNotification.status_active" : "pushNotification.status_inactive")}
         className={`w-3 h-3 rounded-full shrink-0 ${
           status === "granted" ? "bg-emerald-400" : "bg-red-400/50"
         }`}

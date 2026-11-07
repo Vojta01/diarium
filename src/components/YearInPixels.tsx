@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchDailyEntries, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
 import { averageMood, CHART_MOOD_COLORS, recordedMoods } from "@/lib/mood";
 import { pragueDateKey, pragueYear } from "@/lib/date";
+import { monthNames, weekdayNames } from "@/lib/calendar-labels";
 import { useTranslation } from "@/lib/i18n";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 export function YearInPixels() {
   const { t, lang } = useTranslation();
@@ -13,19 +15,20 @@ export function YearInPixels() {
   const [selectedYear, setSelectedYear] = useState(() => pragueYear());
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
 
-  const monthNames: string[] = Array.isArray(t("calendar.month_names"))
-    ? (t("calendar.month_names") as unknown as string[])
-    : ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const months = monthNames(lang, selectedYear);
+  const weekdays = weekdayNames(lang);
 
-  const weekdays: string[] = Array.isArray(t("calendar.day_names"))
-    ? (t("calendar.day_names") as unknown as string[])
-    : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchDailyEntries()
       .then(data => { setEntries(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useDataRefresh(["entries"], load);
 
   const moodMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -40,7 +43,7 @@ export function YearInPixels() {
   }, [entries]);
 
   // Build each month as a matrix: rows × 7 columns
-  const months = useMemo(() => {
+  const monthsData = useMemo(() => {
     const result: { name: string; index: number; weeks: { date: string; day: number; mood: number; note?: string }[][] }[] = [];
 
     for (let m = 0; m < 12; m++) {
@@ -80,11 +83,11 @@ export function YearInPixels() {
         weeks.push(currentWeek);
       }
 
-      result.push({ name: monthNames[m], index: m, weeks });
+      result.push({ name: months[m], index: m, weeks });
     }
 
     return result;
-  }, [selectedYear, moodMap, noteMap, monthNames]);
+  }, [selectedYear, moodMap, noteMap, months]);
 
   const stats = useMemo(() => {
     const yearEntries = entries.filter(e => e.date.startsWith(String(selectedYear)));
@@ -106,7 +109,7 @@ export function YearInPixels() {
   const gapSize = "2px";
 
   // Calculate counts per month for a mini summary
-  const monthEntryCounts = months.map(m => {
+  const monthEntryCounts = monthsData.map(m => {
     let count = 0;
     for (const week of m.weeks) {
       for (const cell of week) {
@@ -150,7 +153,7 @@ export function YearInPixels() {
       </div>
 
       {/* ── Months Grid ── */}
-      {months.map((month, mi) => (
+      {monthsData.map((month, mi) => (
         <div key={month.name} className="glass-card">
           {/* Month header */}
           <div className="flex items-center justify-between mb-2">

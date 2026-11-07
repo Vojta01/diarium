@@ -111,7 +111,7 @@ export const cs = {
     data: 'Data',
     export: 'Exportovat data',
     notifications: 'Notifikace',
-    notifications_hint: 'Připomínky běží v aplikaci pro Android.',
+    notifications_hint: 'V prohlížeči používají připomínky push notifikace; v Android aplikaci je plánuje systém.',
     about_app: 'O aplikaci Diarium',
   },
 
@@ -274,6 +274,7 @@ export const cs = {
     edit_btn: 'Upravit cíl (název, ikona)',
     error_name: 'Zadej název cíle',
     confirm_delete: 'Smazat cíl „{name}“? Historie splněných dnů se ztratí.',
+    default_name: 'Krátké cvičení',
   },
 
   // ── Gratitude ──
@@ -293,6 +294,7 @@ export const cs = {
   // ── Photo ──
   photo: {
     label: 'Fotka',
+    zoom_hint: 'Klepnutím přiblížíš',
   },
 
   // ── Add Activity Modal ──
@@ -433,7 +435,6 @@ export const cs = {
     legend: 'Legenda:',
     apps: 'Appky:',
     other: 'Ostatní',
-    weekdays: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
     day_detail: '📅 Detail dne',
     close: '✕',
     no_apps: 'Žádná data o aplikacích pro tento den',
@@ -453,8 +454,6 @@ export const cs = {
   calendar: {
     edit_entry: '✏️ Upravit tento záznam',
     gratitude: 'Vděčnost',
-    day_names: ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'],
-    month_names: ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'],
   },
 
   // ── YearInPixels ──
@@ -538,35 +537,6 @@ export const cs = {
     direction_no_relation: '➡️ žádný vztah',
   },
 
-  // ── Mood quotes ──
-  quotes: {
-    5: [
-      'Dny jako tenhle jsou důvod, proč to celé má smysl. ✨',
-      'Když je duše v pohodě, celý svět se usmívá s tebou. 🌟',
-      'Tohle si zapiš za uši — dneska jsi vyhrál/a. 🏆',
-    ],
-    4: [
-      'Dobrý den je jako šálek dobré kávy — zahřeje a povzbudí. ☕',
-      'Ne každý den je perfektní, ale dnešek byl zatraceně blízko. 🙂',
-      'Vděčnost mění obyčejné dny ve výjimečné. 💫',
-    ],
-    3: [
-      'I neutrální dny mají svou hodnotu — jsou to dny klidu. 🌤️',
-      'Není to ani kopec, ani údolí. Prostě rovina. A to je v pořádku. 🛤️',
-      'Zítra je nový den, nová příležitost. Dnes stačilo být. 🌅',
-    ],
-    2: [
-      'I špatné dny končí. A zítřek začíná znovu. 🌙',
-      'Nejsi sám/sama. Každý má někdy den, kdy to nejde. 🫂',
-      'Tohle je jen kapitola, ne celá kniha. 📖',
-    ],
-    1: [
-      'Někdy je vítězství jen to, že jsi ten den přežil/a. A to stačí. 💪',
-      'Dno je pevný základ, ze kterého se dá odrazit. 🚀',
-      'I po nejhorší bouřce vyjde slunce. Vydrž. 🌈',
-    ],
-  },
-
   // ── Activity groups (category name translations) ──
   categoryGroups: {
     sociální: 'Společenské',
@@ -607,6 +577,10 @@ export const cs = {
     activity: 'Aktivita',
     times_per_week: 'krát týdně',
     times_per_month: 'krát měsíčně',
+    name_placeholder: 'Např. Krátké cvičení',
+    error_activity: 'Vyber aktivitu',
+    error_name: 'Zadej název cíle',
+    save_error: 'Cíl se nepodařilo uložit',
   },
 
   // ── Scales ──

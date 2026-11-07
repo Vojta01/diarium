@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getScaleEntries, getScaleAverage, seedDefaultScales, type Scale, type ScaleEntry } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
+import { pragueDateKey, shiftDateKey } from "@/lib/date";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 interface ScalesWidgetProps {
   userId: string;
@@ -11,37 +13,14 @@ interface ScalesWidgetProps {
 
 const DAYS = 7;
 
-function dateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function lastNDays(n: number): Date[] {
-  const days: Date[] = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    days.push(d);
-  }
-  return days;
-}
-
 export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const [scales, setScales] = useState<Scale[]>([]);
   const [entries, setEntries] = useState<Record<string, ScaleEntry[]>>({});
   const [averages, setAverages] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadScales();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadScales() {
+  const loadScales = useCallback(async () => {
     try {
       const data = await seedDefaultScales();
       setScales(data);
@@ -62,7 +41,14 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
       console.error("Failed to load scales:", e);
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch resolves after the effect body
+    loadScales();
+  }, [loadScales]);
+
+  useDataRefresh(["entries", "scales"], loadScales);
 
   if (loading) {
     return (
@@ -81,7 +67,8 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
     );
   }
 
-  const days = lastNDays(DAYS);
+  const todayKey = pragueDateKey();
+  const days = Array.from({ length: DAYS }, (_, i) => shiftDateKey(todayKey, i - (DAYS - 1)));
 
   return (
     <div className="glass-card p-4">
@@ -138,13 +125,16 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
               {/* Last 7 days bar chart */}
               <div className="flex items-end gap-1.5">
                 {days.map((day) => {
-                  const key = dateKey(day);
+                  const key = day;
                   const value = byDate[key];
                   const hasValue = typeof value === "number" && value > 0;
                   const normalized = hasValue ? (value - minVal) / range : 0;
                   const height = hasValue ? Math.max(12, normalized * 100) : 8;
-                  const isToday = key === dateKey(new Date());
-                  const dayLabel = day.toLocaleDateString("cs-CZ", { weekday: "short" });
+                  const isToday = key === todayKey;
+                  const dayLabel = new Date(`${key}T12:00:00Z`).toLocaleDateString(
+                    lang === "cs" ? "cs-CZ" : "en-US",
+                    { weekday: "short", timeZone: "UTC" }
+                  );
 
                   return (
                     <div

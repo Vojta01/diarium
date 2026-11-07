@@ -14,6 +14,8 @@ import { TemplatePicker } from "@/components/TemplatePicker";
 import { GoalEditorDialog } from "@/components/GoalEditorDialog";
 import { HabitEditDialog } from "@/components/HabitEditDialog";
 import { Modal } from "@/components/ui/Modal";
+import { pragueDateKey, shiftDateKey } from "@/lib/date";
+import { notifyDataChanged } from "@/lib/data-refresh";
 import { seedDefaultScales, type Scale } from "@/lib/scales";
 import { checkAndUnlockAchievements } from "@/lib/achievements";
 
@@ -175,7 +177,7 @@ const EMPTY_HABITS: Record<string, boolean> = {};
 
 // ── Hardcoded defaults used only as fallback ── (replaced by DB-loaded habits)
 const FALLBACK_HABIT_DEFS: HabitDef[] = [
-  { key: "alkohol", label: "Alkohol", icon: "🍺", category: "zdraví", color: "#ef4444", is_negative: true, source: "default" },
+  { key: "alkohol", label: "Alkohol", labelEn: "Alcohol", icon: "🍺", category: "zdraví", color: "#ef4444", is_negative: true, source: "default" },
 ];
 
 const EMPTY_DATA: CheckInData = {
@@ -204,13 +206,12 @@ function saveGoals(goals: Goal[]) { localStorage.setItem("diarium_goals", JSON.s
 function computeStreak(dates: string[]): number {
   if (dates.length === 0) return 0;
   const sorted = [...dates].sort().reverse();
-  const today = new Date().toISOString().split("T")[0];
+  const today = pragueDateKey();
   let expected = today, streak = 0;
   for (const d of sorted) {
     if (d === expected) {
       streak++;
-      const prev = new Date(expected); prev.setDate(prev.getDate() - 1);
-      expected = prev.toISOString().split("T")[0];
+      expected = shiftDateKey(expected, -1);
     } else if (d < expected) break;
   }
   return streak;
@@ -245,10 +246,12 @@ function CompletedCard({
   const { t, lang } = useTranslation();
   const displayLabel = (item: { label: string; labelEn?: string }) =>
     lang === 'en' ? (item.labelEn || item.label) : item.label;
+  const displayGoalName = (goal: Goal) =>
+    lang === 'en' && goal.name === 'Krátké cvičení' ? t('goals.default_name') : goal.name;
   const mood = MOODS.find(m => m.value === data.mood);
   const sleep = SLEEP_QUALITY.find(s => s.value === data.sleepQuality);
   const stressLevel = data.stress > 0 ? STRESS_LEVELS[data.stress - 1] : null;
-  const isToday = dateStr === new Date().toISOString().split("T")[0];
+  const isToday = dateStr === pragueDateKey();
   const goalsDone = goals.filter(g => g.completedDates.includes(dateStr));
   const hasGratitude = data.gratitude.some(g => g.trim());
   const hasNote = data.note.trim().length > 0;
@@ -368,7 +371,7 @@ function CompletedCard({
                   <span className={`text-sm ${done ? "text-indigo-400" : "text-white/15"}`}>
                     {done ? "✓" : "○"}
                   </span>
-                  <span className="text-white/70">{g.emoji} {g.name}</span>
+                  <span className="text-white/70">{g.emoji} {displayGoalName(g)}</span>
                   {streak > 0 && <span className="text-[10px] text-indigo-400 ml-auto">🔥{streak}</span>}
                 </div>
               );
@@ -439,6 +442,7 @@ function CompletedCard({
 
 // ── PHOTO VIEWER ──
 function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const { t } = useTranslation();
   const [zoomed, setZoomed] = useState(false);
 
   return (
@@ -481,7 +485,7 @@ function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; onClose:
         {!zoomed && (
           <div className="absolute bottom-8 left-0 right-0 text-center" onClick={e => e.stopPropagation()}>
             <span className="inline-block text-white/30 text-xs bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-              Klepnutím přiblížíš
+              {t("photo.zoom_hint")}
             </span>
           </div>
         )}
@@ -500,6 +504,8 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   const addActivityTitleId = useId();
   const displayLabel = (item: { label: string; labelEn?: string }) =>
     lang === 'en' ? (item.labelEn || item.label) : item.label;
+  const displayGoalName = (goal: Goal) =>
+    lang === 'en' && goal.name === 'Krátké cvičení' ? t('goals.default_name') : goal.name;
   const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
   const [goals, setGoals] = useState<Goal[]>([]);
   const [saving, setSaving] = useState(false);
@@ -509,7 +515,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [currentDate, setCurrentDate] = useState(
-    initialDate || new Date().toISOString().split("T")[0]
+    initialDate || pragueDateKey()
   );
   const [habitDefs, setHabitDefs] = useState<HabitDef[]>(FALLBACK_HABIT_DEFS);
   const [activityDefs, setActivityDefs] = useState<ActivityDef[]>([]);
@@ -537,7 +543,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   useEffect(() => { dataRef.current = data; }, [data]);
   useEffect(() => { dateRef.current = currentDate; }, [currentDate]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = pragueDateKey();
 
   // Load habits and activities from DB and user email
   useEffect(() => {
@@ -634,6 +640,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         completedDates: isDone ? g.completedDates.filter(dd => dd !== d) : [...g.completedDates, d],
       };
     }));
+    notifyDataChanged("goals");
   };
 
   // Goals — created/edited through the visual editor (window.prompt() made
@@ -647,11 +654,13 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         ? prev.map(g => (g.id === id ? { ...g, name, emoji } : g))
         : [...prev, { id: Date.now().toString(), emoji, name, completedDates: [] }]
     );
+    notifyDataChanged("goals");
   };
 
   const removeGoal = (goal: Goal) => {
     if (!confirm(t("goals.confirm_delete", { name: goal.name }))) return;
     setGoals(prev => prev.filter(g => g.id !== goal.id));
+    notifyDataChanged("goals");
   };
 
   // Add custom activity (persisted to DB)
@@ -779,6 +788,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         prev.map(h => (h.key === existing.key ? { ...h, label: name, icon, is_negative: isNegative } : h))
       );
       persistHabit("update", existing.key, name, icon, isNegative);
+      notifyDataChanged("habits");
       return;
     }
 
@@ -787,6 +797,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     setHabitDefs(prev => [...prev, newHabit]);
     setData(d => ({ ...d, habits: { ...d.habits, [key]: false } }));
     persistHabit("add", key, name, icon, isNegative);
+    notifyDataChanged("habits");
   };
 
   // Remove habit (local + DB)
@@ -807,6 +818,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         body: JSON.stringify({ action: "remove", userId, key: habitKey }),
       }).catch(() => {});
     }
+    notifyDataChanged("habits");
   };
 
   const doSave = useCallback((currentData: CheckInData, final: boolean) => {
@@ -941,6 +953,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
       setEditing(false);
       // Clear the draft since it's now persisted to DB
       localStorage.removeItem(`diarium_draft_${currentDate}`);
+      // Let the shell and the other mounted tabs know this day changed.
+      notifyDataChanged("entries");
+      onSaveDone();
       // Fetch AI reflection in background
       fetchAIReflection(data);
       // Check achievements in background
@@ -963,9 +978,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   };
 
   const navigateDate = (offset: number) => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + offset);
-    setCurrentDate(d.toISOString().split("T")[0]);
+    setCurrentDate(shiftDateKey(currentDate, offset));
   };
 
   if (loading) {
@@ -1327,7 +1340,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
                     </span>
                     <span className="text-lg">{g.emoji}</span>
                     <div className="text-left">
-                      <span className="text-sm text-white/80 block">{g.name}</span>
+                      <span className="text-sm text-white/80 block">{displayGoalName(g)}</span>
                       {streak > 0 && <span className="text-[10px] text-indigo-400">{t("goals.streak", { streak })}</span>}
                     </div>
                   </button>

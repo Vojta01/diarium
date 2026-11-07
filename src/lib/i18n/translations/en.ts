@@ -96,7 +96,7 @@ export const en = {
     data: 'Data',
     export: 'Export data',
     notifications: 'Notifications',
-    notifications_hint: 'Reminders run in the Android app.',
+    notifications_hint: 'In the browser, reminders use push notifications; the Android app schedules them natively.',
     about_app: 'About Diarium',
   },
 
@@ -259,6 +259,7 @@ export const en = {
     edit_btn: 'Edit goal (name, icon)',
     error_name: 'Enter a goal name',
     confirm_delete: 'Delete goal “{name}”? Its completed-day history will be lost.',
+    default_name: 'Short workout',
   },
 
   // ── Scales ──
@@ -296,6 +297,7 @@ export const en = {
   // ── Photo ──
   photo: {
     label: 'Photo',
+    zoom_hint: 'Tap to zoom in',
   },
 
   // ── Add Activity Modal ──
@@ -436,7 +438,6 @@ export const en = {
     legend: 'Legend:',
     apps: 'Apps:',
     other: 'Other',
-    weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     day_detail: '📅 Day detail',
     close: '✕',
     no_apps: 'No app data for this day',
@@ -456,8 +457,6 @@ export const en = {
   calendar: {
     edit_entry: '✏️ Edit this entry',
     gratitude: 'Gratitude',
-    day_names: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    month_names: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
   },
 
   // ── YearInPixels ──
@@ -541,35 +540,6 @@ export const en = {
     direction_no_relation: '➡️ no relationship',
   },
 
-  // ── Mood quotes ──
-  quotes: {
-    5: [
-      'Days like this are why it all matters. ✨',
-      'When the soul is at peace, the whole world smiles with you. 🌟',
-      'Remember this — today you won. 🏆',
-    ],
-    4: [
-      'A good day is like a good cup of coffee — warms and uplifts. ☕',
-      'Not every day is perfect, but today came pretty close. 🙂',
-      'Gratitude turns ordinary days into extraordinary ones. 💫',
-    ],
-    3: [
-      'Even neutral days have their value — they are days of rest. 🌤️',
-      'It\'s neither a peak nor a valley. Just a plain. And that\'s okay. 🛤️',
-      'Tomorrow is a new day, a new chance. Today, it was enough to just be. 🌅',
-    ],
-    2: [
-      'Even bad days end. And tomorrow starts anew. 🌙',
-      'You\'re not alone. Everyone has a rough day sometimes. 🫂',
-      'This is just a chapter, not the whole book. 📖',
-    ],
-    1: [
-      'Sometimes winning is just making it through the day. And that\'s enough. 💪',
-      'Rock bottom is a solid foundation to build on. 🚀',
-      'Even after the worst storm, the sun comes out. Hang in there. 🌈',
-    ],
-  },
-
   // ── Activity groups (category name translations) ──
   categoryGroups: {
     sociální: 'Social',
@@ -611,6 +581,82 @@ export const en = {
     best_day_with: 'Best day with activity',
     worst_day_with: 'Worst day with activity',
     no_activities: 'No activities in the last 30 days yet',
+  },
+
+  // ── Emoji picker ──
+  emojiPicker: {
+    label: 'Icon',
+    custom_placeholder: 'Custom emoji (type or paste)',
+    use: 'Use',
+    groups: {
+      sport: 'Sport',
+      zdravi: 'Health',
+      jidlo: 'Food & drink',
+      prace: 'Work & learning',
+      relax: 'Relax & people',
+      ostatni: 'Other',
+    },
+  },
+
+  // ── Goals (Daylio-style) ──
+  daylio_goals: {
+    title: 'Goals',
+    add_goal: 'Add goal',
+    edit_goal: 'Edit goal',
+    delete_goal: 'Delete goal',
+    goal_name: 'Goal name',
+    target_count: 'Target count',
+    frequency: 'Frequency',
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+    current_progress: 'Current progress',
+    streak: 'Streak',
+    target_met: 'Goal met!',
+    no_goals: 'No goals yet',
+    create_first: 'Create your first goal',
+    activity: 'Activity',
+    times_per_week: 'times per week',
+    times_per_month: 'times per month',
+    name_placeholder: 'E.g. Short workout',
+    error_activity: 'Choose an activity',
+    error_name: 'Enter a goal name',
+    save_error: 'Could not save the goal',
+  },
+
+  // ── Templates ──
+  templates: {
+    title: 'Templates',
+    use_template: 'Use template',
+    save_as_template: 'Save as template',
+    template_name: 'Template name',
+    template_content: 'Template content',
+    no_templates: 'No templates yet',
+    create_first: 'Create your first template',
+    insert: 'Insert',
+  },
+
+  // ── Achievements ──
+  achievements: {
+    title: 'Achievements',
+    unlocked: 'Unlocked',
+    locked: 'Locked',
+    progress: 'Progress',
+    no_achievements: 'No achievements yet',
+  },
+
+  // ── Export ──
+  export: {
+    title: 'Export data',
+    date_range: 'Date range',
+    from: 'From',
+    to: 'To',
+    format: 'Format',
+    csv: 'CSV',
+    pdf: 'PDF',
+    export_button: 'Export',
+    exporting: 'Exporting...',
+    include_photos: 'Include photos',
   },
 };
 

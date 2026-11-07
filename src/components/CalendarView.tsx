@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
 import { useTranslation } from "@/lib/i18n";
+import { monthNames, weekdayNames } from "@/lib/calendar-labels";
+import { pragueDateKey } from "@/lib/date";
 
 interface CalendarViewProps {
   entries: DailyEntry[];
@@ -10,10 +12,10 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
-  const { t } = useTranslation();
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const { lang } = useTranslation();
+  const todayKey = pragueDateKey();
+  const [viewYear, setViewYear] = useState(Number(todayKey.slice(0, 4)));
+  const [viewMonth, setViewMonth] = useState(Number(todayKey.slice(5, 7)) - 1);
 
   const moodMap = useMemo(() => {
     const map: Record<string, DailyEntry> = {};
@@ -63,12 +65,8 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
     }
   };
 
-  const dayNames: string[] = Array.isArray(t("calendar.day_names"))
-    ? (t("calendar.day_names") as unknown as string[])
-    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const monthNames: string[] = Array.isArray(t("calendar.month_names"))
-    ? (t("calendar.month_names") as unknown as string[])
-    : ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dayNames = weekdayNames(lang);
+  const months = monthNames(lang, viewYear);
 
   return (
     <div className="glass-card">
@@ -78,7 +76,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
           ←
         </button>
         <h2 className="text-lg font-semibold">
-          {monthNames[viewMonth]} {viewYear}
+          {months[viewMonth]} {viewYear}
         </h2>
         <button onClick={nextMonth} className="btn-glass text-sm px-3">
           →
@@ -101,7 +99,7 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
 
           const entry = moodMap[dateStr];
           const day = parseInt(dateStr.split("-")[2]);
-          const isToday = dateStr === new Date().toISOString().split("T")[0];
+          const isToday = dateStr === todayKey;
 
           return (
             <button

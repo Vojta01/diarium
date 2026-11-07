@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getGoals, getGoalProgress, type Goal, type GoalProgress } from "@/lib/goals";
 import { useTranslation } from "@/lib/i18n";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 interface GoalsWidgetProps {
   onAddGoal?: () => void;
@@ -15,15 +16,11 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadGoals();
-  }, []);
-
-  async function loadGoals() {
+  const loadGoals = useCallback(async () => {
     try {
       const data = await getGoals();
       setGoals(data);
-      
+
       // Load progress for each goal
       const progress: Record<string, GoalProgress> = {};
       for (const goal of data) {
@@ -36,7 +33,14 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
       console.error("Failed to load goals:", e);
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch resolves after the effect body
+    loadGoals();
+  }, [loadGoals]);
+
+  useDataRefresh(["goals", "entries"], loadGoals);
 
   if (loading) {
     return (
@@ -117,7 +121,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
                 
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/60">
-                    {current}/{target} {goal.frequency === 'daily' ? 'denně' : goal.frequency === 'weekly' ? 'týdně' : 'měsíčně'}
+                    {current}/{target} {goal.frequency === 'daily' ? t("daylio_goals.daily") : goal.frequency === 'weekly' ? t("daylio_goals.weekly") : t("daylio_goals.monthly")}
                   </span>
                   {streak > 0 && (
                     <span className="text-orange-400 flex items-center gap-1">
@@ -137,7 +141,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
                     </div>
                     <div>
                       <span className="text-white/40">{t("daylio_goals.streak")}:</span>
-                      <span className="ml-1 text-white">{streak} dní</span>
+                      <span className="ml-1 text-white">{t("advanced_stats.days", { count: streak })}</span>
                     </div>
                     <div className="col-span-2">
                       <span className="text-white/40">{t("daylio_goals.frequency")}:</span>

@@ -64,6 +64,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const detected = detectBrowserLang();
     setLangState(detected);
+    // Keep the document language in sync with the detected language, not just
+    // after a manual switch, so screen readers and hyphenation use the right one.
+    document.documentElement.lang = detected;
     setReady(true);
   }, []);
 
@@ -81,11 +84,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       const map = translations[lang];
       const resolved = resolvePath(map, path);
       if (resolved === undefined) {
-        // Fallback to English, then Czech, then the raw path
-        const enResolved = resolvePath(translations.en, path);
-        if (enResolved !== undefined) return interpolate(enResolved, params);
-        const csResolved = resolvePath(translations.cs, path);
-        if (csResolved !== undefined) return interpolate(csResolved, params);
+        // Czech may fall back to English while a translation is being added.
+        // English must never fall back to Czech: that would silently ship a
+        // Czech string in the English UI.
+        if (lang !== "en") {
+          const enResolved = resolvePath(translations.en, path);
+          if (enResolved !== undefined) return interpolate(enResolved, params);
+        }
         console.warn(`[i18n] Missing translation key: ${path}`);
         return path;
       }
