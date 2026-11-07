@@ -38,6 +38,31 @@ test("AppShell remembers the opener and restores focus after Back/popstate", () 
   assert.match(appShell, /aria-controls|shellPanelId/);
 });
 
+test("check-in save completion keeps the mounted day and never navigates", () => {
+  const appShell = source("../src/components/shell/AppShell.tsx");
+  const start = appShell.indexOf("const handleCheckinSaved");
+  const end = appShell.indexOf("const handleOpenSub");
+  const handler = appShell.slice(start, end);
+
+  assert.ok(start > 0 && end > start, "save handler must exist");
+  // The screen key changes only for a new check-in session, never on save.
+  assert.match(appShell, /key=\{`checkin-\$\{checkin\.nonce\}`\}/);
+  assert.match(appShell, /initialDate=\{checkin\.date\}/);
+  // A late save reads the live nav and must not call setNav at all.
+  assert.doesNotMatch(handler, /setNav\(/);
+  assert.match(handler, /navRef\.current/);
+  assert.match(handler, /navAfterCheckinSave/);
+  assert.match(handler, /writeHistory\(current, "replace", urlState\)/);
+});
+
+test("Modal locks body scroll and contains stray focus", () => {
+  const modal = source("../src/components/ui/Modal.tsx");
+
+  assert.match(modal, /lockBodyScroll\(document\.body\)/);
+  assert.match(modal, /document\.addEventListener\("focusin", onFocusIn\)/);
+  assert.match(modal, /document\.removeEventListener\("focusin", onFocusIn\)/);
+});
+
 test("ScreenHeader and SubScreenChrome stick above long content", () => {
   for (const path of [
     "../src/components/ui/ScreenHeader.tsx",

@@ -158,6 +158,23 @@ export function openCheckin(nav: NavState, date: string | null): NavState {
   return { tab: "today", sub: null, checkinDate: isValidIsoDate(date) ? date : null };
 }
 
+/**
+ * Address-bar state after a check-in save completes.
+ *
+ * The rendered state deliberately keeps `checkinDate`: the mounted check-in
+ * screen must stay on the day that was just saved so its confirmation card
+ * remains visible. Only the one-shot `?edit=` deep link is dropped, so a reload
+ * starts on today instead of reopening a stale edit.
+ *
+ * When the user has already navigated to another destination this returns the
+ * same object, so a late save completion can never pull them back.
+ */
+export function navAfterCheckinSave(nav: NavState): NavState {
+  return nav.tab === "today" && nav.checkinDate !== null
+    ? { ...nav, checkinDate: null }
+    : nav;
+}
+
 export function openSub(nav: NavState, sub: SubScreen): NavState {
   return { ...nav, sub };
 }

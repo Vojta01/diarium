@@ -37,6 +37,7 @@ import {
   isSubScreen,
   navScrollKey,
   navToSearch,
+  navAfterCheckinSave,
   normalizeNav,
   openCheckin,
   openSub,
@@ -70,10 +71,21 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
   const [nav, setNav] = useState<NavState>(() => normalizeNav(initialNav, IMPLEMENTED_SUBS));
   const [visited, setVisited] = useState<Set<MainTab>>(() => new Set([nav.tab]));
-  const [checkinNonce, setCheckinNonce] = useState(0);
+  // Identity of the mounted check-in screen. `date` is what the screen opened
+  // with; `nonce` changes only when a *new* check-in session starts. Saving must
+  // not change either one, or the confirmation card would be unmounted and the
+  // screen would silently jump back to today.
+  const [checkin, setCheckin] = useState<{ date: string | null; nonce: number }>(() => ({
+    date: nav.checkinDate,
+    nonce: 0,
+  }));
 
   const initialNavRef = useRef(nav);
   const subPushedRef = useRef(false);
+  // Refs mirror the committed navigation/session so async callbacks (a save
+  // that resolves after a tab switch) never act on a stale render closure.
+  const navRef = useRef(nav);
+  const checkinRef = useRef(checkin);
 
   // Focus return: remember the control that opened a sub-screen and restore it
   // after Back/browser popstate, but never steal focus after a tab switch.
@@ -100,6 +112,17 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     );
   }, []);
 
+  const commitNav = useCallback((next: NavState) => {
+    navRef.current = next;
+    setNav(next);
+  }, []);
+
+  const startCheckinSession = useCallback((date: string | null) => {
+    const next = { date, nonce: checkinRef.current.nonce + 1 };
+    checkinRef.current = next;
+    setCheckin(next);
+  }, []);
+
   const activeKey = navScrollKey(nav);
   const scrollPositions = useRef<Record<string, number>>({});
   const suppressScrollSave = useRef(false);
@@ -111,9 +134,9 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   );
 
   const writeHistory = useCallback(
-    (state: NavState, mode: "push" | "replace") => {
+    (state: NavState, mode: "push" | "replace", urlState: NavState = state) => {
       const method = mode === "push" ? "pushState" : "replaceState";
-      window.history[method]({ diariumNav: state }, "", urlFor(state));
+      window.history[method]({ diariumNav: state }, "", urlFor(urlState));
     },
     [urlFor]
   );
@@ -155,7 +178,13 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         }
         subPushedRef.current = false;
         markVisited(next.tab);
-        setNav(next);
+        // A history entry can pin Today to a past day (?edit=). Reopen that
+        // day; when the entry means plain Today, start a fresh session so the
+        // screen cannot keep showing a day from the previous entry.
+        if (next.tab === "today" && next.checkinDate !== checkinRef.current.date) {
+          startCheckinSession(next.checkinDate);
+        }
+        commitNav(next);
         return;
       }
 
@@ -168,13 +197,23 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         writeHistory(next, "replace");
       }
       if (nav.sub !== null && next.sub === null) scheduleFocusRestore();
+      if (next.tab === "today" && next.checkinDate !== checkinRef.current.date) {
+        startCheckinSession(next.checkinDate);
+      }
       markVisited(next.tab);
-      setNav(next);
+      commitNav(next);
     };
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [markVisited, nav, scheduleFocusRestore, writeHistory]);
+  }, [
+    commitNav,
+    markVisited,
+    nav,
+    scheduleFocusRestore,
+    startCheckinSession,
+    writeHistory,
+  ]);
 
   // Restore focus after the parent panel is visible again. Waiting one frame
   // avoids focusing an element that is still inside the hidden tab panel.
@@ -232,30 +271,52 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
       subPushedRef.current = false;
       forgetFocusOpener();
+      // Tapping Today always means today, even when the screen was opened on a
+      // past day through ?edit=. Only then does it need a new session; a plain
+      // Today screen stays mounted so a half-written check-in survives a tab
+      // round-trip.
+      if (tab === "today" && checkinRef.current.date !== null) {
+        startCheckinSession(null);
+      }
       markVisited(next.tab);
       writeHistory(next, "push");
-      setNav(next);
+      commitNav(next);
     },
-    [forgetFocusOpener, markVisited, nav, writeHistory]
+    [commitNav, forgetFocusOpener, markVisited, nav, startCheckinSession, writeHistory]
   );
 
   const handleNavigateToCheckIn = useCallback(
     (date: string) => {
       const next = openCheckin(nav, date);
-      setCheckinNonce((nonce) => nonce + 1);
+      startCheckinSession(next.checkinDate);
       forgetFocusOpener();
       markVisited(next.tab);
       writeHistory(next, "push");
-      setNav(next);
+      commitNav(next);
     },
-    [forgetFocusOpener, markVisited, nav, writeHistory]
+    [
+      commitNav,
+      forgetFocusOpener,
+      markVisited,
+      nav,
+      startCheckinSession,
+      writeHistory,
+    ]
   );
 
   const handleCheckinSaved = useCallback(() => {
-    const next = { ...nav, checkinDate: null };
-    writeHistory(next, "replace");
-    setNav(next);
-  }, [nav, writeHistory]);
+    // Read the live navigation state instead of the render closure captured
+    // when the save started: a tab switch during the request must win.
+    const current = navRef.current;
+    const urlState = navAfterCheckinSave(current);
+    if (urlState === current) return;
+
+    // Keep `checkinDate` in the rendered/history state so the mounted screen
+    // stays on the saved day and shows its confirmation; drop only the ?edit=
+    // deep link from the address bar. No setNav here — changing the nav state
+    // would remount the check-in screen as today.
+    writeHistory(current, "replace", urlState);
+  }, [writeHistory]);
 
   const handleOpenSub = useCallback(
     (sub: SubScreen) => {
@@ -264,9 +325,9 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
       subPushedRef.current = true;
       markVisited(next.tab);
       writeHistory(next, "push");
-      setNav(next);
+      commitNav(next);
     },
-    [markVisited, nav, rememberFocusOpener, writeHistory]
+    [commitNav, markVisited, nav, rememberFocusOpener, writeHistory]
   );
 
   const handleBack = useCallback(() => {
@@ -280,8 +341,8 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
     const next = closeSub(nav);
     writeHistory(next, "replace");
-    setNav(next);
-  }, [nav, scheduleFocusRestore, writeHistory]);
+    commitNav(next);
+  }, [commitNav, nav, scheduleFocusRestore, writeHistory]);
 
   const todayLabel = new Date().toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
     weekday: "long",
@@ -351,8 +412,8 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
           {panel(
             "today",
             <OnePageCheckIn
-              key={`checkin-${checkinNonce}-${nav.checkinDate ?? "today"}`}
-              initialDate={nav.checkinDate}
+              key={`checkin-${checkin.nonce}`}
+              initialDate={checkin.date}
               onSaveDone={handleCheckinSaved}
               onBack={() => handleSelectTab("overview")}
             />

@@ -24,12 +24,14 @@ function fakeStorage(initial: Record<string, string>) {
   };
 }
 
-test("logout removes auth tokens, drafts and local goals", () => {
+test("logout removes auth tokens, drafts, local goals and the Google token", () => {
   const storage = fakeStorage({
     "sb-abc-auth-token": "{}",
     "supabase.auth.token": "{}",
     "diarium_draft_2026-11-07": "{}",
     "diarium_goals": "[]",
+    "diarium_google_token": "ya29.secret",
+    "diarium_google_token_expires_at": "1760000000000",
     "diarium-lang": "cs",
     unrelated: "keep",
   });

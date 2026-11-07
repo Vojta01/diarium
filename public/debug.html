@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>Diarium — Diagnostika</title>
 <style>
 body{background:#0f0f23;color:#a5b4fc;font-family:monospace;padding:2rem;font-size:0.9rem}
@@ -18,16 +19,16 @@ pre{background:rgba(99,102,241,0.1);padding:1rem;border-radius:8px;overflow-x:au
 <h1>🩺 Diarium Auth Diagnostika</h1>
 <p>Poslední aktualizace: <span id="ts"></span></p>
 
-<h2>📍 Aktuální URL</h2>
+<h2>📍 Aktuální stránka</h2>
 <pre id="url"></pre>
 
-<h2>🔍 Query parametry</h2>
+<h2>🔍 Query parametry (jen názvy)</h2>
 <pre id="query"></pre>
 
 <h2>🔑 Hash fragment</h2>
 <pre id="hash"></pre>
 
-<h2>📦 localStorage</h2>
+<h2>📦 localStorage (jen názvy klíčů)</h2>
 <div class="grid">
   <div>
     <h3>Supabase token key</h3>
@@ -39,7 +40,7 @@ pre{background:rgba(99,102,241,0.1);padding:1rem;border-radius:8px;overflow-x:au
   </div>
 </div>
 
-<h2>🍪 Cookies</h2>
+<h2>🍪 Cookies (jen názvy)</h2>
 <pre id="cookies"></pre>
 
 <h2>🔌 Service Workers</h2>
@@ -60,30 +61,56 @@ pre{background:rgba(99,102,241,0.1);padding:1rem;border-radius:8px;overflow-x:au
 <p id="reset-msg"></p>
 
 <script>
+// This page is a diagnostic aid, never a credential viewer: it lists key and
+// cookie *names* only and never prints token values, query values or hashes.
 const el = id => document.getElementById(id);
 el('ts').textContent = new Date().toLocaleString();
-el('url').textContent = window.location.href;
-el('query').textContent = window.location.search || '(prázdné — žádné query parametry)';
-el('hash').textContent = window.location.hash || '(prázdné — žádný hash fragment)';
+el('url').textContent = window.location.origin + window.location.pathname;
 
-// localStorage
-try {
+const queryNames = [];
+new URLSearchParams(window.location.search).forEach((_value, name) => queryNames.push(name));
+el('query').textContent = queryNames.length
+  ? queryNames.map(name => name + '=…').join('\n')
+  : '(prázdné — žádné query parametry)';
+
+el('hash').textContent = window.location.hash
+  ? '(hash přítomen — obsah je záměrně skrytý)'
+  : '(prázdné — žádný hash fragment)';
+
+function storageKeys() {
   const keys = [];
-  for (let i=0; i<localStorage.length; i++) keys.push(localStorage.key(i));
-  el('ls-keys').textContent = keys.join('\n') || '(prázdné)';
-  const tokenKeys = keys.filter(k => k.includes('auth') || k.includes('token') || k.startsWith('sb-'));
-  if (tokenKeys.length) {
-    el('ls-token').textContent = 'Nalezeny: ' + tokenKeys.join(', ') + '\n\nDélka: ';
-    tokenKeys.forEach(k => el('ls-token').textContent += k + '=' + localStorage.getItem(k).length + ' znaků\n');
-  } else {
-    el('ls-token').textContent = 'Žádné auth tokeny nenalezeny';
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) keys.push(key);
+    }
+  } catch (e) {}
+  return keys;
+}
+
+function projectRefFromStorage(keys) {
+  for (const key of keys) {
+    const match = key.match(/^sb-([a-z0-9-]+)-auth-token$/i);
+    if (match) return match[1];
   }
-} catch(e) { el('ls-keys').textContent = 'Chyba: ' + e; }
+  return null;
+}
 
-// cookies
-el('cookies').textContent = document.cookie || '(prázdné — žádné cookies)';
+const keys = storageKeys();
+el('ls-keys').textContent = keys.length ? keys.join('\n') : '(prázdné)';
+const tokenKeys = keys.filter(k => k.includes('auth') || k.includes('token') || k.startsWith('sb-'));
+el('ls-token').textContent = tokenKeys.length
+  ? 'Nalezeny klíče: ' + tokenKeys.join(', ') + '\n(hodnoty se nikdy nezobrazují)'
+  : 'Žádné auth tokeny nenalezeny';
 
-// service workers
+const cookieNames = document.cookie
+  .split(';')
+  .map(c => c.split('=')[0].trim())
+  .filter(Boolean);
+el('cookies').textContent = cookieNames.length
+  ? cookieNames.join('\n')
+  : '(prázdné — žádné cookies)';
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => {
     if (regs.length) {
@@ -102,15 +129,26 @@ if ('serviceWorker' in navigator) {
 
 el('online').textContent = navigator.onLine ? '✅ Ano' : '❌ Ne';
 el('online').className = navigator.onLine ? 'success' : 'fail';
-el('ref').textContent = document.referrer || '(žádný)';
+try {
+  el('ref').textContent = document.referrer ? new URL(document.referrer).origin : '(žádný)';
+} catch (e) {
+  el('ref').textContent = '(skryto)';
+}
 
 async function testSupabase() {
   const out = el('supabase-test');
-  out.textContent = 'Testuji...';
+  // The project ref is never hardcoded: derive it from the Supabase session
+  // key that the app itself created, so previews and custom domains work.
+  const ref = projectRefFromStorage(storageKeys());
+  if (!ref) {
+    out.textContent = 'Nelze určit Supabase projekt — chybí přihlašovací relace.';
+    return;
+  }
+  out.textContent = 'Testuji…';
   try {
-    const resp = await fetch('https://vmqbslghzgfotwhzgawa.supabase.co');
+    const resp = await fetch('https://' + ref + '.supabase.co/auth/v1/health');
     out.textContent = 'Supabase API: ' + resp.status + ' ' + resp.statusText;
-  } catch(e) {
+  } catch (e) {
     out.textContent = 'Chyba spojení: ' + e.message;
   }
 }

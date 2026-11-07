@@ -36,6 +36,29 @@ export function shiftDateKey(key: string, days: number): string {
 }
 
 /**
+ * Shift a `YYYY-MM-DD` key by whole calendar months.
+ *
+ * Anchored at noon UTC for the same reason as `shiftDateKey`: a DST transition
+ * must never move the result to the previous or next day. The day-of-month is
+ * clamped to the target month's last day, so 31 March minus one month is
+ * 28 February rather than overflowing into March.
+ */
+export function shiftMonthKey(key: string, months: number): string {
+  const anchor = new Date(`${key}T12:00:00Z`);
+  const day = anchor.getUTCDate();
+
+  anchor.setUTCDate(1);
+  anchor.setUTCMonth(anchor.getUTCMonth() + months);
+
+  const lastDay = new Date(
+    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, 0, 12)
+  ).getUTCDate();
+  anchor.setUTCDate(Math.min(day, lastDay));
+
+  return anchor.toISOString().slice(0, 10);
+}
+
+/**
  * Returns the Europe/Prague calendar year.
  *
  * Year selectors must use this instead of `new Date().getFullYear()`: around

@@ -10,6 +10,7 @@ import {
   isValidIsoDate,
   navScrollKey,
   navToSearch,
+  navAfterCheckinSave,
   normalizeNav,
   openCheckin,
   openSub,
@@ -139,6 +140,52 @@ test("search round-trips through parseNavFromSearch", () => {
   for (const state of states) {
     assert.deepEqual(parseNavFromSearch(navToSearch(state)), state);
   }
+});
+
+test("a completed save drops ?edit= but keeps the saved day on screen", () => {
+  const editing = {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-06",
+  } as const;
+
+  const urlState = navAfterCheckinSave(editing);
+
+  // Address bar: no stale edit deep link.
+  assert.equal(navToSearch(urlState), "?view=today");
+  // Rendered state keeps the date, so the mounted screen (and its confirmation
+  // card) stays on the saved day instead of remounting as today.
+  assert.equal(editing.checkinDate, "2026-11-06");
+  assert.deepEqual(urlState, { tab: "today", sub: null, checkinDate: null });
+});
+
+test("a save that finishes after a tab switch never pulls the user back", () => {
+  const onHistory = { tab: "history", sub: null, checkinDate: null } as const;
+  assert.equal(navAfterCheckinSave(onHistory), onHistory);
+
+  const onSettingsSub = {
+    tab: "settings",
+    sub: "about",
+    checkinDate: null,
+  } as const;
+  assert.equal(navAfterCheckinSave(onSettingsSub), onSettingsSub);
+
+  // Saving today has no ?edit= to drop and must not rewrite history either.
+  assert.equal(navAfterCheckinSave(DEFAULT_NAV), DEFAULT_NAV);
+  const today = { tab: "today", sub: null, checkinDate: null } as const;
+  assert.equal(navAfterCheckinSave(today), today);
+});
+
+test("tapping Today after saving a past day starts a fresh today session", () => {
+  const savedPast = { tab: "today", sub: null, checkinDate: "2026-11-06" } as const;
+
+  // The rendered state keeps the date after save; only the bottom-nav tap
+  // resets it to a plain Today destination.
+  assert.deepEqual(selectTab(savedPast, "today"), {
+    tab: "today",
+    sub: null,
+    checkinDate: null,
+  });
 });
 
 test("selectTab closes an open sub-screen and resets stale edit dates", () => {

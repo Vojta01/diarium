@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PRAGUE_TIME_ZONE, pragueDateKey, pragueYear, shiftDateKey } from "../src/lib/date.ts";
+import { PRAGUE_TIME_ZONE, pragueDateKey, pragueYear, shiftDateKey, shiftMonthKey } from "../src/lib/date.ts";
 
 test("uses the canonical Europe/Prague time zone", () => {
   assert.equal(PRAGUE_TIME_ZONE, "Europe/Prague");
@@ -44,4 +44,17 @@ test("shifts date keys across DST without landing on the wrong day", () => {
   assert.equal(shiftDateKey("2026-10-25", 1), "2026-10-26");
   assert.equal(shiftDateKey("2026-01-01", -1), "2025-12-31");
   assert.equal(shiftDateKey("2026-12-31", 1), "2027-01-01");
+});
+
+test("shifts month keys without a DST or midnight off-by-one", () => {
+  assert.equal(shiftMonthKey("2026-11-07", -1), "2026-10-07");
+  assert.equal(shiftMonthKey("2026-01-01", -1), "2025-12-01");
+  assert.equal(shiftMonthKey("2026-03-15", -1), "2026-02-15");
+  assert.equal(shiftMonthKey("2026-10-25", -1), "2026-09-25");
+});
+
+test("clamps month-end keys to the target month's last day", () => {
+  assert.equal(shiftMonthKey("2026-03-31", -1), "2026-02-28");
+  assert.equal(shiftMonthKey("2028-03-31", -1), "2028-02-29");
+  assert.equal(shiftMonthKey("2026-01-31", -1), "2025-12-31");
 });

@@ -1,5 +1,6 @@
 import { createSupabaseClient } from "./supabase/client";
 import { readStoredSession } from "./auth-storage";
+import { goalPeriodRange } from "./goal-period";
 
 export interface Goal {
   id: string;
@@ -126,17 +127,9 @@ export async function getGoalProgress(goalId: string, period: 'week' | 'month'):
   
   if (goalError || !goal) throw new Error("Goal not found");
   
-  // Calculate period dates
-  const now = new Date();
-  const periodStart = new Date(now);
-  if (period === 'week') {
-    periodStart.setDate(periodStart.getDate() - 7);
-  } else {
-    periodStart.setMonth(periodStart.getMonth() - 1);
-  }
-  
-  const startStr = periodStart.toISOString().split('T')[0];
-  const endStr = now.toISOString().split('T')[0];
+  // Calculate period dates in Europe/Prague calendar days. UTC keys would drop
+  // today's entry during the first hours after Prague midnight.
+  const { start: startStr, end: endStr } = goalPeriodRange(period);
   
   // Count entries with this activity in the period
   const { data: entries, error: entriesError } = await sb
@@ -153,7 +146,7 @@ export async function getGoalProgress(goalId: string, period: 'week' | 'month'):
   let currentCount = 0;
   const datesWithActivity: string[] = [];
   
-  (entries || []).forEach((entry: any) => {
+  (entries || []).forEach((entry: { date: string; activities?: string[] }) => {
     if (entry.activities?.includes(goal.activity_key)) {
       currentCount++;
       datesWithActivity.push(entry.date);

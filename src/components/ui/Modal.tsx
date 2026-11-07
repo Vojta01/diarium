@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 
 import { FOCUSABLE_SELECTOR, resolveTabStop } from "@/lib/modal-a11y";
 import { SHELL_NAVIGATION_EVENT } from "@/lib/navigation";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 const subscribeToNothing = () => () => {};
 const getClientSnapshot = () => true;
@@ -88,6 +89,9 @@ export function Modal({
   const isClient = useIsClient();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  // Set while the dialog is unmounting so the focus-in guard does not fight
+  // the focus restoration to the opener.
+  const closingRef = useRef(false);
 
   // Capture the opener during the first render, before the dialog's children
   // (and their autoFocus inputs) are committed to the DOM.
@@ -131,10 +135,42 @@ export function Modal({
     return () => window.removeEventListener(SHELL_NAVIGATION_EVENT, onNavigate);
   }, []);
 
+  // Freeze background scrolling while the dialog is open. The lock is
+  // reference-counted so stacked dialogs keep the page frozen until the last
+  // one closes, and the previous inline overflow is restored exactly.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    return lockBodyScroll(document.body);
+  }, []);
+
+  // Focus containment: Tab is handled inside the panel, but programmatic focus
+  // or browser UI can still move focus behind the dialog. Pull it back to the
+  // first focusable control (or the panel itself).
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      if (closingRef.current) return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const target = event.target;
+      if (target instanceof Node && panel.contains(target)) return;
+      // A stacked dialog owns focus while it is open; never yank focus out of
+      // the top-most layer back into its parent dialog.
+      const owner =
+        target instanceof Element ? target.closest('[role="dialog"]') : null;
+      if (owner && !owner.closest("[hidden]")) return;
+      const fallback = focusableElements(panel)[0] ?? panel;
+      fallback.focus({ preventScroll: true });
+    };
+
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, []);
+
   // Restore focus to the control that opened the dialog, unless that control
   // disappeared or sits in a panel that is now hidden.
   useEffect(() => {
     return () => {
+      closingRef.current = true;
       if (isRestorable(opener)) opener.focus({ preventScroll: true });
     };
   }, [opener]);

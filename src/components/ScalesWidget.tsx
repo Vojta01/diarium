@@ -7,13 +7,12 @@ import { pragueDateKey, shiftDateKey } from "@/lib/date";
 import { useDataRefresh } from "@/lib/use-data-refresh";
 
 interface ScalesWidgetProps {
-  userId: string;
   todayScaleValues?: Record<string, number>;
 }
 
 const DAYS = 7;
 
-export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
+export function ScalesWidget({ todayScaleValues }: ScalesWidgetProps) {
   const { t, lang } = useTranslation();
   const [scales, setScales] = useState<Scale[]>([]);
   const [entries, setEntries] = useState<Record<string, ScaleEntry[]>>({});
@@ -89,8 +88,6 @@ export function ScalesWidget({ userId, todayScaleValues }: ScalesWidgetProps) {
           scaleEntries.forEach((e) => {
             byDate[e.date] = e.value;
           });
-
-          const maxCount = 1;
 
           return (
             <div key={scale.id} className="rounded-xl bg-white/5 p-3">

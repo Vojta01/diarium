@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { fetchDailyEntries, type DailyEntry, MOOD_EMOJIS } from "@/lib/stats";
-import { getEntry, getCurrentUser } from "@/lib/supabase/db";
+import { getEntry } from "@/lib/supabase/db";
 import type { Entry } from "@/lib/supabase/db";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags } from "@/lib/feature-flags";
@@ -31,7 +31,6 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
   const { t, lang } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [todayEntry, setTodayEntry] = useState<Entry | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showGoalDialog, setShowGoalDialog] = useState(false);
 
@@ -39,14 +38,12 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [data, entry, user] = await Promise.all([
+      const [data, entry] = await Promise.all([
         fetchDailyEntries(),
         getEntry(today),
-        getCurrentUser(),
       ]);
       setEntries(data);
       setTodayEntry(entry);
-      setUserEmail(user?.email ?? null);
     } catch (e) {
       console.error("Dashboard load error:", e);
     }
@@ -112,7 +109,6 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
   const activitiesCount = todayEntry?.activities?.length ?? 0;
   const aiReflection = todayEntry?.ai_reflection ?? null;
   const sleepQuality = todayEntry?.sleep_quality;
-  const totalEntries = entries.length;
 
   // ── Week stats (computed even before check-in) ──
   const weekEntriesWithMood = last7Days.filter(d => d.mood);
@@ -440,7 +436,7 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
 
       {/* ── Scales Widget ── */}
       <div className="mb-4">
-        <ScalesWidget userId={userEmail || ""} />
+        <ScalesWidget />
       </div>
 
       {/* ── Achievements ── */}
