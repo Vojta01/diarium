@@ -8,6 +8,7 @@ import {
   getEntryOrThrow,
   getHiddenActivities,
   getHabits,
+  patchEntry,
   saveEntry,
   type ActivityDef,
   type Entry,
@@ -25,12 +26,17 @@ import {
   emptyCheckIn,
   fromEntry,
   hasContent,
-  positiveScaleValues,
-  filteredGratitude,
 } from "@/lib/checkin/model";
 import { buildCheckInPayload } from "@/lib/checkin/payload";
 import { saveCheckIn } from "@/lib/checkin/save";
 import { loadCheckIn } from "@/lib/checkin/load";
+import {
+  buildReflectionRequest,
+  reflectionPatch,
+} from "@/lib/checkin/readonly";
+import { fetchGoalProgress } from "@/lib/goals-data";
+import type { GoalProgressData } from "@/lib/goal-progress";
+import type { Goal } from "@/lib/goals";
 import {
   clampCheckInDate,
   isLateNight,
@@ -41,6 +47,8 @@ import {
   aiEmptyError,
   aiFailedError,
   aiNetworkError,
+  aiPersistError,
+  isCheckInError,
   type CheckInError,
 } from "@/lib/checkin/errors";
 
@@ -54,14 +62,17 @@ import { PhotoViewer } from "./dialogs/PhotoViewer";
  * activity/habit/scale mutations. It renders no section internals — those live
  * in `sections/*` and are ordered by `CHECKIN_SECTION_ORDER`.
  *
- * Phase 2A renders mood → note. Goals, screen time and the AI reflection stay
- * reserved in the order constant for the following phases.
+ * Phase 2B renders the full Android beta5 order: mood → note, then the
+ * read-only goals, screen-time and AI-reflection sections.
  */
 export function CheckInScreen({
   onSaveDone,
+  onOpenGoals,
   initialDate,
 }: {
   onSaveDone: () => void;
+  /** Opens the Goals sub-screen; goals are managed there, never here. */
+  onOpenGoals: () => void;
   initialDate?: string | null;
 }) {
   const { t, lang } = useTranslation();
@@ -83,6 +94,8 @@ export function CheckInScreen({
   const [saveError, setSaveError] = useState<CheckInError | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  /** True from the first edit until the next successful load/save. */
+  const [dirty, setDirty] = useState(false);
   const [editing, setEditing] = useState(initialDate != null);
   const [storedEntry, setStoredEntry] = useState<Entry | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
@@ -101,12 +114,30 @@ export function CheckInScreen({
   const [scalesLoadedNonce, setScalesLoadedNonce] = useState(-1);
   const scalesLoading = scalesLoadedNonce !== scalesNonce;
 
+  // Goals are a report for the selected date's calendar period; the check-in
+  // never edits them. The key keeps "loading" derived so a failed read cannot
+  // flash an empty-goals CTA over a slow one.
+  const [goalRows, setGoalRows] = useState<GoalProgressData<Goal>[]>([]);
+  const [goalsError, setGoalsError] = useState<string | null>(null);
+  const [goalsNonce, setGoalsNonce] = useState(0);
+  const [goalsLoadedKey, setGoalsLoadedKey] = useState<string | null>(null);
+  const goalsKey = `${currentDate}#${goalsNonce}`;
+  const goalsLoading = goalsLoadedKey !== goalsKey;
+
+  // Reflection state is owned here, not by the section: generation must survive
+  // a section collapse and must be invalidated when the date changes.
+  const [reflectionLoading, setReflectionLoading] = useState(false);
+  const [reflectionError, setReflectionError] = useState<CheckInError | null>(null);
+  const [reflectionCached, setReflectionCached] = useState(false);
+
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoCleared, setPhotoCleared] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   const saveInFlight = useRef(false);
   const loadToken = useRef(0);
+  const reflectionToken = useRef(0);
+  const reflectionInFlight = useRef(false);
   const dateRef = useRef(currentDate);
   const lateNightChecked = useRef(false);
   const saveErrorRef = useRef<HTMLDivElement | null>(null);
@@ -124,6 +155,7 @@ export function CheckInScreen({
       draftWriter.markEdited();
       setData(updater);
       setSaved(false);
+      setDirty(true);
     },
     [draftWriter]
   );
@@ -138,6 +170,7 @@ export function CheckInScreen({
         photoLegacy: url ? false : current.photoLegacy,
       }));
       setSaved(false);
+      setDirty(true);
     },
     [draftWriter]
   );
@@ -189,6 +222,30 @@ export function CheckInScreen({
     };
   }, [scalesNonce]);
 
+  // ── Goals: read-only progress for the selected date's calendar period ──
+  useEffect(() => {
+    let cancelled = false;
+    const key = goalsKey;
+    (async () => {
+      try {
+        const rows = await fetchGoalProgress(currentDate);
+        if (cancelled) return;
+        setGoalRows(rows);
+        setGoalsError(null);
+      } catch {
+        // A failed read is not "no goals": keep the error and offer a retry.
+        if (cancelled) return;
+        setGoalRows([]);
+        setGoalsError("checkin.goals_error");
+      } finally {
+        if (!cancelled) setGoalsLoadedKey(key);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDate, goalsKey]);
+
   // ── Entry load ──
   useEffect(() => {
     const token = ++loadToken.current;
@@ -196,6 +253,8 @@ export function CheckInScreen({
 
     loadCheckIn(currentDate, getEntryOrThrow).then((outcome) => {
       if (token !== loadToken.current) return;
+      // A freshly loaded row (or an empty form) is never an unsaved edit.
+      setDirty(false);
 
       if (outcome.status === "failed") {
         // Never render an editable empty form over a stored day: a save would
@@ -295,9 +354,17 @@ export function CheckInScreen({
       setSaveError(null);
       setLoadError(null);
       setSaved(false);
+      setDirty(false);
       setPhotoUploading(false);
       setPhotoCleared(false);
       setDraftRestored(false);
+      // Invalidate an in-flight reflection: its response belongs to the old day
+      // and must never be rendered (or patched) under the new date.
+      reflectionToken.current += 1;
+      reflectionInFlight.current = false;
+      setReflectionLoading(false);
+      setReflectionError(null);
+      setReflectionCached(false);
       setCurrentDate(clamped);
     },
     [currentDate, today]
@@ -353,8 +420,13 @@ export function CheckInScreen({
       setData(savedData);
       setStoredEntry(result.entry as Entry);
       setSaved(true);
+      setDirty(false);
       setEditing(true);
       setPhotoCleared(false);
+      // The saved row may have changed a goal's count for this period.
+      setGoalsNonce((value) => value + 1);
+      setReflectionError(null);
+      setReflectionCached(false);
       // Clears the day's draft and blocks the pre-save flush closure from
       // writing it back when the `saved` state re-renders the effects.
       draftWriter.markSaved(saveDate);
@@ -371,71 +443,95 @@ export function CheckInScreen({
           if (unlocked.length > 0) console.log("🏆 Unlocked:", unlocked);
         })
         .catch(() => {});
-      // Keep the existing product behaviour: a saved day gets an AI reflection
-      // in the background. The section/dialog UI lands in a later phase.
-      void requestReflection(savedData, saveDate);
+      // A day with no reflection yet gets one in the background; the route
+      // caches, so an existing reflection is never regenerated here.
+      if (!savedData.aiReflection) void requestReflection(saveDate);
     } finally {
       setSaving(false);
     }
   };
 
-  async function requestReflection(
-    entryData: CheckInData,
-    requestDate: string
-  ) {
+  async function requestReflection(requestDate: string) {
+    if (reflectionInFlight.current) return;
+    if (requestDate !== dateRef.current) return;
+
+    reflectionInFlight.current = true;
+    const token = ++reflectionToken.current;
+    setReflectionLoading(true);
+    setReflectionError(null);
+    setReflectionCached(false);
+
     try {
       const session = readStoredSession();
+      // Identifiers only: the route reads the saved row and its history from
+      // Supabase. Form fields (mood, note, activities, ...) never leave here.
+      const requestBody = buildReflectionRequest({
+        userId: userId || session?.user?.id || "",
+        date: requestDate,
+        lang,
+        userName:
+          session?.user?.user_metadata?.full_name ||
+          session?.user?.email ||
+          "",
+      });
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getAccessToken()}`,
         },
-        body: JSON.stringify({
-          user_id: userId || session?.user?.id || "",
-          date: requestDate,
-          lang,
-          userName: session?.user?.user_metadata?.full_name || session?.user?.email || "",
-          mood: entryData.mood,
-          mood_emoji: entryData.moodEmoji,
-          sleep_quality: entryData.sleepQuality,
-          stress: entryData.stress,
-          activities: entryData.activities,
-          habits: entryData.habits,
-          gratitude: filteredGratitude(entryData.gratitude),
-          note: entryData.note,
-          weather: entryData.weather,
-          scale_values: positiveScaleValues(entryData.scaleValues),
-          ...(entryData.phoneScreenTime != null
-            ? { phone_screen_time: entryData.phoneScreenTime }
-            : {}),
-        }),
+        body: JSON.stringify(requestBody),
       });
-      if (!resp.ok) {
-        console.warn("Reflection not generated:", aiFailedError(resp.status).code);
-        return;
-      }
+      if (!resp.ok) throw aiFailedError(resp.status);
+
       const json = await resp.json().catch(() => null);
       const text =
         typeof json?.reflection === "string" ? json.reflection.trim() : "";
-      if (!text) {
-        console.warn("Reflection not generated:", aiEmptyError().code);
+      if (!text) throw aiEmptyError();
+      if (token !== reflectionToken.current) return;
+
+      if (json?.cached === true) {
+        // The endpoint returns the stored reflection instead of regenerating;
+        // show it and say so rather than pretending a new text was written.
+        setReflectionCached(true);
+        applyReflection(text, requestDate);
         return;
       }
-      if (requestDate !== dateRef.current) return;
-      setData((current) => ({ ...current, aiReflection: text }));
-      await fetch("/api/save-entry", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getAccessToken()}`,
-        },
-        body: JSON.stringify({ date: requestDate, ai_reflection: text }),
-      }).catch(() => {});
+
+      const patch = reflectionPatch(requestDate, text);
+      if (!patch) throw aiEmptyError();
+      // Partial write only: date + ai_reflection. A failed patch leaves the old
+      // text visible, so the section never shows a reflection that is not saved.
+      const updated = await patchEntry(patch);
+      if (token !== reflectionToken.current) return;
+      applyReflection(text, requestDate);
+      setStoredEntry(updated);
     } catch (error) {
-      console.warn("Reflection request failed:", aiNetworkError(error).code);
+      if (token !== reflectionToken.current) return;
+      const mapped = isCheckInError(error)
+        ? error.kind === "ai_failed" || error.kind === "signed_out"
+          ? error
+          : aiPersistError(error)
+        : aiNetworkError(error);
+      setReflectionError(mapped);
+    } finally {
+      if (token === reflectionToken.current) {
+        setReflectionLoading(false);
+        reflectionInFlight.current = false;
+      }
     }
   }
+
+  /** Show a server reflection without marking the form dirty. */
+  const applyReflection = useCallback((text: string, forDate: string) => {
+    if (forDate !== dateRef.current) return;
+    setData((current) => ({ ...current, aiReflection: text }));
+    setStoredEntry((current) =>
+      current && current.date === forDate
+        ? { ...current, ai_reflection: text }
+        : current
+    );
+  }, []);
 
   // ── Activity mutations ──
   const toggleActivity = (label: string) => {
@@ -658,6 +754,11 @@ export function CheckInScreen({
   // ── Render ──
   const stored =
     storedEntry && isRecordedMood(storedEntry.mood) ? storedEntry : null;
+  // A reflection can only be generated for a day that is already stored and
+  // has something to reflect on; an empty shell row is not a check-in. A stored
+  // reflection is enough on its own (it can be re-read/regenerated).
+  const reflectionCanGenerate =
+    Boolean(storedEntry) && (hasContent(data) || Boolean(data.aiReflection));
 
   return (
     <div className="space-y-4 pb-6">
@@ -736,6 +837,19 @@ export function CheckInScreen({
           photoUploading={photoUploading}
           saved={saved}
           loadFailed={Boolean(loadError)}
+          dirty={dirty}
+          goals={goalRows}
+          goalsLoading={goalsLoading}
+          goalsError={goalsError}
+          onRetryGoals={() => setGoalsNonce((value) => value + 1)}
+          onOpenGoals={onOpenGoals}
+          reflectionLoading={reflectionLoading}
+          reflectionError={reflectionError}
+          reflectionCached={reflectionCached}
+          reflectionCanGenerate={reflectionCanGenerate}
+          onGenerateReflection={() => {
+            if (reflectionCanGenerate && !dirty) void requestReflection(currentDate);
+          }}
           onSave={handleSave}
           onViewPhoto={setViewingPhoto}
         />

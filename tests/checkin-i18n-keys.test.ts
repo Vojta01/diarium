@@ -115,6 +115,9 @@ test("check-in section titles are distinct in both languages", () => {
     "photo_title",
     "scales_title",
     "note_title",
+    "goals_readonly_title",
+    "screen_time_title",
+    "reflection_title",
   ];
   for (const tree of [cs, en] as unknown as Record<string, Record<string, string>>[]) {
     const titles = keys.map((key) => tree.checkin[key]);

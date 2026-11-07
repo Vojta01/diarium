@@ -441,6 +441,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
               key={`checkin-${checkin.nonce}`}
               initialDate={checkin.date}
               onSaveDone={handleCheckinSaved}
+              onOpenGoals={() => handleOpenSub("goals")}
             />
           )}
           {panel("history", <HistoryView onNavigateToDate={handleNavigateToCheckIn} />)}

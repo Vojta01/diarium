@@ -11,7 +11,7 @@ import { toggleWeatherKey, WEATHER_OPTIONS } from "../src/lib/checkin/options.ts
 import { templateChange } from "../src/lib/checkin/note.ts";
 import { buildCheckInPayload } from "../src/lib/checkin/payload.ts";
 
-test("section order matches Android beta5 and reserves the later phases", () => {
+test("section order matches Android beta5 and renders all thirteen", () => {
   assert.deepEqual(CHECKIN_SECTION_ORDER, [
     "mood",
     "sleep",
@@ -27,15 +27,15 @@ test("section order matches Android beta5 and reserves the later phases", () => 
     "screenTime",
     "reflection",
   ]);
-  // Phase 2A renders the first ten in that exact order; the reserved tail is
-  // never rendered yet, so a later phase can only append.
-  assert.deepEqual(
-    CHECKIN_RENDERED_SECTIONS,
-    CHECKIN_SECTION_ORDER.slice(0, 10)
-  );
-  assert.ok(!CHECKIN_RENDERED_SECTIONS.includes("goals"));
-  assert.ok(!CHECKIN_RENDERED_SECTIONS.includes("screenTime"));
-  assert.ok(!CHECKIN_RENDERED_SECTIONS.includes("reflection"));
+  assert.equal(CHECKIN_SECTION_ORDER.length, 13);
+  // Phase 2B renders every section; the read-only tail is exactly goals →
+  // screen time → reflection, after note.
+  assert.deepEqual(CHECKIN_RENDERED_SECTIONS, CHECKIN_SECTION_ORDER);
+  assert.deepEqual(CHECKIN_SECTION_ORDER.slice(-3), [
+    "goals",
+    "screenTime",
+    "reflection",
+  ]);
 });
 
 test("a template replaces the note instead of appending to it", () => {

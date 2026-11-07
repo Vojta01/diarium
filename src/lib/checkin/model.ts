@@ -36,19 +36,9 @@ export const CHECKIN_SECTION_ORDER = [
 
 export type CheckInSectionId = (typeof CHECKIN_SECTION_ORDER)[number];
 
-/** Sections this phase renders; the rest stay reserved in the order above. */
-export const CHECKIN_RENDERED_SECTIONS: readonly CheckInSectionId[] = [
-  "mood",
-  "sleep",
-  "stress",
-  "activities",
-  "habits",
-  "gratitude",
-  "weather",
-  "photo",
-  "scales",
-  "note",
-];
+/** Sections this phase renders; the full Android beta5 order. */
+export const CHECKIN_RENDERED_SECTIONS: readonly CheckInSectionId[] =
+  CHECKIN_SECTION_ORDER;
 
 
 export const EMPTY_CHECKIN: CheckInData = {

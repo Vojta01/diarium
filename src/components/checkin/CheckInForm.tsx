@@ -2,6 +2,9 @@
 
 import { Fragment, type ReactNode } from "react";
 
+import type { CheckInError } from "@/lib/checkin/errors";
+import type { GoalProgressData } from "@/lib/goal-progress";
+import type { Goal } from "@/lib/goals";
 import type { CheckInData } from "@/lib/types";
 import type { ActivityDef, HabitDef } from "@/lib/supabase/db";
 import type { Scale } from "@/lib/scales";
@@ -14,12 +17,15 @@ import {
 } from "@/lib/checkin/model";
 
 import { ActivitiesSection } from "./sections/ActivitiesSection";
+import { GoalsReadonlySection } from "./sections/GoalsReadonlySection";
 import { GratitudeSection } from "./sections/GratitudeSection";
 import { HabitsSection } from "./sections/HabitsSection";
 import { MoodSection, SleepSection, StressSection } from "./sections/MoodSleepStress";
 import { NoteSection } from "./sections/NoteSection";
 import { PhotoSection } from "./sections/PhotoSection";
+import { ReflectionSection } from "./sections/ReflectionSection";
 import { ScalesSection } from "./sections/ScalesSection";
+import { ScreenTimeSection } from "./sections/ScreenTimeSection";
 import { WeatherSection } from "./sections/WeatherSection";
 
 export interface CheckInFormProps {
@@ -63,6 +69,19 @@ export interface CheckInFormProps {
   photoUploading: boolean;
   saved: boolean;
   loadFailed: boolean;
+  /** The form has edits that are not saved yet. */
+  dirty: boolean;
+  goals: readonly GoalProgressData<Goal>[];
+  goalsLoading: boolean;
+  /** i18n key for a failed goals read. */
+  goalsError: string | null;
+  onRetryGoals: () => void;
+  onOpenGoals: () => void;
+  reflectionLoading: boolean;
+  reflectionError: CheckInError | null;
+  reflectionCached: boolean;
+  reflectionCanGenerate: boolean;
+  onGenerateReflection: () => void;
   onSave: () => void;
   onViewPhoto: (url: string) => void;
 }
@@ -72,8 +91,8 @@ export interface CheckInFormProps {
  *
  * Sections are built into a map and rendered by iterating
  * `CHECKIN_SECTION_ORDER`, so the visual order can never drift from Android's.
- * Reserved ids (goals, screen time, reflection) are simply absent from the map
- * until their phase lands. The only save action is the inline button below.
+ * Goals, screen time and the AI reflection are read-only reports; the only
+ * save action is the inline button below.
  */
 export function CheckInForm(props: CheckInFormProps) {
   const { t } = useTranslation();
@@ -167,6 +186,27 @@ export function CheckInForm(props: CheckInFormProps) {
       <NoteSection
         value={data.note}
         onChange={(note) => setData((current) => ({ ...current, note }))}
+      />
+    ),
+    goals: (
+      <GoalsReadonlySection
+        rows={props.goals}
+        loading={props.goalsLoading}
+        error={props.goalsError}
+        onRetry={props.onRetryGoals}
+        onOpenGoals={props.onOpenGoals}
+      />
+    ),
+    screenTime: <ScreenTimeSection data={data} />,
+    reflection: (
+      <ReflectionSection
+        reflection={data.aiReflection}
+        loading={props.reflectionLoading}
+        error={props.reflectionError}
+        cached={props.reflectionCached}
+        canGenerate={props.reflectionCanGenerate}
+        dirty={props.dirty}
+        onGenerate={props.onGenerateReflection}
       />
     ),
   };

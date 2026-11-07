@@ -8,8 +8,9 @@ import { mapDailyEntryRow } from "@/lib/stats";
 /**
  * A recorded day opens passively, exactly like history: the shared `DayDetail`
  * renders the stored row and owns the single "Upravit" action. The check-in
- * adds no second edit button and no goals block (Android's stored view has
- * neither).
+ * adds no second edit button. Android's stored day renders screen time and the
+ * AI reflection (both come from `DayDetail`) but no goals block, so this
+ * wrapper adds neither.
  */
 export function StoredDayView({
   date,
