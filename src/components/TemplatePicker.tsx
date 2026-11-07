@@ -2,6 +2,7 @@
 
 import { useId, useState, useEffect } from "react";
 import { getTemplates, createTemplate, DEFAULT_TEMPLATES, type Template } from "@/lib/templates";
+import { notifyDataChanged } from "@/lib/data-refresh";
 import { useTranslation } from "@/lib/i18n";
 import { Modal } from "@/components/ui/Modal";
 
@@ -53,6 +54,7 @@ export function TemplatePicker({ open, onClose, onSelect, currentNote }: Templat
         content: currentNote.trim(),
         sort_order: templates.length,
       });
+      notifyDataChanged("templates");
       setShowSaveForm(false);
       setSaveName("");
       await loadTemplates();

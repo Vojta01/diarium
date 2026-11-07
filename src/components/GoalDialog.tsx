@@ -3,6 +3,7 @@
 import { useId, useState, useEffect } from "react";
 import { getActivities, type ActivityDef } from "@/lib/supabase/db";
 import { createGoal, updateGoal, type Goal } from "@/lib/goals";
+import { notifyDataChanged } from "@/lib/data-refresh";
 import { useTranslation } from "@/lib/i18n";
 import { Modal } from "@/components/ui/Modal";
 
@@ -91,6 +92,7 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
           is_active: true,
         });
       }
+      notifyDataChanged("goals");
       onSaved();
       onClose();
     } catch (e: any) {

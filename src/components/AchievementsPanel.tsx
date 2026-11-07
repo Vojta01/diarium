@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { getAchievementProgress, ACHIEVEMENTS, type AchievementDef } from "@/lib/achievements";
 import { useTranslation } from "@/lib/i18n";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 export function AchievementsPanel() {
   const { t } = useTranslation();
@@ -10,11 +11,7 @@ export function AchievementsPanel() {
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => {
-    loadAchievements();
-  }, []);
-
-  async function loadAchievements() {
+  const loadAchievements = useCallback(async () => {
     try {
       const data = await getAchievementProgress();
       setAchievements(data);
@@ -22,7 +19,16 @@ export function AchievementsPanel() {
       console.error("Failed to load achievements:", e);
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch resolves after the effect body
+    loadAchievements();
+  }, [loadAchievements]);
+
+  // Achievements are derived from entries, habits and goals, so refresh when any
+  // of those mutations lands while this panel is mounted on a hidden tab.
+  useDataRefresh(["entries", "habits", "goals"], loadAchievements);
 
   if (loading) {
     return (

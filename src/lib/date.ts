@@ -24,6 +24,18 @@ export function pragueDateKey(instant: Date = new Date()): string {
 }
 
 /**
+ * Shift a `YYYY-MM-DD` key by whole calendar days.
+ *
+ * Uses noon UTC as the anchor so adding/subtracting a day never lands on the
+ * wrong date across a DST transition, regardless of the runtime time zone.
+ */
+export function shiftDateKey(key: string, days: number): string {
+  const anchor = new Date(`${key}T12:00:00Z`);
+  anchor.setUTCDate(anchor.getUTCDate() + days);
+  return anchor.toISOString().slice(0, 10);
+}
+
+/**
  * Returns the Europe/Prague calendar year.
  *
  * Year selectors must use this instead of `new Date().getFullYear()`: around

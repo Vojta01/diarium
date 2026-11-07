@@ -1,6 +1,7 @@
 import { createSupabaseClient } from "./client";
 import { readStoredSession } from "@/lib/auth-storage";
 import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
+import { pragueDateKey } from "@/lib/date";
 
 // ── Typy ──
 
@@ -114,7 +115,7 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Nepřihlášen");
 
-  const entryDate = payload.date || new Date().toISOString().split("T")[0];
+  const entryDate = payload.date || pragueDateKey();
 
   // ── Upload fotky do Storage ──
   let photoPath: string | null = payload.photo_path || null;

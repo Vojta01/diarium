@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { YearInPixels } from "@/components/YearInPixels";
 import { CalendarView } from "@/components/CalendarView";
 import { ScreenTimeChart } from "@/components/ScreenTimeChart";
@@ -14,6 +14,7 @@ import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date: string) => void }) {
   const { t } = useTranslation();
@@ -25,20 +26,26 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   const [userEmail, setUserEmail] = useState<string>("");
   const flags = getFeatureFlags();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchDailyEntries()
       .then((data) => {
         setEntries(data);
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
 
     const session = readStoredSession();
     if (session?.user) {
       if (session.user.id) setUserId(session.user.id);
       if (session.user.email) setUserEmail(session.user.email);
     }
-  }, []);
+  }, [load]);
+
+  useDataRefresh(["entries"], load);
 
   if (loading) {
     return (

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { CalendarView } from "@/components/CalendarView";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useTranslation } from "@/lib/i18n";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 interface HistoryViewProps {
   onNavigateToDate: (date: string) => void;
@@ -22,7 +23,7 @@ export function HistoryView({ onNavigateToDate }: HistoryViewProps) {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"calendar" | "photos">("calendar");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let active = true;
 
     fetchDailyEntries()
@@ -40,6 +41,9 @@ export function HistoryView({ onNavigateToDate }: HistoryViewProps) {
       active = false;
     };
   }, []);
+
+  useEffect(() => load(), [load]);
+  useDataRefresh(["entries"], load);
 
   return (
     <div className="space-y-4">

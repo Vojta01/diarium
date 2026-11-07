@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchDailyEntries, type DailyEntry, MOOD_EMOJIS } from "@/lib/stats";
 import { getEntry, getCurrentUser } from "@/lib/supabase/db";
 import type { Entry } from "@/lib/supabase/db";
@@ -11,6 +11,8 @@ import { GoalsWidget } from "@/components/GoalsWidget";
 import { GoalDialog } from "@/components/GoalDialog";
 import { ScalesWidget } from "@/components/ScalesWidget";
 import { AchievementsPanel } from "@/components/AchievementsPanel";
+import { pragueDateKey, shiftDateKey } from "@/lib/date";
+import { useDataRefresh } from "@/lib/use-data-refresh";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
@@ -33,26 +35,32 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
   const [loading, setLoading] = useState(true);
   const [showGoalDialog, setShowGoalDialog] = useState(false);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = pragueDateKey();
+
+  const load = useCallback(async () => {
+    try {
+      const [data, entry, user] = await Promise.all([
+        fetchDailyEntries(),
+        getEntry(today),
+        getCurrentUser(),
+      ]);
+      setEntries(data);
+      setTodayEntry(entry);
+      setUserEmail(user?.email ?? null);
+    } catch (e) {
+      console.error("Dashboard load error:", e);
+    }
+    setLoading(false);
+  }, [today]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [data, entry, user] = await Promise.all([
-          fetchDailyEntries(),
-          getEntry(today),
-          getCurrentUser(),
-        ]);
-        setEntries(data);
-        setTodayEntry(entry);
-        setUserEmail(user?.email ?? null);
-      } catch (e) {
-        console.error("Dashboard load error:", e);
-      }
-      setLoading(false);
-    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch resolves after the effect body
     load();
-  }, [today]);
+  }, [load]);
+
+  // Overview stays mounted while the user checks in on Today, so refetch after
+  // any entry/goal mutation instead of trusting the mount-time snapshot.
+  useDataRefresh(["entries", "goals"], load);
 
   if (loading) {
     return (
@@ -71,16 +79,17 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: "Europe/Prague",
   });
 
   // ── Last 7 days (for emoji row) ──
   const last7Days: { date: string; mood?: number; label: string; isToday: boolean }[] = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().split("T")[0];
+    const key = shiftDateKey(today, -i);
     const entry = entries.find((e) => e.date === key);
-    const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()];
+    const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+      new Date(`${key}T12:00:00Z`).getUTCDay()
+    ];
     last7Days.push({
       date: key,
       mood: entry?.mood,
@@ -92,17 +101,10 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
   // ── Streak ──
   // Count consecutive days backwards. If today has no entry yet, start from yesterday.
   let streak = 0;
-  const checkDate = new Date(today);
-  if (!entries.find(e => e.date === today)) {
-    checkDate.setDate(checkDate.getDate() - 1);
-  }
-  const streakDate = new Date(checkDate);
-  while (true) {
-    const key = streakDate.toISOString().split("T")[0];
-    if (entries.find((e) => e.date === key)) {
-      streak++;
-      streakDate.setDate(streakDate.getDate() - 1);
-    } else break;
+  let streakKey = entries.find((e) => e.date === today) ? today : shiftDateKey(today, -1);
+  while (entries.find((e) => e.date === streakKey)) {
+    streak++;
+    streakKey = shiftDateKey(streakKey, -1);
   }
 
   // ── Today's data ──
@@ -120,9 +122,7 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
   const weekEntryCount = weekEntriesWithMood.length;
 
   // ── Yesterday ──
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = yesterday.toISOString().split("T")[0];
+  const yesterdayKey = shiftDateKey(today, -1);
   const yesterdayEntry = entries.find(e => e.date === yesterdayKey);
 
   // ── This month ──
