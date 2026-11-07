@@ -7,7 +7,7 @@
  *
  * Use this instead of duplicating the localStorage.getItem + JSON.parse pattern.
  */
-import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { getSupabaseAuthTokenKey } from "./supabase-ref.ts";
 
 export interface StoredSession {
   access_token: string;

@@ -511,6 +511,70 @@ export async function getHabits(): Promise<HabitDef[]> {
   return [...defaults, ...customs];
 }
 
+/**
+ * Strict habits read for the dashboard: throws on a failed query instead of
+ * substituting the hardcoded fallback. The check-in keeps using `getHabits`,
+ * whose fallback and seeding are deliberate there.
+ */
+export async function getHabitsOrThrow(): Promise<HabitDef[]> {
+  const user = await getCurrentUser();
+  const sb = getAuthenticatedClient();
+
+  const [defaultRes, userRes] = await Promise.all([
+    sb.from("habit_catalog").select("*").eq("is_default", true).order("sort_order"),
+    user
+      ? sb.from("user_habits").select("*").eq("user_id", user.id)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (defaultRes.error) {
+    throw new Error(
+      `Návyky se nepodařilo načíst: ${defaultRes.error.message || "neznámá chyba"}`
+    );
+  }
+  if (userRes.error) {
+    throw new Error(
+      `Návyky se nepodařilo načíst: ${userRes.error.message || "neznámá chyba"}`
+    );
+  }
+
+  const defaults: HabitDef[] = ((defaultRes.data ?? []) as HabitDef[]).map(
+    (habit) => ({ ...habit, source: "default" as const })
+  );
+  type UserHabitRow = HabitDef & { is_active?: boolean };
+  const userHabits = (userRes.data ?? []) as UserHabitRow[];
+  const overrides = new Map(userHabits.map((habit) => [habit.key, habit]));
+
+  const mergedDefaults = defaults.map((habit) => {
+    const override = overrides.get(habit.key);
+    if (!override) return habit;
+    return {
+      ...habit,
+      label: override.label || habit.label,
+      icon: override.icon || habit.icon,
+      is_negative:
+        typeof override.is_negative === "boolean"
+          ? override.is_negative
+          : habit.is_negative,
+    };
+  });
+
+  const defaultKeys = new Set(mergedDefaults.map((habit) => habit.key));
+  const customs: HabitDef[] = userHabits
+    .filter((habit) => habit.is_active && !defaultKeys.has(habit.key))
+    .map((habit) => ({ ...habit, source: "custom" as const }));
+
+  if (!isPersonalMode()) {
+    const sensitive = new Set(SENSITIVE_HABIT_KEYS);
+    return [
+      ...mergedDefaults.filter((habit) => !sensitive.has(habit.key)),
+      ...customs.filter((habit) => !sensitive.has(habit.key)),
+    ];
+  }
+
+  return [...mergedDefaults, ...customs];
+}
+
 /** Toggle a habit's visibility for the current user.
  *  Setting visible=false creates a user_habit with is_active=false (hides it).
  *  Setting visible=true removes the override (shows default) or creates an active custom habit. */

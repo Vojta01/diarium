@@ -59,10 +59,15 @@ async function getCurrentUserId(): Promise<string | null> {
   return data.user?.id || null;
 }
 
-export async function getScales(): Promise<Scale[]> {
+/**
+ * Strict scales read for the dashboard: throws instead of turning a failed read
+ * into an empty list. The legacy `getScales` keeps its old tolerant behaviour
+ * for the existing statistics screen.
+ */
+export async function getScalesOrThrow(): Promise<Scale[]> {
   const userId = await getCurrentUserId();
-  if (!userId) return [];
-  
+  if (!userId) throw new Error("Not authenticated");
+
   const sb = await getAuthenticatedClient();
   const { data, error } = await sb
     .from("scales")
@@ -70,12 +75,22 @@ export async function getScales(): Promise<Scale[]> {
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
-  
+
   if (error) {
+    throw new Error(
+      `Škály se nepodařilo načíst: ${error.message || "neznámá chyba"}`
+    );
+  }
+  return data || [];
+}
+
+export async function getScales(): Promise<Scale[]> {
+  try {
+    return await getScalesOrThrow();
+  } catch (error) {
     console.error("getScales error:", error);
     return [];
   }
-  return data || [];
 }
 
 export async function createScale(scale: Omit<Scale, 'id' | 'user_id' | 'created_at'>): Promise<Scale> {

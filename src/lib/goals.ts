@@ -61,8 +61,8 @@ async function getCurrentUserId(): Promise<string | null> {
 
 export async function getGoals(): Promise<Goal[]> {
   const userId = await getCurrentUserId();
-  if (!userId) return [];
-  
+  if (!userId) throw new Error("Not authenticated");
+
   const sb = await getAuthenticatedClient();
   const { data, error } = await sb
     .from("goals")
@@ -70,10 +70,14 @@ export async function getGoals(): Promise<Goal[]> {
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
-  
+
+  // A failed read must never look like "this account has no goals": the
+  // dashboard renders an error + retry state for this, while only a successful
+  // empty list may show the empty-goals CTA.
   if (error) {
-    console.error("getGoals error:", error);
-    return [];
+    throw new Error(
+      `Cíle se nepodařilo načíst: ${error.message || "neznámá chyba"}`
+    );
   }
   return data || [];
 }
