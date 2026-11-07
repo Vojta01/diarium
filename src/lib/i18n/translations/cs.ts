@@ -26,6 +26,11 @@ export const cs = {
     android_app: 'Android aplikace',
     download_apk: 'Stáhnout APK',
     opens_in_new_tab: '{label} (otevře se v nové kartě)',
+    github_source: 'Zdrojový kód na GitHubu',
+    android: 'Diarium pro Android',
+    download_android: 'Stáhnout aplikaci pro Android',
+    apk_hint: 'APK, beta',
+    about: 'O aplikaci',
   },
 
   // ── Emoji picker ──
@@ -61,6 +66,58 @@ export const cs = {
     tab_checkin: '✏️ Check-in',
     tab_stats: '📊 Statistiky',
     logout: 'odhlásit',
+  },
+
+  // ── App shell / navigation ──
+  nav: {
+    primary: 'Hlavní navigace',
+    back: 'Zpět',
+    overview: 'Přehled',
+    today: 'Dnes',
+    history: 'Historie',
+    stats: 'Statistiky',
+    settings: 'Nastavení',
+    goals: 'Cíle',
+    scales: 'Škály',
+    templates: 'Šablony',
+    achievements: 'Odznaky',
+    reports: 'Přehledy',
+    export: 'Export',
+  },
+
+  history: {
+    subtitle: 'Kalendář a fotky',
+    loading: 'Načítám historii...',
+    view_mode: 'Zobrazení historie',
+  },
+
+  today: {
+    subtitle: 'Dnešní check-in',
+  },
+
+  stats: {
+    subtitle: 'Trendy a souvislosti',
+  },
+
+  settings: {
+    subtitle: 'Účet, data a odkazy',
+    account: 'Účet',
+    unknown_user: 'Přihlášený účet',
+    logout: 'Odhlásit se',
+    language: 'Jazyk',
+    language_hint: 'Jazyk rozhraní',
+    data: 'Data',
+    export: 'Exportovat data',
+    notifications: 'Notifikace',
+    notifications_hint: 'Připomínky běží v aplikaci pro Android.',
+  },
+
+  error: {
+    title: 'Něco se pokazilo',
+    hint: 'Obrazovku se nepodařilo vykreslit. Přihlášení zůstává v pořádku.',
+    retry: 'Zkusit znovu',
+    reload: 'Obnovit stránku',
+    session_safe: 'Relace se neodstraňuje — po obnovení zůstaneš přihlášený.',
   },
 
   // ── Dashboard ──

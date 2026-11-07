@@ -1,0 +1,156 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  DEFAULT_NAV,
+  MAIN_TABS,
+  SUB_SCREENS,
+  closeSub,
+  isMainTab,
+  isValidIsoDate,
+  navScrollKey,
+  navToSearch,
+  openCheckin,
+  openSub,
+  parentTabForSub,
+  parseNavFromSearch,
+  selectTab,
+} from "../src/lib/navigation.ts";
+
+test("exposes exactly the five Android bottom destinations in order", () => {
+  assert.deepEqual([...MAIN_TABS], ["overview", "today", "history", "stats", "settings"]);
+  assert.equal(MAIN_TABS.length, 5);
+});
+
+test("sub-screens never become a sixth tab", () => {
+  for (const sub of SUB_SCREENS) {
+    assert.ok(!(MAIN_TABS as readonly string[]).includes(sub));
+    assert.ok(isMainTab(parentTabForSub(sub)));
+  }
+});
+
+test("defaults to the overview destination for empty or unknown searches", () => {
+  assert.deepEqual(parseNavFromSearch(""), DEFAULT_NAV);
+  assert.deepEqual(parseNavFromSearch("?"), DEFAULT_NAV);
+  assert.deepEqual(parseNavFromSearch("?view=nope"), DEFAULT_NAV);
+  assert.deepEqual(parseNavFromSearch("?view=overview"), DEFAULT_NAV);
+});
+
+test("parses a stats deep link", () => {
+  assert.deepEqual(parseNavFromSearch("?view=stats"), {
+    tab: "stats",
+    sub: null,
+    checkinDate: null,
+  });
+});
+
+test("restores ?edit= for a stored session", () => {
+  assert.deepEqual(parseNavFromSearch("?edit=2026-11-06"), {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-06",
+  });
+  assert.deepEqual(parseNavFromSearch("?view=today&edit=2026-11-06"), {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-06",
+  });
+});
+
+test("ignores malformed or impossible edit dates", () => {
+  assert.deepEqual(parseNavFromSearch("?edit=06.11.2026"), DEFAULT_NAV);
+  assert.deepEqual(parseNavFromSearch("?edit=2026-02-31"), DEFAULT_NAV);
+  assert.deepEqual(parseNavFromSearch("?edit="), DEFAULT_NAV);
+  assert.equal(isValidIsoDate("2026-11-06"), true);
+  assert.equal(isValidIsoDate("2026-13-01"), false);
+});
+
+test("parses a sub-screen deep link and opens its parent tab", () => {
+  assert.deepEqual(parseNavFromSearch("?sub=achievements"), {
+    tab: "overview",
+    sub: "achievements",
+    checkinDate: null,
+  });
+  assert.deepEqual(parseNavFromSearch("?view=stats&sub=reports"), {
+    tab: "stats",
+    sub: "reports",
+    checkinDate: null,
+  });
+  assert.deepEqual(parseNavFromSearch("?view=settings&sub=achievements"), {
+    tab: "settings",
+    sub: "achievements",
+    checkinDate: null,
+  });
+  assert.deepEqual(parseNavFromSearch("?sub=unknown"), DEFAULT_NAV);
+});
+
+test("serializes the default destination to a clean URL", () => {
+  assert.equal(navToSearch(DEFAULT_NAV), "");
+  assert.equal(navToSearch({ tab: "stats", sub: null, checkinDate: null }), "?view=stats");
+  assert.equal(
+    navToSearch({ tab: "today", sub: null, checkinDate: "2026-11-06" }),
+    "?view=today&edit=2026-11-06"
+  );
+  assert.equal(
+    navToSearch({ tab: "today", sub: "export", checkinDate: null }),
+    "?view=today&sub=export"
+  );
+});
+
+test("search round-trips through parseNavFromSearch", () => {
+  const states = [
+    DEFAULT_NAV,
+    { tab: "today", sub: null, checkinDate: "2026-11-06" },
+    { tab: "history", sub: null, checkinDate: null },
+    { tab: "settings", sub: null, checkinDate: null },
+    { tab: "overview", sub: "achievements", checkinDate: null },
+  ] as const;
+
+  for (const state of states) {
+    assert.deepEqual(parseNavFromSearch(navToSearch(state)), state);
+  }
+});
+
+test("selectTab closes an open sub-screen and clears stale edit dates", () => {
+  const editing = { tab: "today", sub: null, checkinDate: "2026-11-06" } as const;
+
+  assert.deepEqual(selectTab(editing, "stats"), {
+    tab: "stats",
+    sub: null,
+    checkinDate: null,
+  });
+  assert.deepEqual(selectTab(openSub(editing, "goals"), "today"), editing);
+  assert.equal(selectTab(DEFAULT_NAV, "overview"), DEFAULT_NAV);
+});
+
+test("openCheckin switches to Today and validates the date", () => {
+  assert.deepEqual(openCheckin(DEFAULT_NAV, "2026-11-05"), {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-05",
+  });
+  assert.deepEqual(openCheckin(DEFAULT_NAV, "not-a-date"), {
+    tab: "today",
+    sub: null,
+    checkinDate: null,
+  });
+});
+
+test("closeSub returns to the parent tab without touching the date", () => {
+  const state = { tab: "today", sub: "goals", checkinDate: "2026-11-05" } as const;
+  assert.deepEqual(closeSub(state), {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-05",
+  });
+  assert.equal(closeSub(DEFAULT_NAV), DEFAULT_NAV);
+});
+
+test("scroll keys are stable per destination", () => {
+  assert.equal(navScrollKey(DEFAULT_NAV), "tab:overview");
+  assert.equal(navScrollKey({ tab: "stats", sub: null, checkinDate: null }), "tab:stats");
+  assert.equal(
+    navScrollKey({ tab: "overview", sub: "achievements", checkinDate: null }),
+    "sub:achievements"
+  );
+});

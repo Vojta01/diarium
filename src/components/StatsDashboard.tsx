@@ -42,21 +42,14 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-white/40 text-lg">{t("statsDashboard.loading")}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-4 pt-8">
-      <header className="text-center mb-6">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-          {t("statsDashboard.title")}
-        </h1>
-        <p className="text-white/40 text-sm mt-1">{t("statsDashboard.subtitle")}</p>
-      </header>
-
+    <div>
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 max-w-md mx-auto">
         <button
@@ -123,7 +116,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
         </button>
       </div>
 
-      <div className="max-w-2xl mx-auto pb-16">
+      <div className="mx-auto max-w-2xl pb-2">
         {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "photos" && <PhotoGallery entries={entries} onNavigateToDate={onNavigateToDate} />}
         {tab === "correlation" && <ActivityMoodChart entries={entries} />}
@@ -133,7 +126,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
       </div>
 
       {/* Advanced stats — always visible below the fold */}
-      <div className="max-w-2xl mx-auto pb-16 mt-8">
+      <div className="mx-auto mt-8 max-w-2xl pb-2">
         <AdvancedStats />
         <div className="mt-6">
           <AchievementsPanel />

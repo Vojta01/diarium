@@ -7,8 +7,6 @@ import type { Entry } from "@/lib/supabase/db";
 import { Markdown } from "@/components/Markdown";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { NotificationSettingsButton } from "@/components/NotificationSettingsButton";
 import { GoalsWidget } from "@/components/GoalsWidget";
 import { GoalDialog } from "@/components/GoalDialog";
 import { ScalesWidget } from "@/components/ScalesWidget";
@@ -59,7 +57,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-white/40 text-lg">{t("common.loading")}</div>
       </div>
     );
@@ -138,19 +136,7 @@ export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
   );
 
   return (
-    <div className="min-h-screen p-4 pt-8 pb-24">
-      {/* Header */}
-      <header className="text-center mb-6">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-          Diarium
-        </h1>
-        <p className="text-white/40 text-sm mt-1">{t("dashboard.subtitle")}</p>
-        <div className="flex items-center justify-center mt-2">
-          <LanguageSwitcher />
-          <NotificationSettingsButton />
-        </div>
-      </header>
-
+    <div>
       {/* ── Today Overview ── */}
       <div className="glass-card mb-4">
         <div className="flex items-center justify-between mb-3">

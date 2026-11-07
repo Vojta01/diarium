@@ -17,6 +17,15 @@
   --color-ink: #0a0a0f;
   --color-ink-deep: #07070b;
   --color-indigo: #6366f1;
+  --color-indigo-light: #818cf8;
+  --color-indigo-deep: #4338ca;
+  --color-violet: #8b5cf6;
+  --color-surface-1: #12121a;
+  --color-surface-2: #1a1a26;
+  --color-surface-3: #232333;
+  --color-text-1: #ededf5;
+  --color-text-2: #9c9cb4;
+  --color-text-3: #6e6e85;
   --color-mood-chart-1: #ef4444;
   --color-mood-chart-2: #f97316;
   --color-mood-chart-3: #fbbf24;
@@ -32,20 +41,37 @@
   --ink: #0a0a0f;
   --ink-deep: #07070b;
   --indigo: #6366f1;
+  --indigo-light: #818cf8;
+  --indigo-deep: #4338ca;
+  --violet: #8b5cf6;
   --cyan: #22d3ee;
+  --surface-1: #12121a;
+  --surface-2: #1a1a26;
+  --surface-3: #232333;
+  --text-1: #ededf5;
+  --text-2: #9c9cb4;
+  --text-3: #6e6e85;
   --grid-size: 34px;
   --pad-card: 18px;
   --mood-chart-none: #6e6e85;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Grid background pattern */
+/* Ink backdrop with the two beta5 radial washes. */
 body {
-  background: linear-gradient(to bottom right, #030712, #111827, #030712);
-  color: white;
+  background-color: var(--ink-deep);
+  background-image:
+    radial-gradient(110% 70% at 105% -5%, rgba(99, 102, 241, 0.20), transparent 60%),
+    radial-gradient(90% 60% at -15% 92%, rgba(139, 92, 246, 0.13), transparent 60%),
+    linear-gradient(180deg, var(--ink-deep), var(--ink) 45%, var(--ink-deep));
+  background-attachment: fixed;
+  color: var(--text-1);
   min-height: 100vh;
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Subtle 34px shell grid — same cell size as Android `ShellChrome`. */
 body::before {
   content: '';
   position: fixed;
@@ -53,23 +79,47 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(rgba(255, 255, 255, 0.013) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.020) 1px, transparent 1px);
+  background-size: 34px 34px;
 }
 
-/* Glass card — enhanced */
+/* Top vignette so the screen header sits on a calmer surface. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 16vh;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(7, 7, 11, 0.55), transparent);
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+
+/* Glass card — beta5 surface: 20px radius, 18px padding, sheen + hairline. */
 .glass-card {
   position: relative;
   z-index: 1;
-  background: rgba(18, 18, 24, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 1.5rem;
-  padding: 1.5rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018) 55%, rgba(18, 18, 26, 0.5)),
+    rgba(18, 18, 26, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 18px;
+  transition:
+    border-color 0.22s var(--ease-standard),
+    box-shadow 0.22s var(--ease-standard),
+    transform 0.22s var(--ease-standard);
 }
 
 .glass-card:hover {
@@ -270,4 +320,75 @@ body::before {
 .mood-glow.selected {
   transform: scale(1.2);
   filter: drop-shadow(0 0 12px currentColor);
+}
+
+/* ── App shell chrome (Android beta5) ── */
+
+.screen-header__bar {
+  display: block;
+  flex-shrink: 0;
+  width: 4px;
+  height: 22px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--indigo-light), var(--indigo));
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+}
+
+.glass-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+.nav-shell {
+  background: linear-gradient(180deg, rgba(18, 18, 26, 0.78), rgba(18, 18, 26, 0.97));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.nav-shell__hairline {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.45), rgba(139, 92, 246, 0.35));
+}
+
+.nav-tab {
+  display: flex;
+  min-width: 58px;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--text-3);
+  transition:
+    color 160ms var(--ease-standard),
+    background-color 160ms var(--ease-standard),
+    border-color 160ms var(--ease-standard),
+    box-shadow 160ms var(--ease-standard);
+}
+
+.nav-tab--selected {
+  color: var(--indigo-light);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.40), rgba(67, 56, 202, 0.24));
+  border-color: rgba(129, 140, 248, 0.55);
+  box-shadow:
+    0 0 18px rgba(99, 102, 241, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

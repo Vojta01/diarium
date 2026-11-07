@@ -30,8 +30,11 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await sb.auth.getUser();
 
-  // Chráněné routy: stats (API endpointy používají vlastní auth)
-  const protectedPaths = ["/stats"];
+  // Protected routes: none. The shell authenticates client-side from the
+  // localStorage session; `/stats` is now just a deep link into the shell
+  // (`?view=stats`), so a cookie gate would bounce logged-in localStorage
+  // users to `/?error=not_authenticated`. API routes keep their own auth.
+  const protectedPaths: string[] = [];
   const isProtected = protectedPaths.some((p) =>
     request.nextUrl.pathname.startsWith(p)
   );

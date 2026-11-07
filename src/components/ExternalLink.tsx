@@ -12,6 +12,8 @@ interface ExternalLinkProps {
   children?: ReactNode;
   className?: string;
   showIcon?: boolean;
+  /** Drop horizontal padding for icon-only header actions (44px target kept). */
+  compact?: boolean;
 }
 
 /**
@@ -24,6 +26,7 @@ export function ExternalLink({
   children,
   className = "",
   showIcon = true,
+  compact = false,
 }: ExternalLinkProps) {
   const { t } = useTranslation();
   // Keep the visible text in the accessible name; only append the new-tab
@@ -37,7 +40,9 @@ export function ExternalLink({
       rel="noopener noreferrer"
       referrerPolicy="no-referrer"
       aria-label={t("links.opens_in_new_tab", { label: nameLabel })}
-      className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${className}`}
+      className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl ${
+        compact ? "px-0" : "px-3"
+      } text-sm font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${className}`}
     >
       {children ?? label}
       {showIcon && (

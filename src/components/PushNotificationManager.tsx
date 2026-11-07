@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { VAPID_PUBLIC_KEY } from "@/lib/vapid";
+import { useTranslation } from "@/lib/i18n";
 import { getAccessToken } from "@/lib/supabase/db";
 
 function authHeaders(): Record<string, string> {
@@ -52,6 +53,7 @@ async function subscribeUser(): Promise<PushSubscription | null> {
 }
 
 export function PushNotificationManager() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<"loading" | "granted" | "denied" | "unsupported">("loading");
   const [showPrompt, setShowPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export function PushNotificationManager() {
 
   if (showPrompt) {
     return (
-      <div className="fixed bottom-20 left-4 right-4 z-50 animate-slide-up">
+      <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-4 right-4 z-50 animate-slide-up">
         <div className="glass-card border-indigo-400/30 bg-indigo-950/90 p-4">
           <div className="flex items-start gap-3 mb-3">
             <span className="text-2xl shrink-0">🔔</span>
@@ -166,9 +168,11 @@ export function PushNotificationManager() {
             </button>
             <button
               onClick={handleDismiss}
+              aria-label={t("common.close")}
               className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/30 hover:text-white/50 transition-colors text-sm cursor-pointer"
             >
-          </button>
+              ✕
+            </button>
           </div>
         </div>
       </div>
@@ -177,7 +181,7 @@ export function PushNotificationManager() {
 
   // Small status indicator in bottom-right
   return (
-    <div className="fixed bottom-24 right-4 z-40 flex items-center gap-2">
+    <div className="fixed bottom-[calc(88px+env(safe-area-inset-bottom))] right-4 z-40 flex items-center gap-2">
       <div
         className={`w-3 h-3 rounded-full shrink-0 ${
           status === "granted" ? "bg-emerald-400" : "bg-red-400/50"

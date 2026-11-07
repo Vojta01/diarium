@@ -61,7 +61,7 @@ export function UpdatePrompt() {
   if (!updateAvailable) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 animate-slide-up">
+    <div className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-4 right-4 z-50 animate-slide-up">
       <div className="glass-card border-indigo-400/30 bg-indigo-950/90 p-4 flex items-center gap-3">
         <span className="text-2xl shrink-0">🔄</span>
         <div className="flex-1 min-w-0">

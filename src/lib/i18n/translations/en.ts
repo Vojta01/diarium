@@ -26,6 +26,11 @@ export const en = {
     android_app: 'Android app',
     download_apk: 'Download APK',
     opens_in_new_tab: '{label} (opens in a new tab)',
+    github_source: 'Source code on GitHub',
+    android: 'Diarium for Android',
+    download_android: 'Download the Android app',
+    apk_hint: 'APK, beta',
+    about: 'About',
   },
 
   // ── Auth Screen ──
@@ -46,6 +51,58 @@ export const en = {
     tab_checkin: '✏️ Check-in',
     tab_stats: '📊 Stats',
     logout: 'log out',
+  },
+
+  // ── App shell / navigation ──
+  nav: {
+    primary: 'Primary navigation',
+    back: 'Back',
+    overview: 'Overview',
+    today: 'Today',
+    history: 'History',
+    stats: 'Statistics',
+    settings: 'Settings',
+    goals: 'Goals',
+    scales: 'Scales',
+    templates: 'Templates',
+    achievements: 'Achievements',
+    reports: 'Reports',
+    export: 'Export',
+  },
+
+  history: {
+    subtitle: 'Calendar and photos',
+    loading: 'Loading history...',
+    view_mode: 'History view',
+  },
+
+  today: {
+    subtitle: "Today's check-in",
+  },
+
+  stats: {
+    subtitle: 'Trends and correlations',
+  },
+
+  settings: {
+    subtitle: 'Account, data and links',
+    account: 'Account',
+    unknown_user: 'Signed-in account',
+    logout: 'Sign out',
+    language: 'Language',
+    language_hint: 'Interface language',
+    data: 'Data',
+    export: 'Export data',
+    notifications: 'Notifications',
+    notifications_hint: 'Reminders run in the Android app.',
+  },
+
+  error: {
+    title: 'Something went wrong',
+    hint: 'This screen failed to render. Your session is still intact.',
+    retry: 'Try again',
+    reload: 'Reload page',
+    session_safe: 'Your session is not cleared — you stay signed in after reloading.',
   },
 
   // ── Dashboard ──

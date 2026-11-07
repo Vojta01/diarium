@@ -263,7 +263,7 @@ function CompletedCard({
   }));
 
   return (
-    <div className="min-h-screen px-4 pt-4 pb-36 space-y-4">
+    <div className="space-y-4 px-4 pb-8 pt-2">
       {/* Hero banner */}
       {isToday && (
         <div className="text-center animate-fade-in pb-2">
@@ -959,7 +959,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">{t("common.loading")}</div>;
+    return <div className="flex min-h-[50vh] items-center justify-center text-white/40">{t("common.loading")}</div>;
   }
 
   // ── COMPLETED CARD VIEW ──
@@ -967,7 +967,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     return (
       <div className="pb-24">
         {/* Date nav */}
-        <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-white/5 bg-ink/85 px-4 py-3 backdrop-blur-xl">
           {onBack && (
             <button onClick={onBack} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors shrink-0">←</button>
           )}
@@ -1013,9 +1013,9 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
 
   // ── FORM VIEW ──
   return (
-    <div className="min-h-screen pb-36">
+    <div className="pb-40">
       {/* Header with date nav */}
-      <div className="flex items-center justify-center gap-4 px-4 py-3 sticky top-0 bg-black/80 backdrop-blur-xl z-10 border-b border-white/5">
+      <div className="sticky top-0 z-10 flex items-center justify-center gap-4 border-b border-white/5 bg-ink/85 px-4 py-3 backdrop-blur-xl">
         <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
         <div className="text-center">
           <span className={`text-sm font-medium ${currentDate === today ? "text-white" : "text-white/40"}`}>
@@ -1567,7 +1567,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
       />
 
       {/* Bottom area: Save button + Navigation — sits above the TabBar */}
-      <div className="fixed bottom-16 left-0 right-0 z-40 bg-black/90 backdrop-blur-xl border-t border-white/5">
+      <div className="fixed bottom-[calc(70px+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-white/5 bg-ink/95 backdrop-blur-xl">
         {/* Save button */}
         <div className="p-3">
           <button

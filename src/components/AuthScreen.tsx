@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseClient } from "@/lib/supabase/client";
-import { useTranslation } from "@/lib/i18n";
 
-export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
+import { ExternalLink } from "@/components/ExternalLink";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { AndroidIcon, GitHubIcon } from "@/components/ui/icons";
+import { resolveOAuthRedirectTo } from "@/lib/auth-redirect";
+import { useTranslation } from "@/lib/i18n";
+import { ANDROID_APK_URL, GITHUB_WEB_URL } from "@/lib/links";
+import { createSupabaseClient } from "@/lib/supabase/client";
+
+export function AuthScreen() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,32 +23,42 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
       const { error } = await sb.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://diarium-two.vercel.app/auth-callback.html",
+          // Same origin as the page the user is on — never a hardcoded host.
+          redirectTo: resolveOAuthRedirectTo(
+            window.location.origin,
+            process.env.NEXT_PUBLIC_AUTH_CALLBACK_URL
+          ),
         },
       });
       if (error) throw error;
-      // Přesměruje na Google OAuth → není potřeba volat onSignedIn
-    } catch (e: any) {
-      setError(e.message || t("auth.sign_in_error"));
+      // Redirects to Google OAuth; no local state to update here.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("auth.sign_in_error"));
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="glass-card w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-            {t("auth.title")}
-          </h1>
-          <p className="text-white/30 text-sm mt-2">
-            {t("auth.subtitle")}
-          </p>
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <div className="glass-card relative w-full max-w-md">
+        <div className="mb-8 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 text-center">
+            <h1 className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-4xl font-bold text-transparent">
+              {t("auth.title")}
+            </h1>
+            <p className="mt-2 text-sm text-[color:var(--text-2)]">{t("auth.subtitle")}</p>
+          </div>
+          <div className="shrink-0 pt-1">
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <div className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm text-center">
+            <div
+              role="alert"
+              className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-400"
+            >
               {error}
             </div>
           )}
@@ -50,11 +66,11 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
           <button
             onClick={signInWithGoogle}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white text-gray-800
-                       hover:bg-gray-100 py-3 px-6 rounded-xl font-medium transition-colors
-                       disabled:opacity-50 border border-white/10"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10
+                       bg-white px-6 py-3 font-medium text-gray-800 transition-colors
+                       hover:bg-gray-100 disabled:opacity-50"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
                 fill="currentColor"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -75,8 +91,35 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }) {
             {loading ? t("auth.signing_in") : t("auth.sign_in_google")}
           </button>
         </div>
+      </div>
 
-        <p className="text-white/15 text-[10px] text-center mt-6">
+      {/* Public links live below the card so they never compete with the CTA. */}
+      <div className="mt-4 w-full max-w-md">
+        <div className="glass-divider" aria-hidden="true" />
+        <div className="mt-2 flex flex-col gap-0.5">
+          <ExternalLink
+            href={GITHUB_WEB_URL}
+            label={t("links.github_source")}
+            className="justify-start text-white/60"
+          >
+            <GitHubIcon size={18} />
+            <span>{t("links.github_source")}</span>
+          </ExternalLink>
+          <div className="flex items-center gap-1">
+            <ExternalLink
+              href={ANDROID_APK_URL}
+              label={t("links.download_android")}
+              className="justify-start text-white/60"
+            >
+              <AndroidIcon size={18} />
+              <span>{t("links.download_android")}</span>
+            </ExternalLink>
+            <span className="text-[11px] text-[color:var(--text-3)]">
+              {t("links.apk_hint")}
+            </span>
+          </div>
+        </div>
+        <p className="mt-4 text-center text-[10px] text-white/20">
           {t("auth.data_privacy")}
         </p>
       </div>
