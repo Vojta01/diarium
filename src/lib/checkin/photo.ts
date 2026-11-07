@@ -1,0 +1,120 @@
+/**
+ * Check-in photo rules.
+ *
+ * The database stores a public Storage URL, never image bytes. These helpers are
+ * pure where they can be (type/size/path/URL) and browser-only in exactly one
+ * place (`compressPhoto`), so the data contract stays unit-testable in Node.
+ */
+import { photoError } from "./errors.ts";
+
+export const PHOTO_BUCKET = "diary-photos";
+export const PHOTO_MAX_INPUT_BYTES = 12 * 1024 * 1024;
+export const PHOTO_MAX_OUTPUT_BYTES = 4.5 * 1024 * 1024;
+export const PHOTO_MAX_EDGE = 1600;
+export const PHOTO_JPEG_QUALITIES = [0.85, 0.7, 0.55, 0.4] as const;
+export const PHOTO_ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export type PhotoValidationCode =
+  | "checkin.photo_error_type"
+  | "checkin.photo_error_size"
+  | "checkin.photo_error_read";
+
+/** `null` means the file may be processed. */
+export function validatePhotoFile(file: {
+  type: string;
+  size: number;
+}): PhotoValidationCode | null {
+  if (!(PHOTO_ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+    return "checkin.photo_error_type";
+  }
+  if (file.size <= 0) return "checkin.photo_error_read";
+  if (file.size > PHOTO_MAX_INPUT_BYTES) return "checkin.photo_error_size";
+  return null;
+}
+
+/**
+ * A stored photo is a bounded public URL. `data:` is deliberately rejected:
+ * legacy base64 must be re-uploaded, not written back to the row.
+ */
+export function isStoredPhotoUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return false;
+  return /^https:\/\//i.test(trimmed);
+}
+
+/** True for a legacy base64 value that needs the explicit re-upload warning. */
+export function isLegacyPhotoValue(value: unknown): boolean {
+  return typeof value === "string" && value.trim().startsWith("data:");
+}
+
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The single storage object for a user's day. */
+export function photoStoragePath(userId: string, date: string): string {
+  if (!userId.trim()) throw new Error("photoStoragePath: missing userId");
+  if (!DATE_KEY.test(date)) throw new Error("photoStoragePath: invalid date");
+  return `${userId}/${date}.jpg`;
+}
+
+function loadImage(file: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(photoError("checkin.photo_error_read"));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  quality: number
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality);
+  });
+}
+
+/**
+ * Compress to JPEG with the Android contract: longest edge 1600, quality 0.85,
+ * then progressively lower quality until the 4.5 MB ceiling is met.
+ */
+export async function compressPhoto(file: File): Promise<Blob> {
+  const validation = validatePhotoFile(file);
+  if (validation) throw photoError(validation);
+
+  const image = await loadImage(file);
+  const scale = Math.min(
+    1,
+    PHOTO_MAX_EDGE / Math.max(image.width, image.height)
+  );
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw photoError("checkin.photo_error_read");
+  context.drawImage(image, 0, 0, width, height);
+
+  for (const quality of PHOTO_JPEG_QUALITIES) {
+    const blob = await canvasToBlob(canvas, quality);
+    if (blob && blob.size > 0 && blob.size <= PHOTO_MAX_OUTPUT_BYTES) {
+      return blob;
+    }
+  }
+
+  throw photoError("checkin.photo_error_size");
+}

@@ -1,185 +1,150 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/lib/i18n";
-
-declare global {
-  interface Window {
-    google?: {
-      photos?: {
-        picker?: {
-          create: (opts: { clientId?: string; authToken: string }) => Promise<{
-            open: () => Promise<{
-              mediaItems?: Array<{ baseUrl: string; mimeType: string }>;
-            }>;
-          }>;
-        };
-      };
-    };
-  }
-}
+import { uploadCheckInPhoto } from "@/lib/supabase/db";
+import { isCheckInError } from "@/lib/checkin/errors";
+import { compressPhoto, validatePhotoFile } from "@/lib/checkin/photo";
 
 interface PhotoPickerProps {
-  onPhotoSelected: (dataUrl: string | null) => void;
+  /** Receives the public Storage URL, or null when the photo is removed. */
+  onPhotoSelected: (url: string | null) => void;
   currentPhoto: string | null;
+  date: string;
+  /** True when the stored value is a legacy base64 photo that must be re-uploaded. */
+  legacyPhoto?: boolean;
+  onUploadingChange?: (uploading: boolean) => void;
+  /** Receives an i18n key, or null when the error is cleared. */
+  onError?: (messageKey: string | null) => void;
 }
 
-export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps) {
+export function PhotoPicker({
+  onPhotoSelected,
+  currentPhoto,
+  date,
+  legacyPhoto = false,
+  onUploadingChange,
+  onError,
+}: PhotoPickerProps) {
   const { t } = useTranslation();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [authToken] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      // Check expiry before returning token
-      const expiresAt = localStorage.getItem("diarium_google_token_expires_at");
-      if (expiresAt && Date.now() > parseInt(expiresAt)) {
-        localStorage.removeItem("diarium_google_token");
-        localStorage.removeItem("diarium_google_token_expires_at");
-        return null;
-      }
-      return localStorage.getItem("diarium_google_token");
-    }
-    return null;
-  });
-  const [pickerMode, setPickerMode] = useState<"menu" | "google" | null>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dateRef = useRef(date);
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  useEffect(() => {
+    dateRef.current = date;
+  }, [date]);
 
-      // Compress and resize large images before converting to base64
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = () => {
-        img.src = reader.result as string;
-      };
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxW = 1024;
-        const maxH = 1024;
-        let { width, height } = img;
-        if (width > maxW || height > maxH) {
-          const ratio = Math.min(maxW / width, maxH / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-        onPhotoSelected(dataUrl);
-      };
-      reader.readAsDataURL(file);
+  const setUploadingState = useCallback(
+    (value: boolean) => {
+      setUploading(value);
+      onUploadingChange?.(value);
     },
-    [onPhotoSelected]
+    [onUploadingChange]
   );
 
-  const handleGooglePhotos = useCallback(async () => {
-    // Re-check expiry at call time
-    const expiresAt = localStorage.getItem("diarium_google_token_expires_at");
-    if (expiresAt && Date.now() > parseInt(expiresAt)) {
-      localStorage.removeItem("diarium_google_token");
-      localStorage.removeItem("diarium_google_token_expires_at");
-    }
+  const reportError = useCallback(
+    (messageKey: string | null) => {
+      setError(messageKey);
+      onError?.(messageKey);
+    },
+    [onError]
+  );
 
-    const token = localStorage.getItem("diarium_google_token");
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Reset immediately so picking the same file twice still fires change.
+      event.target.value = "";
+      if (!file) return;
 
-    if (!token) {
-      // Start OAuth flow — user needs to authorize
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      if (!clientId) {
-        alert(
-          t("photoPicker.google_not_configured")
+      const validation = validatePhotoFile(file);
+      if (validation) {
+        reportError(validation);
+        return;
+      }
+
+      const uploadDate = dateRef.current;
+      reportError(null);
+      setUploadingState(true);
+      try {
+        const blob = await compressPhoto(file);
+        const url = await uploadCheckInPhoto(blob, uploadDate);
+        // The user changed the date while the upload was in flight; discard the
+        // result rather than attaching yesterday's photo to today's entry.
+        if (uploadDate !== dateRef.current) return;
+        onPhotoSelected(url);
+      } catch (uploadError) {
+        reportError(
+          isCheckInError(uploadError)
+            ? uploadError.code
+            : "checkin.photo_error_upload"
         );
-        return;
+      } finally {
+        setUploadingState(false);
       }
-      const redirectUri = `${window.location.origin}/auth/google-callback`;
-      const scope = "https://www.googleapis.com/auth/photoslibrary.readonly";
-      const authUrl =
-        `https://accounts.google.com/o/oauth2/v2/auth` +
-        `?client_id=${clientId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=token` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&prompt=consent`;
+    },
+    [onPhotoSelected, reportError, setUploadingState]
+  );
 
-      // Save current state so we come back to the right step
-      sessionStorage.setItem("diarium_auth_pending", "true");
-      window.location.href = authUrl;
-      return;
-    }
-
-    // Try Google Photos Picker API via POST to proxy
-    try {
-      const res = await fetch(
-        "https://photoslibrary.googleapis.com/v1/mediaItems:search",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ pageSize: 20 }),
-        }
-      );
-
-      if (!res.ok) {
-        // Token expired — clear and fall back
-        localStorage.removeItem("diarium_google_token");
-        localStorage.removeItem("diarium_google_token_expires_at");
-        fileRef.current?.click();
-        return;
-      }
-
-      const data = await res.json();
-      if (data.mediaItems?.[0]) {
-        // Take the first photo — we could build an actual gallery picker later
-        onPhotoSelected(data.mediaItems[0].baseUrl + "=w1024-h1024");
-      } else {
-        alert(t("photoPicker.no_photos_found"));
-        fileRef.current?.click();
-      }
-    } catch {
-      // Network error — fall back to device picker
-      fileRef.current?.click();
-    }
-  }, [onPhotoSelected, authToken]);
-
-  const clearPhoto = () => onPhotoSelected(null);
+  const removePhoto = () => {
+    reportError(null);
+    onPhotoSelected(null);
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex gap-2 flex-wrap">
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
-          className="btn-glass flex items-center gap-2 text-sm px-3 py-2"
+          onClick={() => cameraRef.current?.click()}
+          disabled={uploading}
+          className="btn-glass flex items-center gap-2 text-sm px-3 py-2 disabled:opacity-50"
         >
           <span className="text-lg">📷</span>
-          {t("photoPicker.device")}
+          {t("checkin.photo_camera")}
         </button>
         <button
           type="button"
-          onClick={handleGooglePhotos}
-          className="btn-glass flex items-center gap-2 text-sm px-3 py-2"
+          onClick={() => galleryRef.current?.click()}
+          disabled={uploading}
+          className="btn-glass flex items-center gap-2 text-sm px-3 py-2 disabled:opacity-50"
         >
           <span className="text-lg">🖼️</span>
-          {t("photoPicker.google_photos")}
+          {t("checkin.photo_gallery")}
         </button>
-        {currentPhoto && (
+        {currentPhoto && !uploading && (
           <button
             type="button"
-            onClick={clearPhoto}
+            onClick={removePhoto}
             className="btn-glass flex items-center gap-1 text-sm px-3 py-2 text-red-400"
           >
-            {t("photoPicker.remove")}
+            {t("checkin.photo_remove")}
           </button>
         )}
       </div>
 
-      {currentPhoto && (
+      {uploading && (
+        <p className="text-xs text-white/40" role="status">
+          {t("checkin.photo_uploading")}
+        </p>
+      )}
+
+      {error && (
+        <p className="text-xs text-red-300" role="alert">
+          {t(error)}
+        </p>
+      )}
+
+      {legacyPhoto && !currentPhoto && (
+        <p className="text-xs text-amber-300/80" role="status">
+          {t("checkin.photo_legacy")}
+        </p>
+      )}
+
+      {currentPhoto ? (
         <div className="relative rounded-xl overflow-hidden border border-white/10">
           <img
             src={currentPhoto}
@@ -187,12 +152,26 @@ export function PhotoPicker({ onPhotoSelected, currentPhoto }: PhotoPickerProps)
             className="w-full max-h-48 object-cover"
           />
         </div>
+      ) : (
+        !uploading && (
+          <p className="text-xs text-white/25 italic">{t("checkin.photo_empty")}</p>
+        )
       )}
 
       <input
-        ref={fileRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
+        capture="environment"
+        aria-label={t("checkin.photo_camera")}
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        aria-label={t("checkin.photo_gallery")}
         onChange={handleFileChange}
         className="hidden"
       />

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyAuth } from '@/lib/auth';
 import { isCronAuthorized } from '@/lib/cron-auth';
+import { buildEntryRow } from '@/lib/entry-row';
+import { isCheckInError } from '@/lib/checkin/errors';
+import { PHOTO_BUCKET } from '@/lib/checkin/photo';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -20,7 +23,10 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = await req.json();
-    const { user_id, date, mood, mood_emoji, sleep_quality, stress, activities, habits, gratitude, note, weather, photo_path, phone_screen_time, phone_unlocks, phone_top_apps, ai_reflection, scale_values } = payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+    const { user_id, date, clear_photo, scale_values } = payload;
 
     if (!user_id || !date) {
       return NextResponse.json({ error: 'Missing user_id or date' }, { status: 400 });
@@ -31,37 +37,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: user_id mismatch' }, { status: 403 });
     }
 
-    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-
-    // Build row conditionally — only set fields that are present in the payload.
-    // This allows partial updates (e.g., cron sending only screen_time without overwriting mood).
-    const row: Record<string, any> = { user_id, date };
-    if (mood !== undefined) row.mood = mood > 0 ? mood : null;
-    if (mood_emoji !== undefined) row.mood_emoji = mood_emoji || '';
-    if (stress !== undefined) row.stress = stress > 0 ? stress : null;
-    if (activities !== undefined) row.activities = activities || [];
-    if (habits !== undefined) row.habits = habits || {};
-    if (gratitude !== undefined) row.gratitude = gratitude || [];
-    if (note !== undefined) row.note = note || '';
-    if (weather !== undefined) row.weather = weather || [];
-    if (sleep_quality !== undefined && sleep_quality > 0) row.sleep_quality = sleep_quality;
-    if (photo_path !== undefined && photo_path) row.photo_path = photo_path;
-    if (phone_screen_time !== undefined) row.phone_screen_time = phone_screen_time;
-    if (phone_unlocks !== undefined) row.phone_unlocks = phone_unlocks;
-    if (phone_top_apps !== undefined) {
-      // Normalize: accept both array and string formats
-      if (Array.isArray(phone_top_apps)) {
-        row.phone_top_apps = phone_top_apps;
-      } else if (typeof phone_top_apps === 'string' && phone_top_apps.trim()) {
-        // Old format: "App:minutes, App:minutes" → convert to [{app, time_sec}]
-        row.phone_top_apps = phone_top_apps.split(',').map((item: string) => {
-          const [app, min] = item.trim().split(':');
-          return { app: app?.trim() || '', time_sec: parseInt(min || '0') * 60 };
-        }).filter((a: any) => a.app && a.time_sec > 0);
+    // The shared builder is the only place that decides field semantics:
+    // undefined is omitted, weather [] is a real clear, photo_path null is
+    // ignored unless clear_photo is true, and data: photo values are rejected.
+    let row: Record<string, unknown>;
+    try {
+      row = buildEntryRow(payload);
+    } catch (error) {
+      if (isCheckInError(error)) {
+        return NextResponse.json({ error: error.message }, { status: error.status || 400 });
       }
+      throw error;
     }
-    if (ai_reflection !== undefined && ai_reflection) row.ai_reflection = ai_reflection;
-    if (scale_values !== undefined) row.scale_values = scale_values;
+
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     const { data, error } = await supabase
       .from('entries')
@@ -74,19 +63,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message, details: error }, { status: 400 });
     }
 
-    // Mirror scale values into scale_entries so the Scales widget has per-day rows.
-    // Values are keyed by scale_id → number; 0 means "not selected" and is skipped.
+    // A cleared photo is removed from Storage after the row is the source of
+    // truth. Best effort: a failed object delete must not roll back the clear.
+    if (clear_photo === true && user) {
+      const { error: removeError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([`${user.id}/${date}.jpg`]);
+      if (removeError) console.error('photo delete error:', removeError);
+    }
+
+    // Mirror scale values into scale_entries so the Scales widget has per-day
+    // rows. Zero means "cleared" and must delete the stale mirror row; positive
+    // values are upserted. The entries.scale_values keeps the zeros on purpose
+    // so a reload still knows the scale was explicitly cleared.
     if (scale_values && typeof scale_values === 'object' && user) {
       try {
-        const scalePairs = Object.entries(scale_values as Record<string, number>)
-          .filter(([, v]) => typeof v === 'number' && v > 0);
-        if (scalePairs.length > 0) {
+        const entries = Object.entries(scale_values as Record<string, unknown>)
+          .filter(([, value]) => typeof value === 'number' && Number.isFinite(value));
+
+        const clearedIds = entries
+          .filter(([, value]) => value === 0)
+          .map(([scaleId]) => scaleId);
+        if (clearedIds.length > 0) {
+          const { error: deleteErr } = await supabase
+            .from('scale_entries')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('date', date)
+            .in('scale_id', clearedIds);
+          if (deleteErr) console.error('scale_entries delete error:', deleteErr);
+        }
+
+        const positivePairs = entries.filter(([, value]) => (value as number) > 0);
+        if (positivePairs.length > 0) {
           const { data: userScales } = await supabase
             .from('scales')
             .select('id')
             .eq('user_id', user.id);
-          const validScaleIds = new Set((userScales || []).map((s: any) => s.id));
-          const scaleRows = scalePairs
+          const validScaleIds = new Set((userScales || []).map((s: { id: string }) => s.id));
+          const scaleRows = positivePairs
             .filter(([scaleId]) => validScaleIds.has(scaleId))
             .map(([scaleId, value]) => ({
               user_id: user.id,
@@ -107,8 +122,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(data);
-  } catch (e: any) {
+  } catch (e) {
     console.error('save-entry exception:', e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 }

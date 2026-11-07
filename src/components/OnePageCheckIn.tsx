@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useId } from "react";
-import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getHiddenActivities, getAccessToken } from "@/lib/supabase/db";
+import { useState, useEffect, useRef, useId } from "react";
+import { saveEntry, patchEntry, getEntryOrThrow, getHabits, setHabitVisibility, getActivities, getHiddenActivities, getAccessToken } from "@/lib/supabase/db";
 import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import type { CheckInData } from "@/lib/types";
@@ -18,6 +18,20 @@ import { pragueDateKey, shiftDateKey } from "@/lib/date";
 import { notifyDataChanged } from "@/lib/data-refresh";
 import { seedDefaultScales, type Scale } from "@/lib/scales";
 import { checkAndUnlockAchievements } from "@/lib/achievements";
+import { WEATHER_KEYS } from "@/lib/dashboard-ui";
+import {
+  emptyCheckIn,
+  filteredGratitude,
+  fromEntry,
+  hasContent,
+  positiveScaleValues,
+} from "@/lib/checkin/model";
+import { buildCheckInPayload } from "@/lib/checkin/payload";
+import { saveCheckIn } from "@/lib/checkin/save";
+import { loadCheckIn } from "@/lib/checkin/load";
+import { clampCheckInDate } from "@/lib/checkin/dates";
+import { aiEmptyError, aiFailedError, aiNetworkError, aiPersistError, type CheckInError } from "@/lib/checkin/errors";
+import { clearDraft, readDraft, writeDraft } from "@/lib/checkin/draft";
 
 // ── Mood ──
 const MOODS = [
@@ -173,19 +187,13 @@ function groupActivities(defs: ActivityDef[], getCategoryName: (key: string) => 
 }
 
 // ── Reduced habits ── (loaded dynamically below)
-const EMPTY_HABITS: Record<string, boolean> = {};
 
 // ── Hardcoded defaults used only as fallback ── (replaced by DB-loaded habits)
 const FALLBACK_HABIT_DEFS: HabitDef[] = [
   { key: "alkohol", label: "Alkohol", labelEn: "Alcohol", icon: "🍺", category: "zdraví", color: "#ef4444", is_negative: true, source: "default" },
 ];
 
-const EMPTY_DATA: CheckInData = {
-  mood: 0, moodEmoji: "", sleepQuality: 0, stress: 0,
-  activities: [], habits: { ...EMPTY_HABITS },
-  gratitude: ["", "", ""], note: "", photoDataUrl: null,
-  scaleValues: {},
-};
+// ── Form model ── (empty state and mapping live in src/lib/checkin/model.ts)
 
 // ── Goals ──
 interface Goal {
@@ -399,14 +407,14 @@ function CompletedCard({
       )}
 
       {/* Photo */}
-      {data.photoDataUrl && (
+      {data.photoPath && (
         <div className="glass-card">
           <h3 className="text-xs font-medium text-white/30 mb-2 uppercase tracking-wider">📷 {t("photo.label")}</h3>
           <img
-            src={data.photoDataUrl}
+            src={data.photoPath}
             alt={t("photo.label")}
             className="w-full rounded-xl object-cover max-h-96 cursor-pointer transition-opacity hover:opacity-80"
-            onClick={() => onPhotoClick?.(data.photoDataUrl!)}
+            onClick={() => onPhotoClick?.(data.photoPath!)}
           />
         </div>
       )}
@@ -506,7 +514,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     lang === 'en' ? (item.labelEn || item.label) : item.label;
   const displayGoalName = (goal: Goal) =>
     lang === 'en' && goal.name === 'Krátké cvičení' ? t('goals.default_name') : goal.name;
-  const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
+  const [data, setData] = useState<CheckInData>(emptyCheckIn);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -514,9 +522,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   const [aiLoading, setAiLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [currentDate, setCurrentDate] = useState(
-    initialDate || pragueDateKey()
-  );
+  const [currentDate, setCurrentDate] = useState(() => clampCheckInDate(initialDate));
   const [habitDefs, setHabitDefs] = useState<HabitDef[]>(FALLBACK_HABIT_DEFS);
   const [activityDefs, setActivityDefs] = useState<ActivityDef[]>([]);
   const [hiddenActivities, setHiddenActivities] = useState<ActivityDef[]>([]);
@@ -534,26 +540,31 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   const [scales, setScales] = useState<Scale[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<CheckInError | null>(null);
+  const [saveError, setSaveError] = useState<CheckInError | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoCleared, setPhotoCleared] = useState(false);
+  const [draftWarning, setDraftWarning] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const flags = getFeatureFlags();
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSaved = useRef<string>("");
-  const dataRef = useRef<CheckInData>(data);
+  const saveInFlight = useRef(false);
+  const aiInFlight = useRef(false);
+  const loadToken = useRef(0);
   const dateRef = useRef<string>(currentDate);
+  const saveErrorRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => { dataRef.current = data; }, [data]);
   useEffect(() => { dateRef.current = currentDate; }, [currentDate]);
 
   const today = pragueDateKey();
 
   // Load habits and activities from DB and user email
   useEffect(() => {
-    // Load habits
+    // Load habits. Do not prefill every key with false: a habit appears in the
+    // saved row only after the user touches it (Android's toggleHabit contract).
     getHabits().then(defs => {
       if (defs.length > 0) setHabitDefs(defs);
-      const initHabits: Record<string, boolean> = {};
-      defs.forEach(h => { initHabits[h.key] = false; });
-      setData(d => ({ ...d, habits: { ...initHabits, ...d.habits } }));
-    }).catch(() => {});
+    }).catch(e => console.error('Failed to load habits:', e));
     
     // Load activities
     getActivities().then(defs => {
@@ -576,57 +587,52 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     seedDefaultScales().then(data => setScales(data)).catch(() => {});
   }, []);
 
-  // Load entry for current date
+  // Load entry for current date. `loadCheckIn` keeps "no entry" and "failed"
+  // distinct: only a real `empty` may render an editable form.
   useEffect(() => {
+    const token = ++loadToken.current;
     setLoading(true);
+    setLoadError(null);
+    setSaveError(null);
+    setAiError(null);
+    setPhotoUploading(false);
+    setPhotoCleared(false);
     setSaved(false);
     setEditing(false);
     setAiReflection(null);
 
-    getEntry(currentDate).then((entry) => {
-      if (entry) {
-        try {
-          setData({
-            mood: entry.mood ?? 0,
-            moodEmoji: entry.mood_emoji ?? "",
-            sleepQuality: entry.sleep_quality ?? 0,
-            stress: entry.stress ?? 0,
-            activities: Array.isArray(entry.activities) ? entry.activities : [],
-            habits: (entry.habits && typeof entry.habits === "object") ? entry.habits : {},
-            gratitude: Array.isArray(entry.gratitude) ? entry.gratitude : [],
-            note: entry.note ?? "",
-            photoDataUrl: typeof entry.photo_path === "string" ? entry.photo_path : null,
-            scaleValues: (entry as any).scale_values && typeof (entry as any).scale_values === "object" ? (entry as any).scale_values : {},
-          });
-          if (entry.ai_reflection) {
-            setAiReflection(typeof entry.ai_reflection === "string" ? entry.ai_reflection : null);
-          }
-          if (entry.mood > 0) {
-            setSaved(true);
-          }
-        } catch (e) {
-          console.error("Failed to set entry data:", e);
-          setData({ ...EMPTY_DATA });
-        }
-      } else {
-        // No DB entry — try to restore draft from localStorage
-        const draftKey = `diarium_draft_${currentDate}`;
-        try {
-          const draft = localStorage.getItem(draftKey);
-          if (draft) {
-            const parsed = JSON.parse(draft);
-            setData({ ...EMPTY_DATA, ...parsed });
-          } else {
-            setData({ ...EMPTY_DATA });
-          }
-        } catch {
-          setData({ ...EMPTY_DATA });
-        }
+    loadCheckIn(currentDate, getEntryOrThrow).then((outcome) => {
+      if (token !== loadToken.current) return;
+
+      if (outcome.status === "failed") {
+        // Never render an empty form over a stored day. The retry button is the
+        // only way forward until the read succeeds.
+        setLoadError(outcome.error);
+        setData(emptyCheckIn());
+        setGoals(loadGoals());
+        setLoading(false);
+        return;
       }
+
+      if (outcome.status === "entry") {
+        const next = fromEntry(
+          outcome.entry as unknown as Record<string, unknown>
+        );
+        setData(next);
+        setAiReflection(next.aiReflection);
+        setSaved(next.mood > 0);
+        setEditing(false);
+        // The row is the source of truth; a stale draft for the same date must
+        // not resurrect after the entry is deleted later.
+        clearDraft(localStorage, currentDate);
+      } else {
+        setData(readDraft(localStorage, currentDate) ?? emptyCheckIn());
+      }
+
       setGoals(loadGoals());
       setLoading(false);
-    }).catch(() => { setGoals(loadGoals()); setLoading(false); });
-  }, [currentDate]);
+    });
+  }, [currentDate, reloadNonce]);
 
   useEffect(() => { if (goals.length > 0) saveGoals(goals); }, [goals]);
 
@@ -821,153 +827,140 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     notifyDataChanged("habits");
   };
 
-  const doSave = useCallback((currentData: CheckInData, final: boolean) => {
-    const serialized = JSON.stringify(currentData);
-    if (serialized === lastSaved.current && !final) return;
-    lastSaved.current = serialized;
-
-    // Build payload
-    const payload = {
-      mood: currentData.mood,
-      mood_emoji: currentData.moodEmoji,
-      sleep_quality: currentData.sleepQuality,
-      stress: currentData.stress,
-      activities: currentData.activities,
-      habits: currentData.habits,
-      gratitude: currentData.gratitude.filter((g: string) => g.trim()),
-      note: currentData.note,
-      weather: [],
-      date: dateRef.current,
-      photoDataUrl: currentData.photoDataUrl,
-      scale_values: currentData.scaleValues,
-    };
-    saveEntry(payload as any).catch(() => {});
-  }, []);
-
-  // Autosave draft to localStorage — allows incremental check-in throughout the day.
-  // Saves form state locally after 1.5s of inactivity. Restored on next visit.
+  // Draft autosave: local only. There is deliberately no server write on
+  // `beforeunload`; closing the tab must never race the explicit save button.
   useEffect(() => {
-    if (saved || loading) return;
-    const draftKey = `diarium_draft_${currentDate}`;
-    const hasContent =
-      data.mood > 0 ||
-      data.activities.length > 0 ||
-      data.gratitude.some((g: string) => g.trim()) ||
-      data.note.trim() ||
-      data.sleepQuality > 0 ||
-      data.stress > 0;
-
-    if (!hasContent) {
-      localStorage.removeItem(draftKey);
-      return;
-    }
-
+    if (saved || loading || loadError) return;
     const timer = setTimeout(() => {
-      localStorage.setItem(draftKey, JSON.stringify(data));
-    }, 1500);
+      const ok = writeDraft(localStorage, currentDate, data);
+      setDraftWarning(!ok);
+    }, 1200);
     return () => clearTimeout(timer);
-  }, [data, saved, loading, currentDate]);
+  }, [data, saved, loading, loadError, currentDate]);
 
-  // Safety net: save on page close / background
   useEffect(() => {
-    const handle = () => {
-      const d = dataRef.current;
-      const hasData = d.mood > 0 || d.activities.length > 0 || d.gratitude.some(g => g.trim()) || d.note.trim();
-      if (hasData) doSave(d, false);
-    };
-    window.addEventListener("beforeunload", handle);
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") handle(); });
-    return () => { window.removeEventListener("beforeunload", handle); document.removeEventListener("visibilitychange", handle); };
-  }, [doSave]);
+    if (saveError) saveErrorRef.current?.focus();
+  }, [saveError]);
 
-  const fetchAIReflection = async (entryData: CheckInData) => {
+  const fetchAIReflection = async (entryData: CheckInData, requestDate: string) => {
+    if (aiInFlight.current || loadError) return;
+    aiInFlight.current = true;
     setAiLoading(true);
+    setAiError(null);
     try {
-      // Get user info for personalization
-      let userName = "";
       const session = readStoredSession();
-      if (session?.user?.email) userName = session.user.email;
+      const userName =
+        session?.user?.user_metadata?.full_name || session?.user?.email || "";
 
       const resp = await fetch("/api/ai/reflect", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAccessToken()}`,
+        },
         body: JSON.stringify({
-          user_id: userId,
-          date: dateRef.current,
+          user_id: userId || session?.user?.id || "",
+          date: requestDate,
+          lang,
           userName,
-          // Still send today's data as fallback (in case Supabase fetch fails)
           mood: entryData.mood,
-          note: entryData.note,
-          gratitude: entryData.gratitude,
-          activities: entryData.activities,
+          mood_emoji: entryData.moodEmoji,
           sleep_quality: entryData.sleepQuality,
           stress: entryData.stress,
+          activities: entryData.activities,
           habits: entryData.habits,
+          gratitude: filteredGratitude(entryData.gratitude),
+          note: entryData.note,
+          weather: entryData.weather,
+          scale_values: positiveScaleValues(entryData.scaleValues),
+          ...(entryData.phoneScreenTime != null
+            ? { phone_screen_time: entryData.phoneScreenTime }
+            : {}),
         }),
       });
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json.reflection) {
-          setAiReflection(json.reflection);
-          // Save reflection to DB
-          try {
-            const tok = getAccessToken();
-            await fetch("/api/save-entry", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
-              body: JSON.stringify({
-                user_id: userId,
-                date: dateRef.current,
-                ai_reflection: json.reflection,
-              }),
-            });
-          } catch (e) {
-            console.error("Failed to save AI reflection:", e);
-          }
-        }
+
+      if (!resp.ok) {
+        setAiError(aiFailedError(resp.status).code);
+        return;
       }
-    } catch (e) {
-      console.error("AI reflection fetch error:", e);
+
+      const json = await resp.json().catch(() => null);
+      const text =
+        typeof json?.reflection === "string" ? json.reflection.trim() : "";
+      if (!text) {
+        setAiError(aiEmptyError().code);
+        return;
+      }
+      if (requestDate !== dateRef.current) return;
+
+      setAiReflection(text);
+      try {
+        // Partial patch only: resending the form here used to race a real save
+        // and could overwrite newer field values with stale ones.
+        await patchEntry({ date: requestDate, ai_reflection: text });
+      } catch {
+        setAiError(aiPersistError().code);
+      }
+    } catch (error) {
+      setAiError(aiNetworkError(error).code);
+    } finally {
+      aiInFlight.current = false;
+      setAiLoading(false);
     }
-    setAiLoading(false);
   };
 
   const handleSave = async () => {
+    if (loadError) return;
+    setSaveError(null);
+    const saveDate = currentDate;
+    const payload = buildCheckInPayload(data, saveDate, {
+      clearPhoto: photoCleared && !data.photoPath,
+    });
+
     setSaving(true);
     try {
-      await saveEntry({
-        mood: data.mood,
-        mood_emoji: data.moodEmoji,
-        sleep_quality: data.sleepQuality,
-        stress: data.stress,
-        activities: data.activities,
-        habits: data.habits,
-        gratitude: data.gratitude.filter((g: string) => g.trim()),
-        note: data.note,
-        weather: [],
-        date: currentDate,
-        photoDataUrl: data.photoDataUrl,
-        scale_values: data.scaleValues,
-      } as any);
+      const result = await saveCheckIn({
+        gate: {
+          loadFailed: Boolean(loadError),
+          photoUploading,
+          hasContent: hasContent(data),
+        },
+        inFlight: saveInFlight,
+        payload,
+        post: saveEntry,
+      });
+
+      if (result.status === "failed") {
+        setSaveError(result.error);
+        return;
+      }
+      if (result.status !== "saved") return;
+      if (saveDate !== dateRef.current) return;
+
+      // Use the server row, not the local draft: it carries the normalised
+      // photo URL, weather keys and read-only phone/AI fields.
+      const savedData = fromEntry(
+        result.entry as unknown as Record<string, unknown>
+      );
+      setData(savedData);
       setSaved(true);
       setEditing(false);
-      // Clear the draft since it's now persisted to DB
-      localStorage.removeItem(`diarium_draft_${currentDate}`);
-      // Let the shell and the other mounted tabs know this day changed.
+      setPhotoCleared(false);
+      setAiReflection(savedData.aiReflection ?? null);
+      clearDraft(localStorage, saveDate);
       notifyDataChanged("entries");
       onSaveDone();
-      // Fetch AI reflection in background
-      fetchAIReflection(data);
-      // Check achievements in background
+      void fetchAIReflection(savedData, saveDate);
       checkAndUnlockAchievements({
-        mood: data.mood,
-        hasPhoto: !!data.photoDataUrl,
-        hasScale: Object.values(data.scaleValues || {}).some(v => v > 0),
+        mood: savedData.mood,
+        hasPhoto: Boolean(savedData.photoPath),
+        hasScale: Object.values(savedData.scaleValues || {}).some(v => v > 0),
       }).then(unlocked => {
         if (unlocked.length > 0) console.log("🏆 Unlocked:", unlocked);
       }).catch(() => {});
-    } catch {}
-    setSaving(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleActivity = (label: string) => {
@@ -977,12 +970,46 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     }));
   };
 
+  const toggleWeather = (key: string) => {
+    setData(d => ({
+      ...d,
+      weather: d.weather.includes(key)
+        ? d.weather.filter(value => value !== key)
+        : [...d.weather, key],
+    }));
+  };
+
   const navigateDate = (offset: number) => {
-    setCurrentDate(shiftDateKey(currentDate, offset));
+    if (saving || photoUploading) return;
+    const next = shiftDateKey(currentDate, offset);
+    if (next > today) return;
+    setCurrentDate(next);
   };
 
   if (loading) {
     return <div className="flex min-h-[50vh] items-center justify-center text-white/40">{t("common.loading")}</div>;
+  }
+
+  // A failed read must never fall through to an editable empty form: saving it
+  // would overwrite the stored day. Retry is the only action until it succeeds.
+  if (loadError) {
+    return (
+      <div className="px-4 py-10">
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-6 text-center"
+        >
+          <p className="text-sm text-red-200">{t(loadError.code)}</p>
+          <button
+            type="button"
+            onClick={() => setReloadNonce((value) => value + 1)}
+            className="mt-4 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+          >
+            {t("checkin.error_retry")}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ── COMPLETED CARD VIEW ──
@@ -995,7 +1022,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
             <button onClick={onBack} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors shrink-0">←</button>
           )}
           <div className="flex items-center justify-center gap-4 flex-1">
-          <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
+          <button onClick={() => navigateDate(-1)} disabled={saving || photoUploading} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors">◀</button>
           <button
             onClick={() => setCurrentDate(today)}
             className={`text-sm font-medium px-3 py-1 rounded-full transition-colors ${
@@ -1011,6 +1038,11 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
           >▶</button>
           </div>
         </div>
+        {aiError && (
+          <div role="alert" className="mx-4 mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {t(aiError)}
+          </div>
+        )}
         <CompletedCard
           data={data}
           goals={goals}
@@ -1039,7 +1071,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
     <div className="pb-40">
       {/* Header with date nav */}
       <div className="sticky top-0 z-10 flex items-center justify-center gap-4 border-b border-white/5 bg-ink/85 px-4 py-3 backdrop-blur-xl">
-        <button onClick={() => navigateDate(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 transition-colors">◀</button>
+        <button onClick={() => navigateDate(-1)} disabled={saving || photoUploading} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors">◀</button>
         <div className="text-center">
           <span className={`text-sm font-medium ${currentDate === today ? "text-white" : "text-white/40"}`}>
             {currentDate === today ? t("checkin.today") : new Date(currentDate).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", { day: "numeric", month: "long" })}
@@ -1047,19 +1079,32 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         </div>
         <button
           onClick={() => navigateDate(1)}
-          disabled={currentDate === today}
+          disabled={currentDate === today || saving || photoUploading}
           className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-20 text-white/60 transition-colors"
         >▶</button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="ml-auto flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
-        >
-          ✓ {saving ? t("common.saving") : t("common.save")}
-        </button>
       </div>
 
       <div className="px-4 pt-4 space-y-6">
+        {saveError && (
+          <div
+            ref={saveErrorRef}
+            role="alert"
+            tabIndex={-1}
+            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 outline-none"
+          >
+            {t(saveError.code)}
+          </div>
+        )}
+        {aiError && (
+          <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {t(aiError)}
+          </div>
+        )}
+        {draftWarning && (
+          <div role="status" className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+            {t("checkin.error_draft_storage")}
+          </div>
+        )}
         {/* ── MOOD ── */}
         <div>
           <div className="flex justify-center gap-2 flex-wrap">
@@ -1437,6 +1482,34 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
           </div>
         </div>
 
+        {/* ── WEATHER ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span className="text-sm font-medium text-white/80">{t("checkin.weather_title")}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {WEATHER_KEYS.map(key => {
+              const selected = data.weather.includes(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => toggleWeather(key)}
+                  className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    selected
+                      ? "border-indigo-400/60 bg-indigo-400/15 text-white"
+                      : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10"
+                  }`}
+                >
+                  {t(`dashboard.weather.${key}`)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ── NOTE ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -1467,8 +1540,18 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
             <span className="text-sm font-medium text-white/80">{t("checkin.photo_title")}</span>
           </div>
           <PhotoPicker
-            onPhotoSelected={url => setData(d => ({ ...d, photoDataUrl: url }))}
-            currentPhoto={data.photoDataUrl}
+            currentPhoto={data.photoPath}
+            date={currentDate}
+            legacyPhoto={data.photoLegacy}
+            onUploadingChange={setPhotoUploading}
+            onPhotoSelected={url => {
+              setPhotoCleared(url === null);
+              setData(d => ({
+                ...d,
+                photoPath: url,
+                photoLegacy: url ? false : d.photoLegacy,
+              }));
+            }}
           />
         </div>
       </div>
@@ -1598,10 +1681,14 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
         <div className="p-3">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || photoUploading || !hasContent(data)}
             className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition-colors"
           >
-            {saving ? t("checkin.saving") : t("checkin.save_to_vault")}
+            {photoUploading
+              ? t("checkin.photo_uploading")
+              : saving
+                ? t("checkin.saving")
+                : t("checkin.save_to_vault")}
           </button>
         </div>
       </div>

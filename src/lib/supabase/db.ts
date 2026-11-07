@@ -7,6 +7,19 @@ import {
 } from "../dashboard-errors.ts";
 import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "../feature-flags.ts";
 import { pragueDateKey } from "../date.ts";
+import { buildEntryRow, type EntryRowInput } from "../entry-row.ts";
+import type { CheckInPayload } from "../types.ts";
+import {
+  CheckInError,
+  isCheckInError,
+  loadFailedError,
+  photoError,
+  saveFailedError,
+  saveNetworkError,
+} from "../checkin/errors.ts";
+import { isStoredPhotoUrl, PHOTO_BUCKET, photoStoragePath } from "../checkin/photo.ts";
+
+export type { CheckInPayload } from "../types.ts";
 
 // ── Typy ──
 
@@ -29,28 +42,14 @@ export interface Entry {
   habits: Record<string, boolean>;
   gratitude: string[];
   note: string;
-  weather: string[];
-  phone_screen_time?: number;
-  phone_unlocks?: number;
-  phone_top_apps?: { app: string; minutes: number }[];
-  photo_path?: string;
-  ai_reflection?: string;
+  weather?: string[];
+  scale_values?: Record<string, number>;
+  phone_screen_time?: number | null;
+  phone_unlocks?: number | null;
+  phone_top_apps?: { app: string; time_sec?: number; minutes?: number }[];
+  photo_path?: string | null;
+  ai_reflection?: string | null;
   created_at: string;
-}
-
-export interface CheckInPayload {
-  mood: number;
-  mood_emoji: string;
-  sleep_quality: number;
-  stress: number;
-  activities: string[];
-  habits: Record<string, boolean>;
-  gratitude: string[];
-  note: string;
-  weather: string[];
-  date?: string; // ISO date string — defaults to today if not set
-  photoDataUrl?: string | null; // base64 data URL or Google Photos URL
-  photo_path?: string | null;   // already-uploaded URL (set internally)
 }
 
 // ── Helpers ──
@@ -75,6 +74,16 @@ function getAuthenticatedClient() {
   // The session will be used for subsequent queries
   sb.auth.setSession({ access_token: token, refresh_token: '' }).catch(() => {});
   return sb;
+}
+
+/**
+ * A client with the user's JWT in the request headers for Storage uploads and
+ * the strict load. It does not call `setSession`: that mutates localStorage and
+ * an empty refresh token can invalidate a valid session.
+ */
+async function getAuthenticatedClientReady() {
+  const token = getAccessToken();
+  return createSupabaseClient(token ?? undefined);
 }
 
 /** Získá aktuálně přihlášeného uživatele — z localStorage (rychlé, offline) */
@@ -115,112 +124,111 @@ export async function getProfile(): Promise<Profile | null> {
 
 // ── Entries ──
 
-/** Uloží nebo updatuje denní check-in — používá interní API (service_role) */
+/**
+ * Save the form through the internal service-role route.
+ *
+ * Photos are uploaded before this call (`uploadCheckInPhoto`), so this function
+ * never receives image bytes and cannot fall back to storing base64 in the row.
+ */
 export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Nepřihlášen");
+  if (!user) {
+    throw new CheckInError("signed_out", "checkin.error_save_auth", 401);
+  }
 
   const entryDate = payload.date || pragueDateKey();
 
-  // ── Upload fotky do Storage ──
-  let photoPath: string | null = payload.photo_path || null;
-
-  if (payload.photoDataUrl && !photoPath) {
-    try {
-      const sb = getSupabase();
-      // Ensure the client has a valid session before upload — storage RLS checks
-      // auth.uid() against the folder name, so an unauthenticated client fails.
-      const token = getAccessToken();
-      if (token) {
-        await sb.auth.setSession({ access_token: token, refresh_token: '' }).catch(() => {});
-      }
-      let imageBlob: Blob;
-
-      if (payload.photoDataUrl.startsWith("data:")) {
-        // Base64 data URL from device upload
-        const [header, base64] = payload.photoDataUrl.split(",");
-        const mimeMatch = header.match(/data:(.*?);/);
-        const mimeType = mimeMatch?.[1] || "image/jpeg";
-        const byteChars = atob(base64);
-        const byteNums = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNums[i] = byteChars.charCodeAt(i);
-        }
-        imageBlob = new Blob([byteNums], { type: mimeType });
-      } else if (payload.photoDataUrl.startsWith("https://")) {
-        // Google Photos URL — download and re-upload to our Storage
-        const resp = await fetch(payload.photoDataUrl);
-        if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
-        imageBlob = await resp.blob();
-      } else {
-        throw new Error("Neznámý formát fotky");
-      }
-
-      // Upload to Supabase Storage: diary-photos/{user_id}/{date}.jpg
-      const filePath = `${user.id}/${entryDate}.jpg`;
-      const { error: uploadErr } = await sb.storage
-        .from("diary-photos")
-        .upload(filePath, imageBlob, {
-          contentType: imageBlob.type || "image/jpeg",
-          upsert: true,
+  let row: Record<string, unknown>;
+  try {
+    row = buildEntryRow({
+      ...payload,
+      user_id: user.id,
+      date: entryDate,
+    } as EntryRowInput);
+  } catch (error) {
+    throw isCheckInError(error)
+      ? error
+      : new CheckInError("save_failed", "checkin.error_save_validation", 400, {
+          cause: error,
         });
-
-      if (uploadErr) {
-        console.error("Storage upload failed:", uploadErr);
-        // Fallback: try to store the data URL directly as base64 in photo_path
-        if (payload.photoDataUrl.length < 500_000) {
-          photoPath = payload.photoDataUrl;
-        }
-      } else {
-        // Construct the public URL
-        const { data: urlData } = sb.storage
-          .from("diary-photos")
-          .getPublicUrl(filePath);
-        photoPath = urlData.publicUrl;
-      }
-    } catch (err) {
-      console.error("Photo upload error:", err);
-      // Fallback: store as base64 if small enough
-      if (payload.photoDataUrl.length < 500_000) {
-        photoPath = payload.photoDataUrl;
-      }
-    }
   }
 
-  // ── Uložit záznam ──
-  const row: Record<string, any> = {
-    user_id: user.id,
-    date: entryDate,
-    mood: payload.mood,
-    mood_emoji: payload.mood_emoji,
-    sleep_quality: payload.sleep_quality,
-    stress: payload.stress,
-    activities: payload.activities,
-    habits: payload.habits,
-    gratitude: payload.gratitude,
-    note: payload.note,
-    weather: payload.weather,
-  };
-  if (photoPath) row.photo_path = photoPath;
-  if ((payload as any).ai_reflection) row.ai_reflection = (payload as any).ai_reflection;
-  if ((payload as any).scale_values !== undefined) row.scale_values = (payload as any).scale_values;
+  return postEntryRow(row);
+}
 
-  // Use our API endpoint which has the service_role key
+/** Persist an AI reflection as a partial patch; no form fields are resent. */
+export async function patchEntry(patch: {
+  date: string;
+  ai_reflection: string;
+}): Promise<Entry> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new CheckInError("signed_out", "checkin.error_save_auth", 401);
+  }
+
+  const row = buildEntryRow({
+    user_id: user.id,
+    date: patch.date,
+    ai_reflection: patch.ai_reflection,
+  });
+  return postEntryRow(row);
+}
+
+async function postEntryRow(row: Record<string, unknown>): Promise<Entry> {
   const token = getAccessToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch("/api/save-entry", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(row),
-  });
+
+  let res: Response;
+  try {
+    res = await fetch("/api/save-entry", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(row),
+    });
+  } catch (error) {
+    // `fetch` rejects with TypeError on DNS/offline/CORS failure. That is a
+    // retryable network error, not a validation error.
+    throw saveNetworkError(error);
+  }
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || "Save failed");
+    const body = await res.json().catch(() => ({}));
+    throw saveFailedError(res.status, body?.error ?? body);
   }
 
   return (await res.json()) as Entry;
+}
+
+/**
+ * Upload a compressed check-in photo to the existing public `diary-photos`
+ * bucket and return the public URL. The row only ever stores this URL.
+ */
+export async function uploadCheckInPhoto(
+  blob: Blob,
+  date: string
+): Promise<string> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw photoError("checkin.photo_error_upload", "signed out");
+  }
+
+  const sb = await getAuthenticatedClientReady();
+  const path = photoStoragePath(user.id, date);
+
+  const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
+    contentType: "image/jpeg",
+    upsert: true,
+  });
+  if (error) {
+    throw photoError("checkin.photo_error_upload", error);
+  }
+
+  const { data } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  if (!isStoredPhotoUrl(data.publicUrl)) {
+    throw photoError("checkin.photo_error_upload", "invalid public URL");
+  }
+  return data.publicUrl.trim();
 }
 
 /** Načte entries pro dané období */
@@ -246,29 +254,65 @@ export async function getEntries(from?: string, to?: string): Promise<Entry[]> {
   return (data as Entry[]) ?? [];
 }
 
-/** Načte jeden denní zápis */
-export async function getEntry(date: string): Promise<Entry | null> {
+/**
+ * Strict single-day read for the check-in.
+ *
+ * `null` means "there is no entry for this date" and is safe to render as an
+ * empty form. A query/auth failure throws, so the screen can show retry instead
+ * of an empty form that would overwrite the stored day on save.
+ */
+export async function getEntryOrThrow(date: string): Promise<Entry | null> {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user) {
+    throw new CheckInError("signed_out", "checkin.error_load", 401);
+  }
 
-  const sb = getAuthenticatedClient();
-  const { data: rows } = await sb
+  const sb = await getAuthenticatedClientReady();
+  const { data: rows, error, status } = await sb
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
     .eq("date", date)
     .limit(2);
 
+  if (error) {
+    throw loadFailedError(error, status);
+  }
   if (!rows || rows.length === 0) return null;
-  const entry = rows[0] as any;
-  // Defensive: ensure required fields have defaults
+
+  return normalizeEntryRow(rows[0] as Record<string, unknown>);
+}
+
+/**
+ * Tolerant compatibility wrapper. New check-in code must use `getEntryOrThrow`;
+ * this stays for callers that intentionally treat a failed read as "no data".
+ */
+export async function getEntry(date: string): Promise<Entry | null> {
+  try {
+    return await getEntryOrThrow(date);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeEntryRow(raw: Record<string, unknown>): Entry {
+  const entry = { ...raw } as Record<string, unknown>;
   if (entry.mood == null) entry.mood = 0;
   if (!entry.mood_emoji) entry.mood_emoji = "";
   if (!Array.isArray(entry.activities)) entry.activities = [];
   if (!entry.habits || typeof entry.habits !== "object") entry.habits = {};
   if (!Array.isArray(entry.gratitude)) entry.gratitude = [];
   if (entry.note == null) entry.note = "";
-  return entry as Entry;
+  if (!Array.isArray(entry.weather)) entry.weather = [];
+  if (
+    !entry.scale_values ||
+    typeof entry.scale_values !== "object" ||
+    Array.isArray(entry.scale_values)
+  ) {
+    entry.scale_values = {};
+  }
+  if (entry.photo_path === "") entry.photo_path = null;
+  return entry as unknown as Entry;
 }
 
 // ── Aktivity & Návyky ──
