@@ -57,6 +57,7 @@ export const cs = {
     signing_in: 'Přihlašuji...',
     sign_in_error: 'Nepodařilo se přihlásit',
     data_privacy: 'Po přihlášení se vytvoří tvůj účet. Data jsou jen tvoje.',
+    links_hint: 'Zdrojový kód a aplikace pro Android',
   },
 
   // ── Page / Tab Bar ──
@@ -83,6 +84,7 @@ export const cs = {
     achievements: 'Odznaky',
     reports: 'Přehledy',
     export: 'Export',
+    about: 'O aplikaci',
   },
 
   history: {
@@ -110,6 +112,17 @@ export const cs = {
     export: 'Exportovat data',
     notifications: 'Notifikace',
     notifications_hint: 'Připomínky běží v aplikaci pro Android.',
+    about_app: 'O aplikaci Diarium',
+  },
+
+  about: {
+    app_name: 'Aplikace',
+    version: 'Web · {package} {version}',
+    parity: 'Web odpovídá Android beta5: stejných pět destinací, tmavý shell a spodní navigace. Nativní Android navíc sbírá screen time a plánuje připomínky.',
+    links: 'Odkazy',
+    data_ai_title: 'Data a AI',
+    data_ai: 'Zápisy se ukládají do tvého Supabase účtu. AI přehledy generuje server přes DeepSeek; prohlížeč žádný API klíč neukládá.',
+    license: 'Licence MIT. Web je PWA, Android aplikace je nativní.',
   },
 
   error: {

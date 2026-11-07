@@ -4,7 +4,12 @@ import type { ComponentType, KeyboardEvent } from "react";
 import { useRef } from "react";
 
 import { useTranslation } from "@/lib/i18n";
-import { MAIN_TABS, TAB_LABEL_KEYS, type MainTab } from "@/lib/navigation";
+import {
+  MAIN_TABS,
+  TAB_LABEL_KEYS,
+  shellPanelId,
+  type MainTab,
+} from "@/lib/navigation";
 import {
   ChartIcon,
   HistoryIcon,
@@ -79,6 +84,7 @@ export function BottomNav({ active, onSelect }: BottomNavProps) {
                 type="button"
                 role="tab"
                 aria-selected={selected}
+                aria-controls={shellPanelId(tab)}
                 tabIndex={selected || (active === null && tab === MAIN_TABS[0]) ? 0 : -1}
                 onClick={() => onSelect(tab)}
                 className="flex min-h-[62px] flex-1 items-center justify-center rounded-2xl px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"

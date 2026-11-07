@@ -17,12 +17,14 @@ import { HistoryView } from "@/components/history/HistoryView";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { NotificationSettingsButton } from "@/components/NotificationSettingsButton";
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
+import { AboutScreen } from "@/components/settings/AboutScreen";
 import { SettingsView } from "@/components/settings/SettingsView";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { StatsDashboard } from "@/components/StatsDashboard";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SubScreenChrome } from "@/components/ui/SubScreenChrome";
 import { AndroidIcon, GitHubIcon } from "@/components/ui/icons";
+import { restoreFocus } from "@/lib/focus";
 import { useTranslation } from "@/lib/i18n";
 import { ANDROID_APK_URL, GITHUB_WEB_URL } from "@/lib/links";
 import {
@@ -38,6 +40,7 @@ import {
   openSub,
   parseNavFromSearch,
   selectTab,
+  shellPanelId,
   type MainTab,
   type NavState,
   type SubScreen,
@@ -47,7 +50,7 @@ import {
  * Sub-screens that have a real implementation today. The navigation model
  * already knows all of them; later phases flip the remaining ones on here.
  */
-const IMPLEMENTED_SUBS: readonly SubScreen[] = ["achievements"];
+const IMPLEMENTED_SUBS: readonly SubScreen[] = ["achievements", "about"];
 
 interface AppShellProps {
   user: User;
@@ -73,6 +76,25 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
   const initialNavRef = useRef(nav);
   const subPushedRef = useRef(false);
+
+  // Focus return: remember the control that opened a sub-screen and restore it
+  // after Back/browser popstate, but never steal focus after a tab switch.
+  const focusOpenerRef = useRef<HTMLElement | null>(null);
+  const pendingFocusRestoreRef = useRef(false);
+
+  const rememberFocusOpener = useCallback(() => {
+    const active = typeof document === "undefined" ? null : document.activeElement;
+    focusOpenerRef.current = active instanceof HTMLElement ? active : null;
+  }, []);
+
+  const forgetFocusOpener = useCallback(() => {
+    focusOpenerRef.current = null;
+    pendingFocusRestoreRef.current = false;
+  }, []);
+
+  const scheduleFocusRestore = useCallback(() => {
+    if (focusOpenerRef.current) pendingFocusRestoreRef.current = true;
+  }, []);
 
   const markVisited = useCallback((tab: MainTab) => {
     setVisited((previous) =>
@@ -115,22 +137,47 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         isMainTab(stored.tab) &&
         (stored.sub === null || isSubScreen(stored.sub))
       ) {
+        const next = normalizeNav(stored);
+        // Returning from a sub-screen to its parent tab: hand focus back to
+        // the control that opened it. Navigating elsewhere keeps the browser's
+        // own focus target.
+        if (nav.sub !== null && next.sub === null && next.tab === nav.tab) {
+          scheduleFocusRestore();
+        }
         subPushedRef.current = false;
-        markVisited(stored.tab);
-        setNav(normalizeNav(stored));
+        markVisited(next.tab);
+        setNav(next);
         return;
       }
 
       const next = nav.sub
         ? closeSub(nav)
         : parseNavFromSearch(window.location.search);
+      if (nav.sub !== null && next.sub === null) scheduleFocusRestore();
       markVisited(next.tab);
       setNav(next);
     };
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [markVisited, nav]);
+  }, [markVisited, nav, scheduleFocusRestore]);
+
+  // Restore focus after the parent panel is visible again. Waiting one frame
+  // avoids focusing an element that is still inside the hidden tab panel.
+  // The pending flag is cleared inside the frame (not before scheduling), so a
+  // StrictMode effect re-run cannot cancel the only restore.
+  useEffect(() => {
+    if (nav.sub !== null || !pendingFocusRestoreRef.current) return;
+
+    const opener = focusOpenerRef.current;
+    const frame = requestAnimationFrame(() => {
+      pendingFocusRestoreRef.current = false;
+      focusOpenerRef.current = null;
+      restoreFocus(opener);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [nav.sub]);
 
   // Remember the scroll offset of the destination currently on screen.
   useEffect(() => {
@@ -170,22 +217,24 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
       if (next === nav) return;
 
       subPushedRef.current = false;
+      forgetFocusOpener();
       markVisited(next.tab);
       writeHistory(next, "push");
       setNav(next);
     },
-    [markVisited, nav, writeHistory]
+    [forgetFocusOpener, markVisited, nav, writeHistory]
   );
 
   const handleNavigateToCheckIn = useCallback(
     (date: string) => {
       const next = openCheckin(nav, date);
       setCheckinNonce((nonce) => nonce + 1);
+      forgetFocusOpener();
       markVisited(next.tab);
       writeHistory(next, "push");
       setNav(next);
     },
-    [markVisited, nav, writeHistory]
+    [forgetFocusOpener, markVisited, nav, writeHistory]
   );
 
   const handleCheckinSaved = useCallback(() => {
@@ -197,15 +246,18 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   const handleOpenSub = useCallback(
     (sub: SubScreen) => {
       const next = openSub(nav, sub);
+      rememberFocusOpener();
       subPushedRef.current = true;
       markVisited(next.tab);
       writeHistory(next, "push");
       setNav(next);
     },
-    [markVisited, nav, writeHistory]
+    [markVisited, nav, rememberFocusOpener, writeHistory]
   );
 
   const handleBack = useCallback(() => {
+    scheduleFocusRestore();
+
     if (nav.sub && subPushedRef.current) {
       subPushedRef.current = false;
       window.history.back();
@@ -215,7 +267,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     const next = closeSub(nav);
     writeHistory(next, "replace");
     setNav(next);
-  }, [nav, writeHistory]);
+  }, [nav, scheduleFocusRestore, writeHistory]);
 
   const todayLabel = new Date().toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
     weekday: "long",
@@ -260,7 +312,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     return (
       <div
         role="tabpanel"
-        id={`shell-panel-${tab}`}
+        id={shellPanelId(tab)}
         aria-label={t(TAB_LABEL_KEYS[tab])}
         hidden={nav.tab !== tab || nav.sub !== null}
       >
@@ -308,6 +360,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         {nav.sub ? (
           <SubScreenChrome title={t(SUB_LABEL_KEYS[nav.sub])} onBack={handleBack}>
             {nav.sub === "achievements" ? <AchievementsPanel /> : null}
+            {nav.sub === "about" ? <AboutScreen /> : null}
           </SubScreenChrome>
         ) : null}
       </div>

@@ -15,6 +15,7 @@ import {
   parentTabForSub,
   parseNavFromSearch,
   selectTab,
+  shellPanelId,
 } from "../src/lib/navigation.ts";
 
 test("exposes exactly the five Android bottom destinations in order", () => {
@@ -84,6 +85,33 @@ test("parses a sub-screen deep link and opens its parent tab", () => {
   assert.deepEqual(parseNavFromSearch("?sub=unknown"), DEFAULT_NAV);
 });
 
+test("routes the About sub-screen through Settings", () => {
+  assert.ok((SUB_SCREENS as readonly string[]).includes("about"));
+  assert.equal(parentTabForSub("about"), "settings");
+  assert.deepEqual(parseNavFromSearch("?sub=about"), {
+    tab: "settings",
+    sub: "about",
+    checkinDate: null,
+  });
+  assert.equal(
+    navToSearch({ tab: "settings", sub: "about", checkinDate: null }),
+    "?view=settings&sub=about"
+  );
+});
+
+test("every bottom tab controls a distinct shell panel id", () => {
+  const ids = MAIN_TABS.map((tab) => shellPanelId(tab));
+
+  assert.deepEqual(ids, [
+    "shell-panel-overview",
+    "shell-panel-today",
+    "shell-panel-history",
+    "shell-panel-stats",
+    "shell-panel-settings",
+  ]);
+  assert.equal(new Set(ids).size, MAIN_TABS.length);
+});
+
 test("serializes the default destination to a clean URL", () => {
   assert.equal(navToSearch(DEFAULT_NAV), "");
   assert.equal(navToSearch({ tab: "stats", sub: null, checkinDate: null }), "?view=stats");
@@ -104,6 +132,7 @@ test("search round-trips through parseNavFromSearch", () => {
     { tab: "history", sub: null, checkinDate: null },
     { tab: "settings", sub: null, checkinDate: null },
     { tab: "overview", sub: "achievements", checkinDate: null },
+    { tab: "settings", sub: "about", checkinDate: null },
   ] as const;
 
   for (const state of states) {

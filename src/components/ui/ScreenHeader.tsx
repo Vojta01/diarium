@@ -15,7 +15,7 @@ interface ScreenHeaderProps {
  */
 export function ScreenHeader({ title, subtitle, trailing }: ScreenHeaderProps) {
   return (
-    <header className="screen-header relative z-[1] mb-4">
+    <header className="screen-header sticky top-0 z-20 -mx-4 -mt-3 mb-4 border-b border-white/5 bg-[#07070b]/90 px-4 pb-3 pt-3 backdrop-blur-xl">
       <div className="flex items-start gap-3">
         <span aria-hidden="true" className="screen-header__bar" />
         <div className="min-w-0 flex-1">

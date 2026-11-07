@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { useTranslation } from "@/lib/i18n";
 import { ChevronLeftIcon } from "@/components/ui/icons";
@@ -27,9 +27,26 @@ export function SubScreenChrome({
 }: SubScreenChromeProps) {
   const { t } = useTranslation();
 
+  // Android back parity: Escape leaves the sub-screen. Dialogs handle their
+  // own Escape first and mark the event as handled, so they are skipped.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+
+      const target = event.target;
+      if (target instanceof Element && target.closest('[role="dialog"]')) return;
+
+      event.preventDefault();
+      onBack();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onBack]);
+
   return (
     <section className="relative z-[1] pb-2">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="sticky top-0 z-20 -mx-4 -mt-3 mb-4 flex items-center gap-2 border-b border-white/5 bg-[#07070b]/90 px-4 pb-3 pt-3 backdrop-blur-xl">
         <button
           type="button"
           onClick={onBack}

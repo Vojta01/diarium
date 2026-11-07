@@ -16,6 +16,7 @@ export const SUB_SCREENS = [
   "achievements",
   "reports",
   "export",
+  "about",
 ] as const;
 export type SubScreen = (typeof SUB_SCREENS)[number];
 
@@ -45,6 +46,7 @@ export const SUB_LABEL_KEYS: Record<SubScreen, string> = {
   achievements: "nav.achievements",
   reports: "nav.reports",
   export: "nav.export",
+  about: "nav.about",
 };
 
 /**
@@ -58,6 +60,7 @@ export const SUB_PARENT_TAB: Record<SubScreen, MainTab> = {
   achievements: "overview",
   reports: "stats",
   export: "settings",
+  about: "settings",
 };
 
 export function isMainTab(value: string | null | undefined): value is MainTab {
@@ -139,6 +142,14 @@ export function openSub(nav: NavState, sub: SubScreen): NavState {
 
 export function closeSub(nav: NavState): NavState {
   return nav.sub === null ? nav : { ...nav, sub: null };
+}
+
+/**
+ * DOM id of the panel a bottom-nav tab controls. Shared by `BottomNav`
+ * (`aria-controls`) and `AppShell` (panel `id`) so the two can never drift.
+ */
+export function shellPanelId(tab: MainTab): string {
+  return `shell-panel-${tab}`;
 }
 
 /** Stable key for per-destination scroll memory. */

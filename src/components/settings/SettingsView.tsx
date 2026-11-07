@@ -92,6 +92,13 @@ export function SettingsView({ email, onLogout, onOpenSub }: SettingsViewProps) 
 
       <section className="glass-card">
         <SectionHeader title={t("links.about")} />
+        <button type="button" onClick={() => onOpenSub("about")} className={rowClass}>
+          <span>{t("settings.about_app")}</span>
+          <span aria-hidden="true" className="text-[color:var(--text-3)]">
+            ›
+          </span>
+        </button>
+        <div className="glass-divider my-2" aria-hidden="true" />
         <div className="space-y-1">
           <ExternalLink
             href={GITHUB_WEB_URL}

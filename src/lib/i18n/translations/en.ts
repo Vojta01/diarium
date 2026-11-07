@@ -42,6 +42,7 @@ export const en = {
     signing_in: 'Signing in...',
     sign_in_error: 'Failed to sign in',
     data_privacy: 'By signing in, your account will be created. Your data is yours only.',
+    links_hint: 'Source code and the Android app',
   },
 
   // ── Page / Tab Bar ──
@@ -68,6 +69,7 @@ export const en = {
     achievements: 'Achievements',
     reports: 'Reports',
     export: 'Export',
+    about: 'About',
   },
 
   history: {
@@ -95,6 +97,17 @@ export const en = {
     export: 'Export data',
     notifications: 'Notifications',
     notifications_hint: 'Reminders run in the Android app.',
+    about_app: 'About Diarium',
+  },
+
+  about: {
+    app_name: 'Application',
+    version: 'Web · {package} {version}',
+    parity: 'The web mirrors Android beta5: the same five destinations, dark shell and bottom navigation. Native Android additionally collects screen time and schedules reminders.',
+    links: 'Links',
+    data_ai_title: 'Data and AI',
+    data_ai: 'Entries are stored in your Supabase account. AI summaries are generated server-side via DeepSeek; the browser stores no API key.',
+    license: 'MIT licensed. The web app is a PWA; the Android app is native.',
   },
 
   error: {

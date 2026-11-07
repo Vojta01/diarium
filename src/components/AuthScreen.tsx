@@ -96,7 +96,10 @@ export function AuthScreen() {
       {/* Public links live below the card so they never compete with the CTA. */}
       <div className="mt-4 w-full max-w-md">
         <div className="glass-divider" aria-hidden="true" />
-        <div className="mt-2 flex flex-col gap-0.5">
+        <p className="mt-2 px-1 text-[11px] text-white/30">
+          {t("auth.links_hint")}
+        </p>
+        <div className="mt-1 flex flex-col gap-0.5">
           <ExternalLink
             href={GITHUB_WEB_URL}
             label={t("links.github_source")}
