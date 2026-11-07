@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { useTranslation } from "@/lib/i18n";
+import { escapeBelongsToDialog } from "@/lib/modal-a11y";
 import { ChevronLeftIcon } from "@/components/ui/icons";
 
 interface SubScreenChromeProps {
@@ -26,6 +27,14 @@ export function SubScreenChrome({
   children,
 }: SubScreenChromeProps) {
   const { t } = useTranslation();
+  const backRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the sub-screen so keyboard and screen-reader users land on
+  // its Back affordance instead of staying on the (now hidden) opener. The
+  // shell restores that opener when Back closes the sub-screen.
+  useEffect(() => {
+    backRef.current?.focus({ preventScroll: true });
+  }, []);
 
   // Android back parity: Escape leaves the sub-screen. Dialogs handle their
   // own Escape first and mark the event as handled, so they are skipped.
@@ -34,7 +43,12 @@ export function SubScreenChrome({
       if (event.key !== "Escape" || event.defaultPrevented) return;
 
       const target = event.target;
-      if (target instanceof Element && target.closest('[role="dialog"]')) return;
+      const targetInsideDialog =
+        target instanceof Element && Boolean(target.closest('[role="dialog"]'));
+      const openModalCount = document.querySelectorAll(
+        '[role="dialog"][aria-modal="true"]'
+      ).length;
+      if (escapeBelongsToDialog(targetInsideDialog, openModalCount)) return;
 
       event.preventDefault();
       onBack();
@@ -48,6 +62,7 @@ export function SubScreenChrome({
     <section className="relative z-[1] pb-2">
       <div className="sticky top-0 z-20 -mx-4 -mt-3 mb-4 flex items-center gap-2 border-b border-white/5 bg-[#07070b]/90 px-4 pb-3 pt-3 backdrop-blur-xl">
         <button
+          ref={backRef}
           type="button"
           onClick={onBack}
           aria-label={t("nav.back")}

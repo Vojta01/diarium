@@ -30,6 +30,13 @@ export interface NavState {
 
 export const DEFAULT_NAV: NavState = { tab: "overview", sub: null, checkinDate: null };
 
+/**
+ * Window event dispatched by the shell whenever the active destination changes.
+ * Modals listen to it so a dialog can never stay open inside a hidden tab
+ * panel after the user navigates (browser Back included).
+ */
+export const SHELL_NAVIGATION_EVENT = "diarium:shell-navigation";
+
 /** i18n keys for the five bottom destinations (cs/en both define them). */
 export const TAB_LABEL_KEYS: Record<MainTab, string> = {
   overview: "nav.overview",
@@ -123,12 +130,27 @@ export function navToSearch(nav: NavState): string {
 
 /** Switch bottom destination; any open sub-screen closes with it. */
 export function selectTab(nav: NavState, tab: MainTab): NavState {
-  if (nav.tab === tab && nav.sub === null) return nav;
+  // Tapping a bottom destination always opens its default state. In particular
+  // "Today" means today — a stale `?edit=` date from an earlier deep link must
+  // not keep the destination pinned to that day.
+  if (nav.tab === tab && nav.sub === null && nav.checkinDate === null) return nav;
   return {
     tab,
     sub: null,
-    checkinDate: tab === "today" ? nav.checkinDate : null,
+    checkinDate: null,
   };
+}
+
+/**
+ * Drop sub-screens that are not implemented in this build. A stale bookmark
+ * (`?sub=goals`) must fall back to the parent tab instead of rendering an empty
+ * sub-screen.
+ */
+export function normalizeNav(
+  state: NavState,
+  implemented: readonly SubScreen[]
+): NavState {
+  return state.sub && !implemented.includes(state.sub) ? closeSub(state) : state;
 }
 
 /** Open the Today tab on a specific date (dashboard day tap, calendar day tap). */

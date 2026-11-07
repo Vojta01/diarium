@@ -10,6 +10,7 @@ import {
   isValidIsoDate,
   navScrollKey,
   navToSearch,
+  normalizeNav,
   openCheckin,
   openSub,
   parentTabForSub,
@@ -140,7 +141,7 @@ test("search round-trips through parseNavFromSearch", () => {
   }
 });
 
-test("selectTab closes an open sub-screen and clears stale edit dates", () => {
+test("selectTab closes an open sub-screen and resets stale edit dates", () => {
   const editing = { tab: "today", sub: null, checkinDate: "2026-11-06" } as const;
 
   assert.deepEqual(selectTab(editing, "stats"), {
@@ -148,8 +149,28 @@ test("selectTab closes an open sub-screen and clears stale edit dates", () => {
     sub: null,
     checkinDate: null,
   });
-  assert.deepEqual(selectTab(openSub(editing, "goals"), "today"), editing);
+  // Tapping the Today destination always means today, even if the screen was
+  // opened with ?edit= for a past day.
+  assert.deepEqual(selectTab(openSub(editing, "goals"), "today"), {
+    tab: "today",
+    sub: null,
+    checkinDate: null,
+  });
   assert.equal(selectTab(DEFAULT_NAV, "overview"), DEFAULT_NAV);
+});
+
+test("normalizeNav drops sub-screens the shell does not implement", () => {
+  const stale = { tab: "today", sub: "export", checkinDate: "2026-11-06" } as const;
+
+  assert.deepEqual(normalizeNav(stale, ["achievements", "about"]), {
+    tab: "today",
+    sub: null,
+    checkinDate: "2026-11-06",
+  });
+  assert.deepEqual(
+    normalizeNav({ tab: "overview", sub: "achievements", checkinDate: null }, ["achievements"]),
+    { tab: "overview", sub: "achievements", checkinDate: null }
+  );
 });
 
 test("openCheckin switches to Today and validates the date", () => {

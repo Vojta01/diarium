@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useId, useState, useEffect } from "react";
 import { getActivities, type ActivityDef } from "@/lib/supabase/db";
 import { createGoal, updateGoal, type Goal } from "@/lib/goals";
 import { useTranslation } from "@/lib/i18n";
+import { Modal } from "@/components/ui/Modal";
 
 interface GoalDialogProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface GoalDialogProps {
 
 export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [activities, setActivities] = useState<ActivityDef[]>([]);
   const [activityKey, setActivityKey] = useState("");
   const [name, setName] = useState("");
@@ -61,11 +63,11 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
 
   async function handleSave() {
     if (!activityKey) {
-      setError("Vyber aktivitu");
+      setError(t("daylio_goals.error_activity"));
       return;
     }
     if (!name.trim()) {
-      setError("Zadej název cíle");
+      setError(t("daylio_goals.error_name"));
       return;
     }
 
@@ -92,7 +94,7 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
       onSaved();
       onClose();
     } catch (e: any) {
-      setError(e.message || "Nepodařilo se uložit");
+      setError(e.message || t("daylio_goals.save_error"));
     }
     setSaving(false);
   }
@@ -102,15 +104,14 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
   const selectedActivity = activities.find(a => a.key === activityKey);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      
-      {/* Dialog */}
-      <div className="relative glass-card p-6 w-full max-w-md mx-4 mb-4 sm:mb-0 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-white mb-4">
-          {goal ? t("daylio_goals.edit_goal") : t("daylio_goals.add_goal")}
-        </h2>
+    <Modal
+      onClose={onClose}
+      labelledBy={titleId}
+      panelClassName="relative glass-card p-6 w-full max-w-md mx-4 mb-4 sm:mb-0 max-h-[90vh] overflow-y-auto"
+    >
+      <h2 id={titleId} className="text-xl font-bold text-white mb-4">
+        {goal ? t("daylio_goals.edit_goal") : t("daylio_goals.add_goal")}
+      </h2>
 
         {/* Error */}
         {error && (
@@ -150,7 +151,7 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Např. 3x týdně do fitka"
+            placeholder={t("daylio_goals.name_placeholder")}
             className="w-full rounded-xl bg-white/10 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 placeholder:text-white/30"
           />
         </label>
@@ -218,7 +219,6 @@ export function GoalDialog({ open, onClose, onSaved, goal }: GoalDialogProps) {
             {saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

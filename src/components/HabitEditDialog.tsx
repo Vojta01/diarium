@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { EmojiPicker } from "@/components/EmojiPicker";
+import { Modal } from "@/components/ui/Modal";
 import { useTranslation } from "@/lib/i18n";
 import type { HabitDef } from "@/lib/supabase/db";
 
@@ -15,6 +16,7 @@ interface HabitEditDialogProps {
 /** Mounted only while open, so the fields start from props on every open. */
 export function HabitEditDialog({ onClose, onSave, habit }: HabitEditDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [name, setName] = useState(habit?.label ?? "");
   const [icon, setIcon] = useState(habit?.icon || "✅");
   const [isNegative, setIsNegative] = useState(habit?.is_negative ?? false);
@@ -30,20 +32,17 @@ export function HabitEditDialog({ onClose, onSave, habit }: HabitEditDialogProps
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      labelledBy={titleId}
+      panelClassName="w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
     >
-      <div
-        className="w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-5 pt-5 pb-2 flex items-center gap-2">
-          <span className="text-xl leading-none">{icon || "✅"}</span>
-          <h3 className="text-base font-semibold text-white">
-            {habit ? t("habits.edit_title") : t("habits.new_title")}
-          </h3>
-        </div>
+      <div className="px-5 pt-5 pb-2 flex items-center gap-2">
+        <span className="text-xl leading-none">{icon || "✅"}</span>
+        <h3 id={titleId} className="text-base font-semibold text-white">
+          {habit ? t("habits.edit_title") : t("habits.new_title")}
+        </h3>
+      </div>
 
         <div className="px-5 pb-2 space-y-3">
           {error && <div className="p-2 rounded-lg bg-red-500/10 text-red-400 text-xs">{error}</div>}
@@ -109,7 +108,6 @@ export function HabitEditDialog({ onClose, onSave, habit }: HabitEditDialogProps
             {t("common.save")}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

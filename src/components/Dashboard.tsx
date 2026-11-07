@@ -14,7 +14,6 @@ import { AchievementsPanel } from "@/components/AchievementsPanel";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
-  onNavigateToStats: () => void;
 }
 
 function formatScreenTime(seconds: number): string {
@@ -26,7 +25,7 @@ function formatScreenTime(seconds: number): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
-export function Dashboard({ onNavigateToCheckIn, onNavigateToStats }: Props) {
+export function Dashboard({ onNavigateToCheckIn }: Props) {
   const { t, lang } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [todayEntry, setTodayEntry] = useState<Entry | null>(null);

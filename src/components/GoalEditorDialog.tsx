@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { EmojiPicker } from "@/components/EmojiPicker";
+import { Modal } from "@/components/ui/Modal";
 import { useTranslation } from "@/lib/i18n";
 
 /**
@@ -26,6 +27,7 @@ interface GoalEditorDialogProps {
  *  below are initialised from props on every open — no effect-based reset. */
 export function GoalEditorDialog({ onClose, onSave, goal }: GoalEditorDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [name, setName] = useState(goal?.name ?? "");
   const [emoji, setEmoji] = useState(goal?.emoji || "🎯");
   const [error, setError] = useState<string | null>(null);
@@ -40,20 +42,17 @@ export function GoalEditorDialog({ onClose, onSave, goal }: GoalEditorDialogProp
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      labelledBy={titleId}
+      panelClassName="w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
     >
-      <div
-        className="w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-5 pt-5 pb-2 flex items-center gap-2">
-          <span className="text-xl leading-none">{emoji || "🎯"}</span>
-          <h3 className="text-base font-semibold text-white">
-            {goal ? t("goals.edit_title") : t("goals.new_title")}
-          </h3>
-        </div>
+      <div className="px-5 pt-5 pb-2 flex items-center gap-2">
+        <span className="text-xl leading-none">{emoji || "🎯"}</span>
+        <h3 id={titleId} className="text-base font-semibold text-white">
+          {goal ? t("goals.edit_title") : t("goals.new_title")}
+        </h3>
+      </div>
 
         <div className="px-5 pb-2 space-y-3">
           {error && <div className="p-2 rounded-lg bg-red-500/10 text-red-400 text-xs">{error}</div>}
@@ -91,7 +90,6 @@ export function GoalEditorDialog({ onClose, onSave, goal }: GoalEditorDialogProp
             {t("common.save")}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

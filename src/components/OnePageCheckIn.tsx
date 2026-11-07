@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId } from "react";
 import { saveEntry, getEntry, getHabits, setHabitVisibility, getActivities, getHiddenActivities, getAccessToken } from "@/lib/supabase/db";
 import type { HabitDef, ActivityDef } from "@/lib/supabase/db";
 import { PhotoPicker } from "@/components/PhotoPicker";
@@ -13,6 +13,7 @@ import { ScaleSlider } from "@/components/ScaleSlider";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { GoalEditorDialog } from "@/components/GoalEditorDialog";
 import { HabitEditDialog } from "@/components/HabitEditDialog";
+import { Modal } from "@/components/ui/Modal";
 import { seedDefaultScales, type Scale } from "@/lib/scales";
 import { checkAndUnlockAchievements } from "@/lib/achievements";
 
@@ -441,43 +442,51 @@ function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; onClose:
   const [zoomed, setZoomed] = useState(false);
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col" onClick={() => setZoomed(!zoomed)}>
-      {/* Back button — always visible */}
-      <div className="absolute top-0 left-0 right-0 z-10 p-4" onClick={e => e.stopPropagation()}>
-        <button
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white text-xl backdrop-blur-sm hover:bg-black/70 transition-colors"
-        >
-          ←
-        </button>
-      </div>
-
-      {/* Image — tap to toggle zoom */}
-      <div
-        className="flex-1 flex items-start justify-center overflow-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <img
-          src={src}
-          alt={alt}
-          className={`transition-all duration-200 ${
-            zoomed
-              ? "w-auto h-auto max-w-none max-h-none"
-              : "max-w-full max-h-full object-contain"
-          }`}
-          style={zoomed ? { minWidth: "100%", minHeight: "100dvh" } : {}}
-        />
-      </div>
-
-      {/* Hint */}
-      {!zoomed && (
-        <div className="absolute bottom-8 left-0 right-0 text-center" onClick={e => e.stopPropagation()}>
-          <span className="inline-block text-white/30 text-xs bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-            Klepnutím přiblížíš
-          </span>
+    <Modal
+      onClose={onClose}
+      ariaLabel={alt}
+      fullScreen
+      panelClassName="relative flex h-full w-full flex-col bg-black/95"
+    >
+      <div className="flex h-full flex-col" onClick={() => setZoomed(!zoomed)}>
+        {/* Back button — always visible */}
+        <div className="absolute top-0 left-0 right-0 z-10 p-4" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onClose}
+            aria-label={alt}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white text-xl backdrop-blur-sm hover:bg-black/70 transition-colors"
+          >
+            ←
+          </button>
         </div>
-      )}
-    </div>
+
+        {/* Image — tap to toggle zoom */}
+        <div
+          className="flex-1 flex items-start justify-center overflow-auto"
+          onClick={e => e.stopPropagation()}
+        >
+          <img
+            src={src}
+            alt={alt}
+            className={`transition-all duration-200 ${
+              zoomed
+                ? "w-auto h-auto max-w-none max-h-none"
+                : "max-w-full max-h-full object-contain"
+            }`}
+            style={zoomed ? { minWidth: "100%", minHeight: "100dvh" } : {}}
+          />
+        </div>
+
+        {/* Hint */}
+        {!zoomed && (
+          <div className="absolute bottom-8 left-0 right-0 text-center" onClick={e => e.stopPropagation()}>
+            <span className="inline-block text-white/30 text-xs bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+              Klepnutím přiblížíš
+            </span>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -488,6 +497,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
   onBack?: () => void;
 }) {
   const { t, lang } = useTranslation();
+  const addActivityTitleId = useId();
   const displayLabel = (item: { label: string; labelEn?: string }) =>
     lang === 'en' ? (item.labelEn || item.label) : item.label;
   const [data, setData] = useState<CheckInData>({ ...EMPTY_DATA });
@@ -1460,11 +1470,15 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
 
       {/* ── ADD ACTIVITY MODAL ── */}
       {showAddActivity && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddActivity(false)}>
-        <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+      <Modal
+        onClose={() => { setShowAddActivity(false); setActivityError(null); }}
+        labelledBy={addActivityTitleId}
+        align="center"
+        panelClassName="w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
+      >
           {/* Header */}
           <div className="px-5 pt-5 pb-2">
-            <h3 className="text-base font-semibold text-white">{t("addActivity.title")}</h3>
+            <h3 id={addActivityTitleId} className="text-base font-semibold text-white">{t("addActivity.title")}</h3>
           </div>
 
           <div className="px-5 pb-2 space-y-3">
@@ -1533,8 +1547,7 @@ export function OnePageCheckIn({ onSaveDone, initialDate, onBack }: {
               {t("addActivity.add")}
             </button>
           </div>
-        </div>
-      </div>
+      </Modal>
       )}
 
       {/* Goal editor — add / edit a goal (name + icon) */}

@@ -29,6 +29,7 @@ import { useTranslation } from "@/lib/i18n";
 import { ANDROID_APK_URL, GITHUB_WEB_URL } from "@/lib/links";
 import {
   DEFAULT_NAV,
+  SHELL_NAVIGATION_EVENT,
   SUB_LABEL_KEYS,
   TAB_LABEL_KEYS,
   closeSub,
@@ -36,6 +37,7 @@ import {
   isSubScreen,
   navScrollKey,
   navToSearch,
+  normalizeNav,
   openCheckin,
   openSub,
   parseNavFromSearch,
@@ -58,10 +60,6 @@ interface AppShellProps {
   onLogout: () => void;
 }
 
-function normalizeNav(state: NavState): NavState {
-  return state.sub && !IMPLEMENTED_SUBS.includes(state.sub) ? closeSub(state) : state;
-}
-
 /**
  * Authenticated app shell: five bottom destinations, Android-beta5 chrome and
  * per-destination scroll memory. Main tabs stay mounted once visited, so
@@ -70,7 +68,7 @@ function normalizeNav(state: NavState): NavState {
 export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellProps) {
   const { t, lang } = useTranslation();
 
-  const [nav, setNav] = useState<NavState>(() => normalizeNav(initialNav));
+  const [nav, setNav] = useState<NavState>(() => normalizeNav(initialNav, IMPLEMENTED_SUBS));
   const [visited, setVisited] = useState<Set<MainTab>>(() => new Set([nav.tab]));
   const [checkinNonce, setCheckinNonce] = useState(0);
 
@@ -126,6 +124,17 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     window.history.replaceState({ diariumNav: initial }, "", urlFor(initial));
   }, [urlFor]);
 
+  // Notify overlays (and later data screens) when the destination changes.
+  // Modals portal outside the hidden tab panel, so without this a dialog could
+  // stay visible after the shell navigates away from its screen.
+  const navKey = `${nav.tab}:${nav.sub ?? ""}`;
+  const lastNavKeyRef = useRef(navKey);
+  useEffect(() => {
+    if (lastNavKeyRef.current === navKey) return;
+    lastNavKeyRef.current = navKey;
+    window.dispatchEvent(new CustomEvent(SHELL_NAVIGATION_EVENT, { detail: nav }));
+  }, [nav, navKey]);
+
   // Browser back/forward: restore the destination stored in the history entry.
   // An open sub-screen must close instead of leaving the app.
   useEffect(() => {
@@ -137,7 +146,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         isMainTab(stored.tab) &&
         (stored.sub === null || isSubScreen(stored.sub))
       ) {
-        const next = normalizeNav(stored);
+        const next = normalizeNav(stored, IMPLEMENTED_SUBS);
         // Returning from a sub-screen to its parent tab: hand focus back to
         // the control that opened it. Navigating elsewhere keeps the browser's
         // own focus target.
@@ -152,7 +161,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
       const next = nav.sub
         ? closeSub(nav)
-        : parseNavFromSearch(window.location.search);
+        : normalizeNav(parseNavFromSearch(window.location.search), IMPLEMENTED_SUBS);
       if (nav.sub !== null && next.sub === null) scheduleFocusRestore();
       markVisited(next.tab);
       setNav(next);
@@ -331,10 +340,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         <main className="relative z-[1]">
           {panel(
             "overview",
-            <Dashboard
-              onNavigateToCheckIn={handleNavigateToCheckIn}
-              onNavigateToStats={() => handleSelectTab("stats")}
-            />
+            <Dashboard onNavigateToCheckIn={handleNavigateToCheckIn} />
           )}
           {panel(
             "today",
