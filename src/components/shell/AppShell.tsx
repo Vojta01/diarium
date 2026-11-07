@@ -16,7 +16,7 @@ import { ExternalLink } from "@/components/ExternalLink";
 import { HistoryView } from "@/components/history/HistoryView";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { NotificationSettingsButton } from "@/components/NotificationSettingsButton";
-import { OnePageCheckIn } from "@/components/OnePageCheckIn";
+import { CheckInScreen } from "@/components/checkin/CheckInScreen";
 import { AboutScreen } from "@/components/settings/AboutScreen";
 import { SettingsView } from "@/components/settings/SettingsView";
 import { GoalsScreen } from "@/components/screens/GoalsScreen";
@@ -418,7 +418,9 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         className={`mx-auto w-full px-4 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 ${
           nav.tab === "overview" && nav.sub === null
             ? "max-w-[620px] lg:max-w-[1040px]"
-            : "max-w-[620px]"
+            : nav.tab === "today" && nav.sub === null
+              ? "max-w-[620px] lg:max-w-[760px]"
+              : "max-w-[620px]"
         }`}
       >
         {nav.sub === null && nav.tab !== "today" ? (
@@ -435,11 +437,10 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
           )}
           {panel(
             "today",
-            <OnePageCheckIn
+            <CheckInScreen
               key={`checkin-${checkin.nonce}`}
               initialDate={checkin.date}
               onSaveDone={handleCheckinSaved}
-              onBack={() => handleSelectTab("overview")}
             />
           )}
           {panel("history", <HistoryView onNavigateToDate={handleNavigateToCheckIn} />)}

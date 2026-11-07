@@ -5,6 +5,7 @@ import {
   dashboardReadError,
   signedOutError,
 } from "./dashboard-errors.ts";
+import { missingDefaultScales } from "./checkin/scales.ts";
 
 export interface Scale {
   id: string;
@@ -69,17 +70,17 @@ async function getCurrentUserId(): Promise<string | null> {
  * into an empty list. The legacy `getScales` keeps its old tolerant behaviour
  * for the existing statistics screen.
  */
-export async function getScalesOrThrow(): Promise<Scale[]> {
+export async function getScalesOrThrow(includeInactive = false): Promise<Scale[]> {
   const userId = await getCurrentUserId();
   if (!userId) throw signedOutError();
 
   const sb = await getAuthenticatedClient();
-  const { data, error, status } = await sb
+  let query = sb
     .from("scales")
     .select("*")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+    .eq("user_id", userId);
+  if (!includeInactive) query = query.eq("is_active", true);
+  const { data, error, status } = await query.order("sort_order", { ascending: true });
 
   if (error) {
     throw dashboardReadError(error, DASHBOARD_ERROR_CODES.scales, status);
@@ -190,43 +191,46 @@ export async function getScaleAverage(scaleId: string, days: number = 30): Promi
   return sum / entries.length;
 }
 
-// Seed default Daylio-inspired scales for new users
-const DEFAULT_SCALES: Omit<Scale, 'id' | 'user_id' | 'created_at'>[] = [
-  { name: "Energie", emoji: "⚡", min_value: 1, max_value: 5, color: "#eab308", sort_order: 0, is_active: true },
-  { name: "Produktivita", emoji: "💪", min_value: 1, max_value: 5, color: "#22c55e", sort_order: 1, is_active: true },
-];
+// Seed default Daylio-inspired scales for new users. The defaults live in
+// `checkin/scales.ts` so the additive rule is unit-testable without Supabase.
 
-export async function seedDefaultScales(): Promise<Scale[]> {
-  // A failed read must reject instead of looking like an empty account: the
-  // caller would otherwise create defaults into an unknown state. Existing
-  // callers already catch (check-in) or render the error (Scales screen).
-  const existing = await getScalesOrThrow();
-  
-  // Delete scales that don't match the new defaults (wrong name or wrong range)
-  for (const scale of existing) {
-    const def = DEFAULT_SCALES.find(s => s.name === scale.name);
-    const needsReset = !def 
-      || def.min_value !== scale.min_value 
-      || def.max_value !== scale.max_value;
-    if (needsReset) {
-      try { await deleteScale(scale.id); } catch {}
+export interface ScaleSeedDeps {
+  /** Strict read; must reject on failure so seeding never runs blind. */
+  read?: () => Promise<Scale[]>;
+  create?: (scale: Omit<Scale, "id" | "user_id" | "created_at">) => Promise<Scale>;
+}
+
+/**
+ * Create only the missing default scales.
+ *
+ * Deliberately never deletes or updates an existing scale: a custom scale, a
+ * renamed default, or a default with a different range is the user's data, and
+ * deleting it also cascades to `scale_entries` history. A failed read rejects
+ * (see `getScalesOrThrow`) so the caller shows an error/retry instead of
+ * seeding into an account whose scales are simply unknown.
+ */
+export async function seedDefaultScales(
+  deps: ScaleSeedDeps = {}
+): Promise<Scale[]> {
+  // Inactive rows count as "existing": deactivating a default must not
+  // resurrect a duplicate copy on the next load.
+  const read = deps.read ?? (() => getScalesOrThrow(true));
+  const create = deps.create ?? createScale;
+
+  const existing = await read();
+  const missing = missingDefaultScales(existing).map((def) => ({
+    ...def,
+    is_active: true,
+  }));
+  if (missing.length === 0) return existing;
+
+  const created: Scale[] = [];
+  for (const def of missing) {
+    try {
+      created.push(await create(def));
+    } catch {
+      // Keep the scales that were created; the caller can retry the rest.
     }
   }
-  
-  // Get remaining scales after cleanup
-  const remaining = await getScalesOrThrow();
-  if (remaining.length >= DEFAULT_SCALES.length) return remaining;
-  
-  // Create missing default scales
-  const created = [];
-  const existingNames = new Set(remaining.map(s => s.name));
-  for (const scale of DEFAULT_SCALES) {
-    if (!existingNames.has(scale.name)) {
-      try {
-        const s = await createScale(scale);
-        created.push(s);
-      } catch {}
-    }
-  }
-  return [...remaining, ...created];
+  return [...existing, ...created];
 }

@@ -8,26 +8,52 @@ import type { HabitDef } from "@/lib/supabase/db";
 
 interface HabitEditDialogProps {
   onClose: () => void;
-  /** `habit` present → edit that habit (icon, label, type), absent → create. */
-  onSave: (habit: { name: string; icon: string; isNegative: boolean }) => void;
+  /**
+   * Returns an i18n key when the save is rejected (duplicate name), or null on
+   * success. The dialog stays open with the error so the typed name is kept.
+   */
+  onSave: (habit: {
+    name: string;
+    icon: string;
+    isNegative: boolean;
+  }) => string | null | Promise<string | null>;
+  /** Present in edit mode; removes the habit after confirmation. */
+  onDelete?: () => void;
   habit?: HabitDef | null;
 }
 
 /** Mounted only while open, so the fields start from props on every open. */
-export function HabitEditDialog({ onClose, onSave, habit }: HabitEditDialogProps) {
+export function HabitEditDialog({
+  onClose,
+  onSave,
+  onDelete,
+  habit,
+}: HabitEditDialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const [name, setName] = useState(habit?.label ?? "");
   const [icon, setIcon] = useState(habit?.icon || "✅");
   const [isNegative, setIsNegative] = useState(habit?.is_negative ?? false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) {
       setError(t("habits.error_name"));
       return;
     }
-    onSave({ name: name.trim(), icon: icon || "✅", isNegative });
+    setSaving(true);
+    const failure = await onSave({
+      name: name.trim(),
+      icon: icon || "✅",
+      isNegative,
+    });
+    setSaving(false);
+    if (failure) {
+      setError(t(failure));
+      return;
+    }
     onClose();
   };
 
@@ -35,79 +61,136 @@ export function HabitEditDialog({ onClose, onSave, habit }: HabitEditDialogProps
     <Modal
       onClose={onClose}
       labelledBy={titleId}
-      panelClassName="w-full max-w-sm mx-4 mb-4 sm:mb-0 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-xl shadow-2xl"
+      panelClassName="mx-4 mb-4 w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900/95 shadow-2xl backdrop-blur-xl sm:mb-0"
     >
-      <div className="px-5 pt-5 pb-2 flex items-center gap-2">
-        <span className="text-xl leading-none">{icon || "✅"}</span>
+      <div className="flex items-center gap-2 px-5 pb-2 pt-5">
+        <span aria-hidden="true" className="text-xl leading-none">
+          {icon || "✅"}
+        </span>
         <h3 id={titleId} className="text-base font-semibold text-white">
           {habit ? t("habits.edit_title") : t("habits.new_title")}
         </h3>
       </div>
 
-        <div className="px-5 pb-2 space-y-3">
-          {error && <div className="p-2 rounded-lg bg-red-500/10 text-red-400 text-xs">{error}</div>}
+      <div className="space-y-3 px-5 pb-2">
+        {error ? (
+          <p role="alert" className="rounded-lg bg-red-500/10 p-2 text-xs text-red-300">
+            {error}
+          </p>
+        ) : null}
 
-          <div>
-            <label className="block text-[11px] text-white/40 mb-1 uppercase tracking-wider">
-              {t("habits.name_label")}
-            </label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder={t("habits.name_placeholder")}
-              autoFocus
-              onKeyDown={e => {
-                if (e.key === "Enter") submit();
-              }}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/15 focus:outline-none focus:border-indigo-400/50"
-            />
-          </div>
+        <div>
+          <label
+            htmlFor={`${titleId}-name`}
+            className="mb-1 block text-[11px] uppercase tracking-wider text-[color:var(--text-3)]"
+          >
+            {t("habits.name_label")}
+          </label>
+          <input
+            id={`${titleId}-name`}
+            value={name}
+            maxLength={40}
+            onChange={(event) => {
+              setName(event.target.value);
+              setError(null);
+            }}
+            placeholder={t("habits.name_placeholder")}
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void submit();
+            }}
+            className="min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/25 focus:border-indigo-400/60 focus:outline-none"
+          />
+        </div>
 
-          <EmojiPicker value={icon} onChange={setIcon} label={t("emojiPicker.label")} />
+        <EmojiPicker value={icon} onChange={setIcon} label={t("emojiPicker.label")} />
 
-          <button
-            type="button"
-            onClick={() => setIsNegative(!isNegative)}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors ${
-              isNegative ? "bg-red-500/10 border-red-400/30" : "bg-white/5 border-white/10"
+        <button
+          type="button"
+          aria-pressed={isNegative}
+          onClick={() => setIsNegative(!isNegative)}
+          className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 ${
+            isNegative ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-white/5"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+              isNegative ? "bg-red-500/60" : "bg-white/10"
             }`}
           >
             <span
-              className={`w-12 h-7 rounded-full relative shrink-0 transition-colors ${
-                isNegative ? "bg-red-500/60" : "bg-white/10"
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                isNegative ? "translate-x-[22px]" : "translate-x-[2px]"
               }`}
+            />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm text-[color:var(--text-1)]">
+              {t("habits.negative_label")}
+            </span>
+            <span className="block text-[11px] leading-snug text-[color:var(--text-3)]">
+              {t("habits.negative_hint")}
+            </span>
+          </span>
+        </button>
+
+        {habit ? (
+          <p className="text-[11px] leading-snug text-[color:var(--text-3)]">
+            {t("habits.key_note")}
+          </p>
+        ) : null}
+
+        {habit && onDelete ? (
+          confirmDelete ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm text-[color:var(--text-2)]"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete();
+                  onClose();
+                }}
+                className="min-h-11 flex-1 rounded-xl bg-red-500/80 text-sm font-medium text-white hover:bg-red-500"
+              >
+                {t("common.remove")}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="min-h-11 w-full rounded-xl border border-red-500/20 bg-red-500/5 text-sm text-red-300 hover:bg-red-500/10"
             >
-              <span
-                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
-                  isNegative ? "translate-x-[22px]" : "translate-x-[2px]"
-                }`}
-              />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm text-white/80">{t("habits.negative_label")}</span>
-              <span className="block text-[11px] text-white/35 leading-snug">{t("habits.negative_hint")}</span>
-            </span>
-          </button>
+              {t("habits.remove_btn")}
+            </button>
+          )
+        ) : null}
+      </div>
 
-          {habit && (
-            <p className="text-[11px] text-white/25 leading-snug">{t("habits.key_note")}</p>
-          )}
-        </div>
-
-        <div className="px-5 pb-5 pt-1 flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-white/10 text-white/60 text-sm font-medium hover:bg-white/20 transition-colors"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            onClick={submit}
-            className="flex-1 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 transition-colors"
-          >
-            {t("common.save")}
-          </button>
-        </div>
+      <div className="flex gap-2 px-5 pb-5 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-11 flex-1 rounded-xl bg-white/10 text-sm font-medium text-[color:var(--text-2)] transition-colors hover:bg-white/20"
+        >
+          {t("common.cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={saving}
+          className="min-h-11 flex-1 rounded-xl bg-indigo-500 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
+        >
+          {t("common.save")}
+        </button>
+      </div>
     </Modal>
   );
 }

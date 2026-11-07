@@ -13,6 +13,44 @@ import { isRecordedMood } from "../mood.ts";
 import { weatherKey } from "../dashboard-ui.ts";
 import { isLegacyPhotoValue, isStoredPhotoUrl } from "./photo.ts";
 
+/**
+ * The Android beta5 section order. Goals, screen time and the AI reflection are
+ * reserved here on purpose: phase 2A renders through `note`, and the later
+ * phases only need to add their components to the map — the order cannot drift.
+ */
+export const CHECKIN_SECTION_ORDER = [
+  "mood",
+  "sleep",
+  "stress",
+  "activities",
+  "habits",
+  "gratitude",
+  "weather",
+  "photo",
+  "scales",
+  "note",
+  "goals",
+  "screenTime",
+  "reflection",
+] as const;
+
+export type CheckInSectionId = (typeof CHECKIN_SECTION_ORDER)[number];
+
+/** Sections this phase renders; the rest stay reserved in the order above. */
+export const CHECKIN_RENDERED_SECTIONS: readonly CheckInSectionId[] = [
+  "mood",
+  "sleep",
+  "stress",
+  "activities",
+  "habits",
+  "gratitude",
+  "weather",
+  "photo",
+  "scales",
+  "note",
+];
+
+
 export const EMPTY_CHECKIN: CheckInData = {
   mood: 0,
   moodEmoji: "",

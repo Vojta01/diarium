@@ -61,3 +61,47 @@ export function clearDraft(storage: DraftStorage, date: string): void {
     // A missing/quota-blocked storage must not break saving.
   }
 }
+
+/**
+ * The draft/save arbitration for one mounted screen.
+ *
+ * `saved` must not live in React state alone: the effect cleanup that runs when
+ * the flag flips still closes over the previous render (`saved === false`), so
+ * an unmount or dependency-change flush would recreate the draft that the save
+ * just cleared. This writer keeps the flag synchronously, so `markSaved` wins
+ * over any flush that was already scheduled with stale props.
+ */
+export interface DraftWriter {
+  /** The form was edited after the last save; drafts may be written again. */
+  markEdited(): void;
+  /** A save succeeded: clear the day's draft and refuse flushes for that day. */
+  markSaved(date: string): void;
+  /** Write the snapshot unless that day was saved. Returns false when skipped. */
+  flush(date: string, data: CheckInData): boolean;
+}
+
+export function createDraftWriter(
+  /** Resolved lazily so the writer is safe to construct during SSR. */
+  resolveStorage: () => DraftStorage | null
+): DraftWriter {
+  // The saved *day*, not a boolean: navigating away must keep suppressing the
+  // old day's stale cleanup while still allowing a draft for the new day.
+  let savedDate: string | null = null;
+
+  return {
+    markEdited() {
+      savedDate = null;
+    },
+    markSaved(date: string) {
+      savedDate = date;
+      const storage = resolveStorage();
+      if (storage) clearDraft(storage, date);
+    },
+    flush(date: string, data: CheckInData) {
+      if (savedDate === date) return false;
+      const storage = resolveStorage();
+      if (!storage) return false;
+      return writeDraft(storage, date, data);
+    },
+  };
+}

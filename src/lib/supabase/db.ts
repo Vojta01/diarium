@@ -153,7 +153,13 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
         });
   }
 
-  return postEntryRow(row);
+  // `clear_photo` is a directive for the route (delete the Storage object), not
+  // a column: `buildEntryRow` turns it into `photo_path: null` and drops the
+  // flag, so it must be re-attached to the body the route receives.
+  const body =
+    payload.clear_photo === true ? { ...row, clear_photo: true } : row;
+
+  return postEntryRow(body);
 }
 
 /** Persist an AI reflection as a partial patch; no form fields are resent. */

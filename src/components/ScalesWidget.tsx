@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getScaleEntries, getScaleAverage, seedDefaultScales, type Scale, type ScaleEntry } from "@/lib/scales";
+import { getScaleEntries, getScaleAverage, getScalesOrThrow, seedDefaultScales, type Scale, type ScaleEntry } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
 import { pragueDateKey, shiftDateKey } from "@/lib/date";
 import { useDataRefresh } from "@/lib/use-data-refresh";
@@ -24,7 +24,10 @@ export function ScalesWidget({ todayScaleValues }: ScalesWidgetProps) {
     setLoading(true);
     setLoadError(false);
     try {
-      const data = await seedDefaultScales();
+      const existing = await getScalesOrThrow();
+      // Seeding is additive and only for an account with no scales at all; a
+      // failed read rejects above instead of creating defaults.
+      const data = existing.length === 0 ? await seedDefaultScales() : existing;
       setScales(data);
 
       const entriesMap: Record<string, ScaleEntry[]> = {};
