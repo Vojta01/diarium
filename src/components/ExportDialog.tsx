@@ -3,6 +3,8 @@
 import { useId, useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { getAccessToken } from "@/lib/supabase/db";
+import { pragueDateKey } from "@/lib/date";
+import { csvFileName } from "@/lib/export-csv";
 import { Modal } from "@/components/ui/Modal";
 
 interface ExportDialogProps {
@@ -10,120 +12,244 @@ interface ExportDialogProps {
   onClose: () => void;
 }
 
+type Phase = "idle" | "loading" | "success" | "empty" | "error";
+
+/**
+ * Web export dialog.
+ *
+ * Deliberate web adaptation of the Android CSV screen: the account lives in
+ * Supabase, so the file is generated server-side. The CSV columns, order,
+ * quoting and line endings are Android's (`lib/export-csv.ts`). PDF is a
+ * **web-only reduced summary** and says so — Android exports CSV only.
+ */
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
+  const fromId = useId();
+  const toId = useId();
+  const rangeErrorId = useId();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [format, setFormat] = useState<"csv" | "pdf">("csv");
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [count, setCount] = useState(0);
+
+  const rangeInvalid = Boolean(from && to && from > to);
+  const loading = phase === "loading";
+
+  function reset() {
+    setPhase("idle");
+    setCount(0);
+  }
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
 
   async function handleExport() {
-    setExporting(true);
-    setError(null);
+    if (rangeInvalid) return;
+
+    setPhase("loading");
+    setCount(0);
 
     try {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
-      // The export routes derive the user from the verified JWT (they no longer accept
-      // a user_id query param), so the access token must be sent.
+      // The export routes derive the user from the verified JWT (they no longer
+      // accept a user_id query param), so the access token must be sent.
       const token = getAccessToken();
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const resp = await fetch(`/api/export/${format}?${params}`, { headers });
+      const response = await fetch(`/api/export/${format}?${params}`, { headers });
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: "Export failed" }));
-        throw new Error(err.error || `Export failed (${resp.status})`);
+      if (response.status === 404) {
+        setPhase("empty");
+        return;
+      }
+      if (!response.ok) {
+        setPhase("error");
+        return;
       }
 
-      // Download the file
-      const blob = await resp.blob();
+      const rows = Number(response.headers.get("X-Diarium-Entry-Count") || "0");
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `diarium-export-${Date.now()}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download =
+        format === "csv"
+          ? csvFileName(pragueDateKey())
+          : csvFileName(pragueDateKey()).replace(/\.csv$/, ".pdf");
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      // Safari needs the URL to outlive the click.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      onClose();
-    } catch (e: any) {
-      setError(e.message || "Export failed");
+      setCount(Number.isFinite(rows) ? rows : 0);
+      setPhase("success");
+    } catch {
+      setPhase("error");
     }
-    setExporting(false);
   }
 
   if (!open) return null;
 
   return (
     <Modal
-      onClose={onClose}
+      onClose={handleClose}
       labelledBy={titleId}
-      panelClassName="relative glass-card p-6 w-full max-w-sm mx-4 mb-4 sm:mb-0"
+      panelClassName="relative glass-card p-5 w-full max-w-sm mx-4 mb-4 sm:mb-0 max-h-[90dvh] overflow-y-auto"
     >
-      <h2 id={titleId} className="text-xl font-bold text-white mb-4">
-        {t("export.title")}
-      </h2>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <h2 id={titleId} className="text-xl font-bold text-[color:var(--text-1)]">
+          {t("export.title")}
+        </h2>
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label={t("common.close")}
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[color:var(--text-2)] transition-colors hover:bg-white/5 hover:text-[color:var(--text-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">
+            ✕
+          </span>
+        </button>
+      </div>
 
-      {error && (
-        <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 text-sm">{error}</div>
-      )}
+      {phase === "error" ? (
+        <p
+          role="alert"
+          className="mb-3 rounded-lg bg-red-500/10 p-2 text-sm text-red-300"
+        >
+          {t("export.error")}
+        </p>
+      ) : null}
 
-      {/* Date range */}
-      <label className="block mb-3">
-        <span className="text-sm text-white/60 mb-1 block">{t("export.date_range")}</span>
+      {phase === "empty" ? (
+        <div role="status" className="mb-3 rounded-lg bg-white/5 p-3 text-sm">
+          <p className="font-medium text-[color:var(--text-1)]">{t("export.empty")}</p>
+          <p className="mt-1 text-xs leading-5 text-[color:var(--text-2)]">
+            {t("export.empty_hint")}
+          </p>
+        </div>
+      ) : null}
+
+      {phase === "success" ? (
+        <p
+          role="status"
+          className="mb-3 rounded-lg bg-emerald-500/10 p-2 text-sm text-emerald-300"
+        >
+          {count > 0
+            ? t("export.success_count", { count })
+            : t("export.success")}
+        </p>
+      ) : null}
+
+      <fieldset className="mb-3">
+        <legend className="mb-2 text-sm text-[color:var(--text-2)]">
+          {t("export.date_range")}
+        </legend>
         <div className="flex gap-2">
-          <div className="flex-1">
-            <span className="text-xs text-white/30 block mb-0.5">{t("export.from")}</span>
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor={fromId}
+              className="mb-1 block text-xs text-[color:var(--text-2)]"
+            >
+              {t("export.from")}
+            </label>
             <input
+              id={fromId}
               type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-xl bg-white/10 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+              onChange={(event) => {
+                setFrom(event.target.value);
+                if (phase === "success" || phase === "empty" || phase === "error") {
+                  reset();
+                }
+              }}
+              aria-invalid={rangeInvalid || undefined}
+              aria-describedby={rangeInvalid ? rangeErrorId : undefined}
+              className="min-h-11 w-full rounded-xl border border-white/15 bg-white/10 px-2 text-sm text-[color:var(--text-1)] [color-scheme:dark] focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
             />
           </div>
-          <div className="flex-1">
-            <span className="text-xs text-white/30 block mb-0.5">{t("export.to")}</span>
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor={toId}
+              className="mb-1 block text-xs text-[color:var(--text-2)]"
+            >
+              {t("export.to")}
+            </label>
             <input
+              id={toId}
               type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-xl bg-white/10 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+              onChange={(event) => {
+                setTo(event.target.value);
+                if (phase === "success" || phase === "empty" || phase === "error") {
+                  reset();
+                }
+              }}
+              className="min-h-11 w-full rounded-xl border border-white/15 bg-white/10 px-2 text-sm text-[color:var(--text-1)] [color-scheme:dark] focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
             />
           </div>
         </div>
-      </label>
+        {rangeInvalid ? (
+          <p id={rangeErrorId} role="alert" className="mt-2 text-xs text-red-300">
+            {t("export.error_range")}
+          </p>
+        ) : null}
+      </fieldset>
 
-      {/* Format */}
-      <label className="block mb-4">
-        <span className="text-sm text-white/60 mb-1 block">{t("export.format")}</span>
-        <div className="flex gap-2">
+      <div className="mb-4">
+        <p id={`${titleId}-format`} className="mb-2 text-sm text-[color:var(--text-2)]">
+          {t("export.format")}
+        </p>
+        <div
+          role="group"
+          aria-labelledby={`${titleId}-format`}
+          className="flex gap-2"
+        >
           {(["csv", "pdf"] as const).map((fmt) => (
             <button
               key={fmt}
-              onClick={() => setFormat(fmt)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+              type="button"
+              aria-pressed={format === fmt}
+              onClick={() => {
+                setFormat(fmt);
+                reset();
+              }}
+              className={`min-h-11 flex-1 rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
                 format === fmt
                   ? "bg-indigo-500 text-white"
-                  : "bg-white/10 text-white/60 hover:bg-white/20"
+                  : "border border-white/15 text-[color:var(--text-1)] hover:bg-white/10"
               }`}
             >
               {t(`export.${fmt}`)}
             </button>
           ))}
         </div>
-      </label>
+        <p className="mt-2 text-xs leading-5 text-[color:var(--text-2)]">
+          {format === "csv" ? t("export.csv_hint") : t("export.pdf_web_only")}
+        </p>
+      </div>
 
       <button
-        onClick={handleExport}
-        disabled={exporting}
-        className="w-full py-2.5 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors disabled:opacity-50"
+        type="button"
+        onClick={() => void handleExport()}
+        disabled={loading || rangeInvalid}
+        aria-busy={loading}
+        className="min-h-11 w-full rounded-xl bg-indigo-500 font-medium text-white transition-colors hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:opacity-50"
       >
-        {exporting ? t("export.exporting") : t("export.export_button")}
+        {loading
+          ? t("export.exporting")
+          : format === "csv"
+            ? t("export.export_csv")
+            : t("export.export_pdf")}
       </button>
     </Modal>
   );

@@ -120,7 +120,7 @@ export const en = {
   },
 
   settings: {
-    subtitle: 'Account, data and links',
+    subtitle: 'Account, goals and reminders in one place.',
     account: 'Account',
     unknown_user: 'Signed-in account',
     logout: 'Sign out',
@@ -129,8 +129,22 @@ export const en = {
     data: 'Data',
     export: 'Export data',
     notifications: 'Notifications',
-    notifications_hint: 'In the browser, reminders use push notifications; the Android app schedules them natively.',
+    notifications_hint: 'Web push is only a delivery channel. The Android app schedules reminder times and days.',
     about_app: 'About Diarium',
+    notifications_status_checking: 'Checking notification status…',
+    notifications_status_unsupported: 'This browser does not support push notifications.',
+    notifications_status_denied: 'Notifications are blocked in this browser.',
+    notifications_status_off: 'Notifications are not enabled yet.',
+    notifications_status_on: 'Notifications are enabled on this device.',
+    notifications_unsupported_hint: 'Only the Android app can schedule reminders at a chosen time.',
+    notifications_denied_hint: 'Allow notifications for this site in the browser settings (lock icon), then try again.',
+    notifications_transport_hint: 'The web can deliver a push, not schedule one. Times, days and reports are configured in the Android app.',
+    notifications_enable: 'Enable notifications',
+    notifications_disable: 'Disable notifications',
+    notifications_busy: 'Saving…',
+    notifications_error: 'Could not save the change. Try again.',
+    notifications_native_button: 'Open notification settings',
+    notifications_native_hint: 'Reminder times and days are configured in the Android app.',
   },
 
   about: {
@@ -850,11 +864,6 @@ export const en = {
     other_time_hint: 'other apps and system',
   },
 
-  // ── Notifications ──
-  notifications: {
-    settings_title: 'Notification settings',
-  },
-
   // ── CalendarView ──
   calendar: {
     edit_entry: '✏️ Edit this entry',
@@ -901,16 +910,6 @@ export const en = {
     not_enough_data: 'Not enough data yet. You need at least 2 days of entries.',
     error_prefix: 'Error: {error}',
     error_connection: 'Connection error',
-  },
-
-  // ── Push Notification Manager ──
-  pushNotification: {
-    title: '🔔 Daily reminder',
-    description: 'Get notified at 9 PM so you don\'t forget your check-in',
-    enable: 'Enable notifications',
-    dismiss: 'Skip',
-    status_active: 'Notifications active ✅',
-    status_inactive: 'Notifications off ❌ — restart the app to enable',
   },
 
   // ── Update Prompt (PWA) ──
@@ -1057,8 +1056,17 @@ export const en = {
     csv: 'CSV',
     pdf: 'PDF',
     export_button: 'Export',
-    exporting: 'Exporting...',
-    include_photos: 'Include photos',
+    export_csv: 'Download CSV',
+    export_pdf: 'Download PDF',
+    exporting: 'Preparing the file…',
+    csv_hint: 'Same columns, order and encoding as the Android export. The file is generated server-side from your account.',
+    pdf_web_only: 'PDF is a web-only reduced summary (date, mood, sleep, stress, activities, shortened note). Android exports CSV only.',
+    empty: 'No entries yet',
+    empty_hint: 'There is nothing to export for this range. Try another date or fill in a day first.',
+    error: 'The export could not be created. Try again.',
+    error_range: 'The “From” date must be before the “To” date.',
+    success: 'The file was downloaded.',
+    success_count: 'The file was downloaded ({count} entries).',
   },
 };
 

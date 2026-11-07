@@ -135,7 +135,7 @@ export const cs = {
   },
 
   settings: {
-    subtitle: 'Účet, data a odkazy',
+    subtitle: 'Účet, cíle a připomínky na jednom místě.',
     account: 'Účet',
     unknown_user: 'Přihlášený účet',
     logout: 'Odhlásit se',
@@ -144,8 +144,22 @@ export const cs = {
     data: 'Data',
     export: 'Exportovat data',
     notifications: 'Notifikace',
-    notifications_hint: 'V prohlížeči používají připomínky push notifikace; v Android aplikaci je plánuje systém.',
+    notifications_hint: 'Web push je jen doručovací kanál. Časy a dny připomínek plánuje Android aplikace.',
     about_app: 'O aplikaci Diarium',
+    notifications_status_checking: 'Zjišťuji stav notifikací…',
+    notifications_status_unsupported: 'Tento prohlížeč push notifikace nepodporuje.',
+    notifications_status_denied: 'Notifikace jsou v prohlížeči zablokované.',
+    notifications_status_off: 'Notifikace zatím nejsou zapnuté.',
+    notifications_status_on: 'Notifikace jsou na tomto zařízení zapnuté.',
+    notifications_unsupported_hint: 'Připomínky v čase umí plánovat jen Android aplikace.',
+    notifications_denied_hint: 'Povol notifikace pro tuto stránku v nastavení prohlížeče (ikona zámku) a zkus to znovu.',
+    notifications_transport_hint: 'Web umí push doručit, ale ne naplánovat. Časy, dny a reporty nastavuje Android aplikace.',
+    notifications_enable: 'Zapnout notifikace',
+    notifications_disable: 'Vypnout notifikace',
+    notifications_busy: 'Ukládám…',
+    notifications_error: 'Změnu se nepodařilo uložit. Zkus to znovu.',
+    notifications_native_button: 'Otevřít nastavení notifikací',
+    notifications_native_hint: 'Časy a dny připomínek se nastavují v Android aplikaci.',
   },
 
   about: {
@@ -846,11 +860,6 @@ export const cs = {
     other_time_hint: 'jiné aplikace a systém',
   },
 
-  // ── Notifications ──
-  notifications: {
-    settings_title: 'Nastavení notifikací',
-  },
-
   // ── CalendarView ──
   calendar: {
     edit_entry: '✏️ Upravit tento záznam',
@@ -897,16 +906,6 @@ export const cs = {
     not_enough_data: 'Zatím není dostatek dat. Potřebuješ alespoň 2 dny záznamů.',
     error_prefix: 'Chyba: {error}',
     error_connection: 'Chyba připojení',
-  },
-
-  // ── Push Notification Manager ──
-  pushNotification: {
-    title: '🔔 Denní připomenutí',
-    description: 'Dostávej upozornění ve 21:00, ať nezapomeneš na check-in',
-    enable: 'Povolit notifikace',
-    dismiss: 'Přeskočit',
-    status_active: 'Notifikace aktivní ✅',
-    status_inactive: 'Notifikace vypnuté ❌ — pro zapnutí obnov aplikaci',
   },
 
   // ── Update Prompt (PWA) ──
@@ -1033,8 +1032,17 @@ export const cs = {
     csv: 'CSV',
     pdf: 'PDF',
     export_button: 'Exportovat',
-    exporting: 'Exportuji...',
-    include_photos: 'Zahrnout fotky',
+    export_csv: 'Stáhnout CSV',
+    export_pdf: 'Stáhnout PDF',
+    exporting: 'Připravuji soubor…',
+    csv_hint: 'Stejné sloupce, pořadí a kódování jako export v Android aplikaci. Soubor se vytváří na serveru z tvého účtu.',
+    pdf_web_only: 'PDF je jen webová zkrácená rekapitulace (datum, nálada, spánek, stres, aktivity, zkrácená poznámka). Android umí pouze CSV.',
+    empty: 'Zatím žádné zápisy',
+    empty_hint: 'Pro zvolené období není co exportovat. Zkus jiné datum nebo si nejdřív vyplň den.',
+    error: 'Export se nepodařilo vytvořit. Zkus to znovu.',
+    error_range: 'Datum „Od“ musí být před datem „Do“.',
+    success: 'Soubor se stáhl.',
+    success_count: 'Soubor se stáhl ({count} záznamů).',
   },
 
   // ── Advanced Stats ──

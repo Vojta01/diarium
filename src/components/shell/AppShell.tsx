@@ -15,7 +15,6 @@ import { Dashboard } from "@/components/Dashboard";
 import { ExternalLink } from "@/components/ExternalLink";
 import { HistoryView } from "@/components/history/HistoryView";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { NotificationSettingsButton } from "@/components/NotificationSettingsButton";
 import { CheckInScreen } from "@/components/checkin/CheckInScreen";
 import { AboutScreen } from "@/components/settings/AboutScreen";
 import { SettingsView } from "@/components/settings/SettingsView";
@@ -376,7 +375,6 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   const headerActions = (
     <div className="flex items-center gap-0.5">
       <LanguageSwitcher />
-      <NotificationSettingsButton />
       <ExternalLink
         href={GITHUB_WEB_URL}
         label={t("links.github")}

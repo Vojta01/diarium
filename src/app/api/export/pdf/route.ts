@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
+import { csvFileName } from "@/lib/export-csv";
+import { fetchAllExportPages } from "@/lib/export-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,35 +128,47 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    let query = supabase
-      .from("entries")
-      .select("date, mood, mood_emoji, sleep_quality, stress, activities, note")
-      .eq("user_id", userId)
-      .order("date", { ascending: true })
-      .limit(10000);
+    // Page through the account like Android does; the old hard row cap could
+    // never return more than PostgREST's per-response limit and silently lost rows.
+    const makeQuery = () => {
+      let query = supabase
+        .from("entries")
+        .select("date, mood, mood_emoji, sleep_quality, stress, activities, note")
+        .eq("user_id", userId)
+        .order("date", { ascending: true });
 
-    if (from) query = query.gte("date", from);
-    if (to) query = query.lte("date", to);
+      if (from) query = query.gte("date", from);
+      if (to) query = query.lte("date", to);
+      return query;
+    };
 
-    const { data: entries, error } = await query;
+    const { data: entries, error } = await fetchAllExportPages(makeQuery);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error }, { status: 500 });
     }
 
-    if (!entries || entries.length === 0) {
-      return NextResponse.json({ error: "No entries found" }, { status: 404 });
+    if (entries.length === 0) {
+      return NextResponse.json(
+        { error: "No entries found", code: "no_entries" },
+        { status: 404 }
+      );
     }
 
-    const pdf = generatePDF(entries);
+    const pdf = generatePDF(entries as any[]);
 
     return new NextResponse(pdf, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="diarium-export.pdf"`,
+        "Content-Disposition": `attachment; filename="${csvFileName(
+          new Date().toISOString().slice(0, 10)
+        ).replace(/\.csv$/, ".pdf")}"`,
+        "X-Diarium-Entry-Count": String(entries.length),
+        "Cache-Control": "no-store",
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,33 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+
 import { useTranslation } from "@/lib/i18n";
+import { getAndroidBridge, hasAndroidNotificationBridge } from "@/lib/android-bridge";
+
+const subscribeToNothing = () => () => {};
+const getServerSnapshot = () => false;
+
+function bridgeAvailable(): boolean {
+  return hasAndroidNotificationBridge(getAndroidBridge());
+}
 
 /**
- * Button that opens the NATIVE notification settings inside the Android app.
- * Only visible when running inside the Diarium Android wrapper
- * (window.AndroidBridge). In a plain browser/PWA it stays hidden — the web
- * has no local notification scheduler.
+ * Opens the NATIVE notification settings inside the Android app.
+ *
+ * The Diarium Android wrapper schedules reminders locally; the browser cannot.
+ * The control therefore exists only inside that wrapper and is rendered as a
+ * normal 44 px row — never as the old 21 px bell that returned null in every
+ * browser and left the Settings card with no action at all.
  */
 export function NotificationSettingsButton() {
   const { t } = useTranslation();
-  const [available, setAvailable] = useState(false);
-
-  useEffect(() => {
-    setAvailable(typeof window !== "undefined" &&
-      typeof (window as any).AndroidBridge?.openNotificationSettings === "function");
-  }, []);
+  const available = useSyncExternalStore(
+    subscribeToNothing,
+    bridgeAvailable,
+    getServerSnapshot
+  );
 
   if (!available) return null;
 
   return (
     <button
-      onClick={() => (window as any).AndroidBridge.openNotificationSettings()}
-      className="px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer text-white/25 hover:text-white/50 border border-transparent"
-      title={t("notifications.settings_title")}
-      aria-label={t("notifications.settings_title")}
+      type="button"
+      onClick={() => getAndroidBridge()?.openNotificationSettings?.()}
+      className="flex min-h-11 w-full flex-col items-start justify-center rounded-xl border border-white/10 px-3 py-2 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
     >
-      🔔
+      <span className="text-sm font-medium text-[color:var(--text-1)]">
+        {t("settings.notifications_native_button")}
+      </span>
+      <span className="text-xs leading-5 text-[color:var(--text-2)]">
+        {t("settings.notifications_native_hint")}
+      </span>
     </button>
   );
 }

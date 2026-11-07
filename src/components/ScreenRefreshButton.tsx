@@ -3,16 +3,6 @@
 import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 
-interface Bridge {
-  forceBackfill?: () => void;
-}
-
-declare global {
-  interface Window {
-    AndroidBridge?: Bridge;
-  }
-}
-
 /**
  * Refresh button for the screen-time chart — only visible inside the native
  * Android app (which can re-read UsageStats and re-push the last 7 days).

@@ -3,13 +3,10 @@ import webpush from "web-push";
 import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { pushSubscriptionsKey } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 let _vapidReady = false;
 function ensureVapid() {
@@ -35,6 +32,17 @@ export async function GET(request: NextRequest) {
     }
 
     const message = JSON.parse(url.searchParams.get("message") || "{}");
+    // Push is addressed to one account. Without a user id there is no safe
+    // recipient: the old behaviour fanned out to every stored subscription,
+    // i.e. one user's reminder reached all users' devices.
+    const userId = (url.searchParams.get("userId") || message.userId || "").trim();
+    if (!userId) {
+      return Response.json(
+        { error: "userId is required; broadcasts are not supported" },
+        { status: 400 }
+      );
+    }
+
     const title = message.title || "Diarium";
     const body = message.body || "Nezapomeň vyplnit dnešní záznam! 🖊️";
 
@@ -46,8 +54,9 @@ export async function GET(request: NextRequest) {
     // user-chosen times; the server only keeps web push for PWA/browser users.
     // (FCM is intentionally not used here anymore to avoid duplicates.)
     const redis = getRedis();
+    const key = pushSubscriptionsKey(userId);
     if (redis && ensureVapid()) {
-      const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
+      const rawSubs: any[] = await redis.smembers(key);
       const subscriptions = rawSubs.map((s: any) => {
         if (typeof s === "string") {
           try { return JSON.parse(s); } catch { return null; }
@@ -69,13 +78,14 @@ export async function GET(request: NextRequest) {
         if (r.status === "rejected") {
           const err = (r as PromiseRejectedResult).reason;
           if (err?.statusCode === 410 || err?.statusCode === 404) {
-            await redis.srem(SUBSCRIPTIONS_KEY, rawSubs[i]);
+            await redis.srem(key, rawSubs[i]);
           }
         }
       }
     }
 
     return Response.json({
+      userId,
       webSent,
       webErrors: webErrors > 0 ? webErrors : undefined,
     });

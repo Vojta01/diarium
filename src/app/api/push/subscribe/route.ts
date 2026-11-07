@@ -1,9 +1,8 @@
 import { NextRequest } from "next/server";
 import { getRedis } from "@/lib/redis";
 import { verifyAuth } from "@/lib/auth";
+import { pushSubscriptionsKey } from "@/lib/push";
 import { createClient } from "@supabase/supabase-js";
-
-const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -51,8 +50,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Redis not configured" }, { status: 500 });
     }
 
-    await redis.sadd(SUBSCRIPTIONS_KEY, JSON.stringify(subscription));
-    console.log("[subscribe] Stored web subscription, endpoint:", subscription.endpoint?.slice(0, 50));
+    await redis.sadd(pushSubscriptionsKey(user.id), JSON.stringify(subscription));
+    console.log("[subscribe] Stored web subscription for user", user.id, "endpoint:", subscription.endpoint?.slice(0, 50));
 
     return Response.json({ ok: true, platform: "web" });
   } catch (err) {
@@ -89,7 +88,7 @@ export async function DELETE(request: NextRequest) {
     if (!redis) {
       return Response.json({ error: "Redis not configured" }, { status: 500 });
     }
-    await redis.srem(SUBSCRIPTIONS_KEY, JSON.stringify(subscription));
+    await redis.srem(pushSubscriptionsKey(user.id), JSON.stringify(subscription));
 
     return Response.json({ ok: true });
   } catch (err) {

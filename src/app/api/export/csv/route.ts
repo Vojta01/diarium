@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
+import { CSV_HEADERS, buildCsv, csvFileName } from "@/lib/export-csv";
+import { fetchAllExportPages } from "@/lib/export-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,60 +26,48 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    let query = supabase
-      .from("entries")
-      .select("date, mood, mood_emoji, sleep_quality, stress, activities, habits, gratitude, note, scale_values")
-      .eq("user_id", userId)
-      .order("date", { ascending: true })
-      .limit(10000);
+    // PostgREST answers with at most one page. Android reads until the account
+    // is exhausted, so page through instead of truncating at an arbitrary cap.
+    const makeQuery = () => {
+      let query = supabase
+        .from("entries")
+        .select(CSV_HEADERS.join(", "))
+        .eq("user_id", userId)
+        .order("date", { ascending: true });
 
-    if (from) query = query.gte("date", from);
-    if (to) query = query.lte("date", to);
+      if (from) query = query.gte("date", from);
+      if (to) query = query.lte("date", to);
+      return query;
+    };
 
-    const { data: entries, error } = await query;
+    const { data: entries, error } = await fetchAllExportPages(makeQuery);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error }, { status: 500 });
     }
 
-    if (!entries || entries.length === 0) {
-      return NextResponse.json({ error: "No entries found" }, { status: 404 });
+    if (entries.length === 0) {
+      return NextResponse.json(
+        { error: "No entries found", code: "no_entries" },
+        { status: 404 }
+      );
     }
 
-    // Generate CSV
-    const headers = [
-      "date", "mood", "mood_emoji", "sleep_quality", "stress",
-      "activities", "habits", "gratitude", "note", "scale_values"
-    ];
-
-    const csvRows = [headers.join(",")];
-
-    for (const entry of entries) {
-      const row = headers.map((col) => {
-        const val = entry[col as keyof typeof entry];
-        if (val === null || val === undefined) return "";
-        if (typeof val === "object") {
-          return `"${JSON.stringify(val).replace(/"/g, '""')}"`;
-        }
-        const str = String(val);
-        // Escape CSV: wrap in quotes if contains comma, quote, or newline
-        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      });
-      csvRows.push(row.join(","));
-    }
-
-    const csv = csvRows.join("\n");
+    const csv = buildCsv(entries as unknown as Record<string, unknown>[]);
 
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="diarium-export.csv"`,
+        "Content-Disposition": `attachment; filename="${csvFileName(
+          new Date().toISOString().slice(0, 10)
+        )}"`,
+        // The dialog reads this so its success state can name the real row count.
+        "X-Diarium-Entry-Count": String(entries.length),
+        "Cache-Control": "no-store",
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

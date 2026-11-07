@@ -6,6 +6,7 @@ import { getRedis } from "@/lib/redis";
 import { guardAIUser } from "@/lib/ai-guard";
 import { getAIModel } from "@/lib/ai-config";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { pushSubscriptionsKey } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -336,8 +337,6 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
   return { analysis, fromDate, periodEnd };
 }
 
-const SUBSCRIPTIONS_KEY = "diarium:push:subscriptions";
-
 async function sendPushNotification(userId: string, title: string, body: string, deepLink?: string) {
   try {
     // Variant A: the Android app polls ai_reports itself and shows LOCAL
@@ -346,7 +345,10 @@ async function sendPushNotification(userId: string, title: string, body: string,
     const redis = getRedis();
     if (!redis) return;
 
-    const rawSubs: any[] = await redis.smembers(SUBSCRIPTIONS_KEY);
+    // Per-user set: this report belongs to one account, so its push must never
+    // reach another account's devices.
+    const key = pushSubscriptionsKey(userId);
+    const rawSubs: any[] = await redis.smembers(key);
     const subscriptions = rawSubs.map((s: any) => {
       if (typeof s === "string") {
         try { return JSON.parse(s); } catch { return null; }
@@ -377,7 +379,7 @@ async function sendPushNotification(userId: string, title: string, body: string,
       if (r.status === "rejected") {
         const err = (r as PromiseRejectedResult).reason;
         if (err?.statusCode === 410 || err?.statusCode === 404) {
-          await redis.srem(SUBSCRIPTIONS_KEY, rawSubs[i]);
+          await redis.srem(key, rawSubs[i]);
         }
       }
     }

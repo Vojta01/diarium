@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ExternalLink } from "@/components/ExternalLink";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { NotificationSettingsButton } from "@/components/NotificationSettingsButton";
+import { NotificationsCard } from "@/components/settings/NotificationsCard";
 import { SectionHeader } from "@/components/ui/ScreenHeader";
 import { AndroidIcon, GitHubIcon } from "@/components/ui/icons";
 import { useTranslation } from "@/lib/i18n";
@@ -82,12 +82,7 @@ export function SettingsView({ email, onLogout, onOpenSub }: SettingsViewProps) 
 
       <section className="glass-card">
         <SectionHeader title={t("settings.notifications")} />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-[color:var(--text-2)]">
-            {t("settings.notifications_hint")}
-          </p>
-          <NotificationSettingsButton />
-        </div>
+        <NotificationsCard />
       </section>
 
       <section className="glass-card">
