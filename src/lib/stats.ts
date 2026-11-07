@@ -2,6 +2,11 @@
 
 import { createSupabaseClient } from "./supabase/client.ts";
 import { readStoredSession } from "./auth-storage.ts";
+import {
+  DASHBOARD_ERROR_CODES,
+  loadFailedError,
+  signedOutError,
+} from "./dashboard-errors.ts";
 import { recordedMood } from "./mood.ts";
 
 /** One app used most on the phone that day, in the single shape the dashboard reads. */
@@ -35,6 +40,15 @@ export interface DailyEntry {
   phone_top_apps?: TopApp[];
   /** Public URL of the day's photo (null if no photo). */
   photo_path: string | null;
+  /** Row creation timestamp; null for legacy rows. Used only for stable dedupe. */
+  created_at: string | null;
+}
+
+/** A goal-progress row: only the columns the pure calendar maths reads. */
+export interface GoalActivityEntry {
+  date: string;
+  activities: string[];
+  habits: Record<string, boolean>;
 }
 
 /** Supabase/PostgREST returns at most this many rows per request by default. */
@@ -47,9 +61,19 @@ function numberOrNull(value: unknown): number | null {
 
 /** Coerce a database boolean map, ignoring arrays and non-boolean values. */
 function booleanMap(value: unknown): Record<string, boolean> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  let parsed: unknown = value;
+  // PostgREST normally returns jsonb as an object, but an older/edge response
+  // can carry it JSON-encoded as a string. Android tolerates that; so do we.
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(
+    Object.entries(parsed as Record<string, unknown>).filter(
       (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
     )
   );
@@ -125,26 +149,45 @@ export function mapDailyEntryRow(row: Record<string, unknown>): DailyEntry {
       typeof row.photo_path === "string" && row.photo_path.trim()
         ? row.photo_path
         : null,
+    created_at:
+      typeof row.created_at === "string" && row.created_at.trim()
+        ? row.created_at
+        : null,
   };
 }
 
 /**
- * Collapse duplicate dates, newest row wins.
+ * Collapse duplicate dates, newest write wins.
  *
  * A day should have one row, but sync workers and retried saves have produced
- * duplicates in production. The rows are read oldest first (date, then
- * created_at), so "last one wins" is the newest write for that date. The result
- * is ascending by date, which is the order every statistics view expects.
+ * duplicates in production. Ordering is explicit rather than trusted from the
+ * query: date ascending, then `created_at` ascending with null first, then the
+ * caller's order. That makes a row with a real timestamp always beat a legacy
+ * row with no timestamp, and gives duplicate null timestamps a stable winner
+ * (the later row in the input). The result is ascending by date, which is the
+ * order every statistics view expects.
  */
 export function dedupeDailyEntries(
   entries: readonly DailyEntry[]
 ): DailyEntry[] {
+  const ordered = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.date.length > 0)
+    .sort((left, right) => {
+      const byDate = left.entry.date.localeCompare(right.entry.date);
+      if (byDate !== 0) return byDate;
+      const byCreated = (left.entry.created_at ?? "").localeCompare(
+        right.entry.created_at ?? ""
+      );
+      if (byCreated !== 0) return byCreated;
+      return left.index - right.index;
+    });
+
   const byDate = new Map<string, DailyEntry>();
-  for (const entry of entries) {
-    if (!entry.date) continue;
+  for (const { entry } of ordered) {
     byDate.set(entry.date, entry);
   }
-  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  return [...byDate.values()];
 }
 
 /** Resolve the signed-in user the same way the rest of the web data layer does. */
@@ -175,45 +218,145 @@ async function resolveUserId(
   return data.user?.id ?? null;
 }
 
+/** Optional calendar bounds for a dashboard-sized read. */
+export interface FetchDailyEntriesOptions {
+  /** Inclusive ISO date; omitted means "from the oldest row". */
+  from?: string;
+  /** Inclusive ISO date; omitted means "through the newest row". */
+  to?: string;
+}
+
 /**
- * Load every daily entry for the signed-in user, oldest first.
+ * Load daily entries for the signed-in user, oldest first.
  *
- * The old read asked for 1000 rows and stopped: an account with more than
- * 1000 days silently lost its oldest history (streaks, year pixels, memories).
- * The read is paginated until a short page arrives. A real read failure throws
- * instead of returning `[]`, because "no entries" and "the request died" must
- * not look the same to the dashboard.
+ * With no bounds this is the full history the statistics screens need; the
+ * dashboard passes a 30-day window so its numbers stay identical to Android.
+ * The read is paginated until a short page arrives. A read failure throws a
+ * semantic `DashboardDataError` instead of returning `[]`, because "no
+ * entries" and "the request died" must not look the same. A missing session
+ * throws `signed_out` (401) so the UI can show the login-expired state instead
+ * of an empty dashboard.
  */
-export async function fetchDailyEntries(): Promise<DailyEntry[]> {
+export async function fetchDailyEntries(
+  options: FetchDailyEntriesOptions = {}
+): Promise<DailyEntry[]> {
   const sb = createSupabaseClient();
   const userId = await resolveUserId(sb);
-  if (!userId) return [];
+  if (!userId) throw signedOutError();
 
   const rows: Record<string, unknown>[] = [];
-  let from = 0;
+  let offset = 0;
 
   for (;;) {
-    const { data, error } = await sb
+    let query = sb
       .from("entries")
       .select("*")
       .eq("user_id", userId)
       .order("date", { ascending: true })
-      .order("created_at", { ascending: true })
-      .range(from, from + ENTRY_PAGE_SIZE - 1);
+      .order("created_at", { ascending: true });
+    if (options.from) query = query.gte("date", options.from);
+    if (options.to) query = query.lte("date", options.to);
+
+    const { data, error } = await query.range(
+      offset,
+      offset + ENTRY_PAGE_SIZE - 1
+    );
 
     if (error) {
-      throw new Error(
-        `Entries se nepodařilo načíst: ${error.message || "neznámá chyba"}`
-      );
+      throw loadFailedError(DASHBOARD_ERROR_CODES.entries, error);
     }
 
     const page = (data ?? []) as Record<string, unknown>[];
     rows.push(...page);
     if (page.length < ENTRY_PAGE_SIZE) break;
-    from += ENTRY_PAGE_SIZE;
+    offset += ENTRY_PAGE_SIZE;
   }
 
   return dedupeDailyEntries(rows.map(mapDailyEntryRow));
+}
+
+/**
+ * Load only the exact dates the memory lane asks for.
+ *
+ * Android reads the 1-year / 6-month / 1-month lookbacks separately from the
+ * 30-day dashboard range; doing the same here keeps old top apps and old
+ * reflections out of the dashboard while still letting a memory open its day
+ * detail. Any failure is the caller's to treat as "no memory today".
+ */
+export async function fetchEntriesByDates(
+  dates: readonly string[]
+): Promise<DailyEntry[]> {
+  const unique = [...new Set(dates.filter((date) => date.length > 0))];
+  if (unique.length === 0) return [];
+
+  const sb = createSupabaseClient();
+  const userId = await resolveUserId(sb);
+  if (!userId) throw signedOutError();
+
+  const { data, error } = await sb
+    .from("entries")
+    .select("*")
+    .eq("user_id", userId)
+    .in("date", unique)
+    .order("date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw loadFailedError(DASHBOARD_ERROR_CODES.entries, error);
+  }
+
+  return dedupeDailyEntries(
+    ((data ?? []) as Record<string, unknown>[]).map(mapDailyEntryRow)
+  );
+}
+
+/**
+ * Read the year of `date, activities, habits` rows the goal maths needs.
+ *
+ * Goals are their own feature in Android: the dashboard's 30-day window cannot
+ * carry a monthly history or a long daily streak, so this read is deliberately
+ * separate from `fetchDailyEntries`' dashboard window.
+ */
+export async function fetchGoalActivityEntries(
+  from: string,
+  to: string
+): Promise<GoalActivityEntry[]> {
+  const sb = createSupabaseClient();
+  const userId = await resolveUserId(sb);
+  if (!userId) throw signedOutError();
+
+  const rows: Record<string, unknown>[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await sb
+      .from("entries")
+      .select("date,activities,habits")
+      .eq("user_id", userId)
+      .gte("date", from)
+      .lte("date", to)
+      .order("date", { ascending: true })
+      .range(offset, offset + ENTRY_PAGE_SIZE - 1);
+
+    if (error) {
+      throw loadFailedError(DASHBOARD_ERROR_CODES.goals, error);
+    }
+
+    const page = (data ?? []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (page.length < ENTRY_PAGE_SIZE) break;
+    offset += ENTRY_PAGE_SIZE;
+  }
+
+  return rows.map((row) => ({
+    date: typeof row.date === "string" ? row.date : "",
+    activities: Array.isArray(row.activities)
+      ? row.activities.filter(
+          (item): item is string => typeof item === "string"
+        )
+      : [],
+    habits: booleanMap(row.habits),
+  }));
 }
 
 export const MOOD_COLORS: Record<number, string> = {

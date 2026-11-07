@@ -133,6 +133,16 @@ export const cs = {
     session_safe: 'Relace se neodstraňuje — po obnovení zůstaneš přihlášený.',
   },
 
+  // ── Selhání datové vrstvy ──
+  // Sémantické kódy z dashboardí datové vrstvy; UI je překládá přes `t()`.
+  errors: {
+    signed_out: 'Přihlášení vypršelo. Přihlas se znovu.',
+    entries_load: 'Zápisy se nepodařilo načíst.',
+    goals_load: 'Cíle se nepodařilo načíst.',
+    scales_load: 'Škály se nepodařilo načíst.',
+    habits_load: 'Návyky se nepodařilo načíst.',
+  },
+
   // ── Dashboard ──
   dashboard: {
     title: 'Diarium',

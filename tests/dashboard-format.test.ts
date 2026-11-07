@@ -28,11 +28,11 @@ test("null is an em dash, never a zero", () => {
   assert.equal(formatTopAppDuration(null), "—");
 });
 
-test("durations follow the Android wording", () => {
+test("metric durations follow Android's hours-without-trailing-min", () => {
   assert.equal(formatDurationMinutes(0), "0 min");
   assert.equal(formatDurationMinutes(45), "45 min");
   assert.equal(formatDurationMinutes(60), "1 h");
-  assert.equal(formatDurationMinutes(132), "2 h 12 min");
+  assert.equal(formatDurationMinutes(132), "2 h 12");
   assert.equal(formatDurationMinutes(-5), "0 min");
 });
 
@@ -51,7 +51,7 @@ test("average mood keeps one decimal and a dot", () => {
 });
 
 test("metric values use the right unit per kind", () => {
-  assert.equal(formatMetricValue(90, "screen_time"), "1 h 30 min");
+  assert.equal(formatMetricValue(90, "screen_time"), "1 h 30");
   assert.equal(formatMetricValue(0, "unlocks"), "0");
   assert.equal(formatMetricValue(3.75, "mood"), "3.8 / 5");
 });

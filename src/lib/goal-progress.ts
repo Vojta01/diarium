@@ -18,7 +18,11 @@ export interface GoalDefinition {
 export interface ActivityEntry {
   date: string;
   activities?: readonly string[] | null;
-  habits?: Record<string, boolean> | null;
+  /**
+   * `entries.habits` key→Boolean. Android also tolerates the column arriving as
+   * a JSON-encoded string, so the web parser accepts both shapes.
+   */
+  habits?: Record<string, boolean> | string | null;
 }
 
 /** One day's logged values, unioned across that day's duplicate entries. */
@@ -228,6 +232,27 @@ export function historyPeriods(frequency: string): number {
 }
 
 /**
+ * `habits` as a boolean map. A JSON-encoded string is parsed first, exactly
+ * like Android's `habitsObject`; malformed values count as no habits.
+ */
+function habitEntries(
+  value: ActivityEntry["habits"]
+): [string, boolean][] {
+  let parsed: unknown = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  return Object.entries(parsed as Record<string, unknown>).filter(
+    (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
+  );
+}
+
+/**
  * Merge `entries` rows into one `DayActivities` per date.
  *
  * A day with several rows (duplicates, or the check-in plus a sync row) is
@@ -252,7 +277,7 @@ export function dayActivitiesFromEntries(
     for (const key of entry.activities ?? []) {
       if (typeof key === "string" && key.trim()) day.keys.add(key);
     }
-    for (const [key, fulfilled] of Object.entries(entry.habits ?? {})) {
+    for (const [key, fulfilled] of habitEntries(entry.habits)) {
       if (key.trim() && fulfilled === true) day.habitKeys.add(key);
     }
   }

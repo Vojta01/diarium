@@ -1,5 +1,10 @@
-import { createSupabaseClient } from "./supabase/client";
-import { readStoredSession } from "./auth-storage";
+import { createSupabaseClient } from "./supabase/client.ts";
+import { readStoredSession } from "./auth-storage.ts";
+import {
+  DASHBOARD_ERROR_CODES,
+  loadFailedError,
+  signedOutError,
+} from "./dashboard-errors.ts";
 
 export interface Scale {
   id: string;
@@ -66,7 +71,7 @@ async function getCurrentUserId(): Promise<string | null> {
  */
 export async function getScalesOrThrow(): Promise<Scale[]> {
   const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Not authenticated");
+  if (!userId) throw signedOutError();
 
   const sb = await getAuthenticatedClient();
   const { data, error } = await sb
@@ -77,9 +82,7 @@ export async function getScalesOrThrow(): Promise<Scale[]> {
     .order("sort_order", { ascending: true });
 
   if (error) {
-    throw new Error(
-      `Škály se nepodařilo načíst: ${error.message || "neznámá chyba"}`
-    );
+    throw loadFailedError(DASHBOARD_ERROR_CODES.scales, error);
   }
   return data || [];
 }

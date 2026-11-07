@@ -28,6 +28,7 @@ test("the entry mapper keeps every dashboard field", () => {
       { nope: true },
     ],
     photo_path: "https://example.test/photo.jpg",
+    created_at: "2026-11-07T21:15:00Z",
   });
 
   assert.equal(mapped.date, "2026-11-07");
@@ -49,6 +50,7 @@ test("the entry mapper keeps every dashboard field", () => {
     { app: "B", time_sec: 90 },
   ]);
   assert.equal(mapped.photo_path, "https://example.test/photo.jpg");
+  assert.equal(mapped.created_at, "2026-11-07T21:15:00Z");
 });
 
 test("missing values stay null, not zero", () => {
@@ -88,4 +90,43 @@ test("duplicate dates are last-wins and the result is oldest first", () => {
       ["2026-11-07", 4],
     ]
   );
+});
+
+test("habits tolerate a JSON-encoded object, exactly like Android", () => {
+  const mapped = mapDailyEntryRow({
+    date: "2026-11-07",
+    habits: '{"trenink":true,"kava":false,"broken":"yes"}',
+  });
+  assert.deepEqual(mapped.habits, { trenink: true, kava: false });
+
+  const malformed = mapDailyEntryRow({
+    date: "2026-11-07",
+    habits: "{not json",
+  });
+  assert.deepEqual(malformed.habits, {});
+});
+
+test("dedupe picks the real timestamp over a null created_at, whatever the order", () => {
+  const legacy = entry("2026-11-06", { mood: 0, created_at: null });
+  const timed = entry("2026-11-06", {
+    mood: 5,
+    created_at: "2026-11-06T20:00:00Z",
+  });
+
+  for (const input of [
+    [legacy, timed],
+    [timed, legacy],
+  ]) {
+    const deduped = dedupeDailyEntries(input);
+    assert.equal(deduped.length, 1);
+    assert.equal(deduped[0].mood, 5);
+  }
+});
+
+test("two null created_at duplicates have a stable input-order winner", () => {
+  const first = entry("2026-11-06", { mood: 1, created_at: null });
+  const second = entry("2026-11-06", { mood: 4, created_at: null });
+
+  assert.equal(dedupeDailyEntries([first, second])[0].mood, 4);
+  assert.equal(dedupeDailyEntries([second, first])[0].mood, 1);
 });

@@ -27,6 +27,7 @@ export function entry(
     phone_unlocks: null,
     phone_top_apps: undefined,
     photo_path: null,
+    created_at: null,
     ...overrides,
   };
 }

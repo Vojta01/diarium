@@ -1,7 +1,12 @@
-import { createSupabaseClient } from "./client";
-import { readStoredSession } from "@/lib/auth-storage";
-import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "@/lib/feature-flags";
-import { pragueDateKey } from "@/lib/date";
+import { createSupabaseClient } from "./client.ts";
+import { readStoredSession } from "../auth-storage.ts";
+import {
+  DASHBOARD_ERROR_CODES,
+  loadFailedError,
+  signedOutError,
+} from "../dashboard-errors.ts";
+import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "../feature-flags.ts";
+import { pragueDateKey } from "../date.ts";
 
 // ── Typy ──
 
@@ -518,24 +523,19 @@ export async function getHabits(): Promise<HabitDef[]> {
  */
 export async function getHabitsOrThrow(): Promise<HabitDef[]> {
   const user = await getCurrentUser();
+  if (!user) throw signedOutError();
   const sb = getAuthenticatedClient();
 
   const [defaultRes, userRes] = await Promise.all([
     sb.from("habit_catalog").select("*").eq("is_default", true).order("sort_order"),
-    user
-      ? sb.from("user_habits").select("*").eq("user_id", user.id)
-      : Promise.resolve({ data: [], error: null }),
+    sb.from("user_habits").select("*").eq("user_id", user.id),
   ]);
 
   if (defaultRes.error) {
-    throw new Error(
-      `Návyky se nepodařilo načíst: ${defaultRes.error.message || "neznámá chyba"}`
-    );
+    throw loadFailedError(DASHBOARD_ERROR_CODES.habits, defaultRes.error);
   }
   if (userRes.error) {
-    throw new Error(
-      `Návyky se nepodařilo načíst: ${userRes.error.message || "neznámá chyba"}`
-    );
+    throw loadFailedError(DASHBOARD_ERROR_CODES.habits, userRes.error);
   }
 
   const defaults: HabitDef[] = ((defaultRes.data ?? []) as HabitDef[]).map(

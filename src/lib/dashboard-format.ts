@@ -7,7 +7,12 @@ import type {
 /** The one "no value" glyph. Null is a dash, never a zero. */
 export const EM_DASH = "—";
 
-/** Android's `formatMinutes`: 132 -> "2 h 12 min", 45 -> "45 min". */
+/**
+ * Android's `formatMetricMinutes`: 132 -> "2 h 12", 45 -> "45 min".
+ *
+ * The trailing "min" is dropped once hours appear, because the card already
+ * carries its own unit; only the top-apps list keeps "1 h 5 min".
+ */
 export function formatDurationMinutes(
   minutes: number | null | undefined
 ): string {
@@ -16,7 +21,7 @@ export function formatDurationMinutes(
   if (total < 60) return `${total} min`;
   const hours = Math.floor(total / 60);
   const rest = total % 60;
-  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest}`;
 }
 
 /**

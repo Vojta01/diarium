@@ -1,6 +1,10 @@
 import { shiftDateKey } from "./date.ts";
 import { isRecordedMood } from "./mood.ts";
-import { pickBestMemory, type OnThisDayMemory } from "./on-this-day.ts";
+import {
+  pickBestMemory,
+  targetMemoryDates,
+  type OnThisDayMemory,
+} from "./on-this-day.ts";
 import type { DailyEntry, TopApp } from "./stats.ts";
 
 /** Days fetched for the dashboard's month view and longest-run calculation. */
@@ -103,9 +107,16 @@ export interface DashboardData {
   /** The newest logged day, whatever it holds. */
   newestEntry: DashboardNewestEntry | null;
   lastGratitude: DashboardGratitude | null;
-  /** Every loaded day's full record, keyed by ISO date. */
+  /** Every loaded day's full record, keyed by ISO date (30-day core + memory dates). */
   entryByDate: Record<string, DailyEntry>;
-  /** Best memory among the 1-year / 6-month / 1-month lookbacks. */
+  /**
+   * Best memory among the 1-year / 6-month / 1-month lookbacks.
+   *
+   * `deriveDashboard` always leaves this null: the lookback dates sit outside
+   * the 30-day core and are fetched separately, then attached with
+   * `attachOnThisDay`. That split is what stops an old reflection or an old
+   * top-app snapshot from leaking into the dashboard.
+   */
   onThisDay: OnThisDayMemory | null;
 }
 
@@ -374,12 +385,21 @@ export function filteredGratitude(entry: DailyEntry): string[] {
  *
  * Pure: same rows in, same dashboard out — no clock, no network, no browser.
  * `today` is passed in so tests and screenshots can pin it.
+ *
+ * Only the `DASHBOARD_LOAD_DAYS` window ending today participates: even if a
+ * caller hands over the account's full history, a 31-day-old top-app snapshot,
+ * reflection or gratitude line cannot become today's card, and a longer run is
+ * capped exactly as Android's 30-day read caps it. `onThisDay` is always null
+ * here; the loader attaches the separately fetched lookback dates afterwards.
  */
 export function deriveDashboard(
   today: string,
   entries: readonly DailyEntry[]
 ): DashboardData {
-  const byDate = indexEntries(entries);
+  const window = new Set(monthWindow(today));
+  const byDate = indexEntries(
+    entries.filter((entry) => window.has(entry.date))
+  );
 
   // The owner's rule: a day is a record only when the mood is filled. The
   // phone sync writes a row for every day, so the streak and longest run key
@@ -431,8 +451,56 @@ export function deriveDashboard(
     newestEntry: newestEntry(byDate),
     lastGratitude: latestGratitude(byDate),
     entryByDate: Object.fromEntries(byDate),
-    onThisDay: pickBestMemory(today, [...byDate.values()]),
+    onThisDay: null,
   };
+}
+
+/**
+ * Attach the memory lane to an already-derived dashboard.
+ *
+ * `memoryEntries` is the result of a separate exact-date read (1 year, 6
+ * months, 1 month back). Only those target dates are accepted: anything else
+ * is ignored even if a caller passes it, so an old day can never sneak into
+ * `entryByDate` or the memory card. The memory is merged into `entryByDate`
+ * for DayDetail, but the already-derived cards (reflection, top apps, newest)
+ * stay untouched — they were computed from the 30-day core alone.
+ */
+export function attachOnThisDay(
+  data: DashboardData,
+  today: string,
+  memoryEntries: readonly DailyEntry[]
+): DashboardData {
+  const targets = new Set(targetMemoryDates(today).map((item) => item.date));
+  const memoryByDate = new Map<string, DailyEntry>();
+  for (const entry of memoryEntries) {
+    if (entry.date && targets.has(entry.date)) {
+      memoryByDate.set(entry.date, entry);
+    }
+  }
+  if (memoryByDate.size === 0) return data;
+
+  const entryByDate = { ...data.entryByDate };
+  for (const [date, entry] of memoryByDate) {
+    entryByDate[date] = entry;
+  }
+
+  return {
+    ...data,
+    entryByDate,
+    onThisDay: pickBestMemory(today, [...memoryByDate.values()]),
+  };
+}
+
+/**
+ * The top-apps list the card renders: the newest rankable day when one exists,
+ * otherwise the newest snapshot of any size (the card then decides whether the
+ * list is long enough to rank). Kept here so the UI does not invent its own
+ * fallback rule.
+ */
+export function topAppsForCard(
+  data: Pick<DashboardData, "topApps" | "rankedTopApps">
+): DashboardTopApps | null {
+  return data.rankedTopApps ?? data.topApps;
 }
 
 /** The week's screen time in minutes, or null when no day was ever synced. */

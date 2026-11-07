@@ -118,6 +118,17 @@ export const en = {
     session_safe: 'Your session is not cleared — you stay signed in after reloading.',
   },
 
+  // ── Data-layer failures ──
+  // Semantic codes thrown by the dashboard data layer; the UI resolves these
+  // through the same `t()` path as every other string.
+  errors: {
+    signed_out: 'Your session expired. Sign in again.',
+    entries_load: 'Could not load your entries.',
+    goals_load: 'Could not load your goals.',
+    scales_load: 'Could not load your scales.',
+    habits_load: 'Could not load your habits.',
+  },
+
   // ── Dashboard ──
   dashboard: {
     title: 'Diarium',

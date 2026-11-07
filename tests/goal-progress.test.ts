@@ -18,6 +18,7 @@ import {
   weekStart,
   type GoalDefinition,
 } from "../src/lib/goal-progress.ts";
+import { goalProgressForWidget } from "../src/lib/goals-data.ts";
 
 const TODAY = "2026-11-07";
 
@@ -246,4 +247,101 @@ test("computeGoalHistory keeps the current period last and the previous period s
   assert.equal(history.at(-1)?.met, true);
   assert.equal(history.at(-2)?.start, "2026-10-26");
   assert.equal(history.at(-2)?.end, "2026-11-01");
+});
+
+test("habit keys arrive as a JSON string and still fulfil the goal", () => {
+  const days = dayActivitiesFromEntries([
+    { date: "2026-11-06", habits: '{"trenink":true,"kava":false}' },
+    { date: "2026-11-07", habits: '{"trenink":true}' },
+  ]);
+
+  assert.deepEqual(activityDates(days, "trenink", "2026-11-01", TODAY), [
+    "2026-11-07",
+    "2026-11-06",
+  ]);
+});
+
+test("metPeriods and knownPeriods exclude no-data periods from the ratio", () => {
+  const progress = computeGoalProgress(
+    goal({ target_count: 1 }),
+    [
+      // Current week met.
+      { date: "2026-11-02", activities: ["trenink"] },
+      // Previous week has entries but not the goal: a known miss.
+      { date: "2026-10-28", activities: ["neco_jineho"] },
+    ],
+    TODAY
+  );
+
+  assert.equal(progress.history.length, 8);
+  assert.equal(progress.metPeriods, 1);
+  assert.equal(progress.knownPeriods, 2);
+  assert.deepEqual(progress.history.slice(-2), [false, true]);
+  assert.deepEqual(progress.history.slice(0, -2), [null, null, null, null, null, null]);
+});
+
+test("weekly and monthly periods cross the year boundary", () => {
+  const january = "2026-01-05";
+
+  assert.equal(periodStart(january, "weekly"), "2026-01-05");
+  assert.equal(periodEndBack(january, "weekly", 1), "2026-01-04");
+  assert.equal(
+    periodStart(periodEndBack(january, "weekly", 1), "weekly"),
+    "2025-12-29"
+  );
+  assert.equal(periodFullEnd(january, "weekly"), "2026-01-11");
+
+  assert.equal(periodStart(january, "monthly"), "2026-01-01");
+  assert.equal(periodEndBack(january, "monthly", 1), "2025-12-31");
+  assert.equal(
+    periodStart(periodEndBack(january, "monthly", 1), "monthly"),
+    "2025-12-01"
+  );
+  assert.equal(periodFullEnd(january, "monthly"), "2026-01-31");
+
+  const progress = computeGoalProgress(
+    goal({ frequency: "weekly", target_count: 1 }),
+    [
+      { date: "2025-12-30", activities: ["trenink"] },
+      { date: "2026-01-05", activities: ["trenink"] },
+    ],
+    january
+  );
+
+  assert.equal(progress.periods.at(-1)?.start, "2026-01-05");
+  assert.equal(progress.periods.at(-1)?.met, true);
+  assert.equal(progress.periods.at(-2)?.start, "2025-12-29");
+  assert.equal(progress.periods.at(-2)?.end, "2026-01-04");
+  assert.equal(progress.periods.at(-2)?.met, true);
+  assert.equal(progress.previousMet, true);
+});
+
+test("the widget's goal progress uses calendar weeks and months, not rolling windows", () => {
+  const weekly = goalProgressForWidget(
+    [goal({ frequency: "weekly", target_count: 2 })],
+    [
+      // Sunday belongs to the previous calendar week; a rolling 7-day window
+      // would count it and show 3/2 instead of the calendar week's 2/2.
+      { date: "2026-11-01", activities: ["trenink"] },
+      { date: "2026-11-02", activities: ["trenink"] },
+      { date: "2026-11-07", activities: ["trenink"] },
+    ],
+    TODAY
+  );
+  assert.equal(weekly[0].count, 2);
+  assert.equal(weekly[0].periods.at(-1)?.start, "2026-11-02");
+  assert.equal(weekly[0].periods.at(-2)?.start, "2026-10-26");
+
+  const monthly = goalProgressForWidget(
+    [goal({ frequency: "monthly", target_count: 2 })],
+    [
+      // 31 October is outside November; a rolling month window would include it.
+      { date: "2026-10-31", activities: ["trenink"] },
+      { date: "2026-11-01", activities: ["trenink"] },
+    ],
+    TODAY
+  );
+  assert.equal(monthly[0].count, 1);
+  assert.equal(monthly[0].periods.at(-1)?.start, "2026-11-01");
+  assert.equal(monthly[0].periods.at(-2)?.start, "2026-10-01");
 });

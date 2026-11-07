@@ -1,6 +1,10 @@
-import { createSupabaseClient } from "./supabase/client";
-import { readStoredSession } from "./auth-storage";
-import { goalPeriodRange } from "./goal-period";
+import { createSupabaseClient } from "./supabase/client.ts";
+import { readStoredSession } from "./auth-storage.ts";
+import {
+  DASHBOARD_ERROR_CODES,
+  loadFailedError,
+  signedOutError,
+} from "./dashboard-errors.ts";
 
 export interface Goal {
   id: string;
@@ -13,15 +17,6 @@ export interface Goal {
   created_at: string;
   archived_at?: string;
   completed_at?: string;
-}
-
-export interface GoalProgress {
-  goal: Goal;
-  current_count: number;
-  streak: number;
-  target_met: boolean;
-  period_start: string;
-  period_end: string;
 }
 
 function getSupabase() {
@@ -61,7 +56,7 @@ async function getCurrentUserId(): Promise<string | null> {
 
 export async function getGoals(): Promise<Goal[]> {
   const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Not authenticated");
+  if (!userId) throw signedOutError();
 
   const sb = await getAuthenticatedClient();
   const { data, error } = await sb
@@ -75,9 +70,7 @@ export async function getGoals(): Promise<Goal[]> {
   // dashboard renders an error + retry state for this, while only a successful
   // empty list may show the empty-goals CTA.
   if (error) {
-    throw new Error(
-      `Cíle se nepodařilo načíst: ${error.message || "neznámá chyba"}`
-    );
+    throw loadFailedError(DASHBOARD_ERROR_CODES.goals, error);
   }
   return data || [];
 }
@@ -115,71 +108,4 @@ export async function deleteGoal(id: string): Promise<void> {
     .eq("id", id);
   
   if (error) throw error;
-}
-
-export async function getGoalProgress(goalId: string, period: 'week' | 'month'): Promise<GoalProgress> {
-  const sb = await getAuthenticatedClient();
-  const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Not authenticated");
-  
-  // Get the goal
-  const { data: goal, error: goalError } = await sb
-    .from("goals")
-    .select("*")
-    .eq("id", goalId)
-    .single();
-  
-  if (goalError || !goal) throw new Error("Goal not found");
-  
-  // Calculate period dates in Europe/Prague calendar days. UTC keys would drop
-  // today's entry during the first hours after Prague midnight.
-  const { start: startStr, end: endStr } = goalPeriodRange(period);
-  
-  // Count entries with this activity in the period
-  const { data: entries, error: entriesError } = await sb
-    .from("entries")
-    .select("date, activities")
-    .eq("user_id", userId)
-    .gte("date", startStr)
-    .lte("date", endStr)
-    .limit(10000);
-  
-  if (entriesError) throw entriesError;
-  
-  // Count occurrences of the activity
-  let currentCount = 0;
-  const datesWithActivity: string[] = [];
-  
-  (entries || []).forEach((entry: { date: string; activities?: string[] }) => {
-    if (entry.activities?.includes(goal.activity_key)) {
-      currentCount++;
-      datesWithActivity.push(entry.date);
-    }
-  });
-  
-  // Calculate streak (consecutive days with the activity)
-  let streak = 0;
-  if (datesWithActivity.length > 0) {
-    const sortedDates = [...datesWithActivity].sort().reverse();
-    streak = 1;
-    for (let i = 1; i < sortedDates.length; i++) {
-      const prev = new Date(sortedDates[i - 1]);
-      const curr = new Date(sortedDates[i]);
-      const diffDays = Math.floor((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-  }
-  
-  return {
-    goal,
-    current_count: currentCount,
-    streak,
-    target_met: currentCount >= goal.target_count,
-    period_start: startStr,
-    period_end: endStr,
-  };
 }

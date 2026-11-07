@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getGoals, getGoalProgress, type Goal, type GoalProgress } from "@/lib/goals";
+import type { GoalProgressData } from "@/lib/goal-progress";
+import type { Goal } from "@/lib/goals";
+import { fetchGoalProgress } from "@/lib/goals-data";
 import { useTranslation } from "@/lib/i18n";
 import { useDataRefresh } from "@/lib/use-data-refresh";
 
@@ -11,24 +13,13 @@ interface GoalsWidgetProps {
 
 export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
   const { t } = useTranslation();
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, GoalProgress>>({});
+  const [progressList, setProgressList] = useState<GoalProgressData<Goal>[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadGoals = useCallback(async () => {
     try {
-      const data = await getGoals();
-      setGoals(data);
-
-      // Load progress for each goal
-      const progress: Record<string, GoalProgress> = {};
-      for (const goal of data) {
-        try {
-          progress[goal.id] = await getGoalProgress(goal.id, goal.frequency === 'monthly' ? 'month' : 'week');
-        } catch {}
-      }
-      setProgressMap(progress);
+      setProgressList(await fetchGoalProgress());
     } catch (e) {
       console.error("Failed to load goals:", e);
     }
@@ -50,7 +41,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
     );
   }
 
-  if (goals.length === 0) {
+  if (progressList.length === 0) {
     return (
       <div className="glass-card p-4">
         <h3 className="text-lg font-semibold text-white mb-2">🎯 {t("daylio_goals.title")}</h3>
@@ -82,13 +73,13 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
       </div>
       
       <div className="space-y-3">
-        {goals.map((goal) => {
-          const progress = progressMap[goal.id];
-          const current = progress?.current_count || 0;
+        {progressList.map((progress) => {
+          const goal = progress.goal;
+          const current = progress.count;
           const target = goal.target_count;
-          const percentage = Math.min(100, (current / target) * 100);
-          const streak = progress?.streak || 0;
-          const isMet = progress?.target_met || false;
+          const percentage = progress.fraction * 100;
+          const streak = progress.streak;
+          const isMet = progress.targetMet;
           const isExpanded = expandedId === goal.id;
 
           return (
@@ -121,7 +112,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
                 
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/60">
-                    {current}/{target} {goal.frequency === 'daily' ? t("daylio_goals.daily") : goal.frequency === 'weekly' ? t("daylio_goals.weekly") : t("daylio_goals.monthly")}
+                    {current}/{target} {t(`daylio_goals.${progress.frequency}`)}
                   </span>
                   {streak > 0 && (
                     <span className="text-orange-400 flex items-center gap-1">
@@ -132,7 +123,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
               </button>
               
               {/* Expanded details */}
-              {isExpanded && progress && (
+              {isExpanded && (
                 <div className="px-3 pb-3 pt-0 text-sm text-white/60 border-t border-white/10 mt-1 pt-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -146,9 +137,7 @@ export function GoalsWidget({ onAddGoal }: GoalsWidgetProps) {
                     <div className="col-span-2">
                       <span className="text-white/40">{t("daylio_goals.frequency")}:</span>
                       <span className="ml-1 text-white">
-                        {goal.frequency === 'daily' ? t("daylio_goals.daily") : 
-                         goal.frequency === 'weekly' ? t("daylio_goals.weekly") : 
-                         t("daylio_goals.monthly")}
+                        {t(`daylio_goals.${progress.frequency}`)}
                       </span>
                     </div>
                   </div>
