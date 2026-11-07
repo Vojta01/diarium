@@ -2,7 +2,7 @@ import { createSupabaseClient } from "./client.ts";
 import { readStoredSession } from "../auth-storage.ts";
 import {
   DASHBOARD_ERROR_CODES,
-  loadFailedError,
+  dashboardReadError,
   signedOutError,
 } from "../dashboard-errors.ts";
 import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "../feature-flags.ts";
@@ -532,10 +532,18 @@ export async function getHabitsOrThrow(): Promise<HabitDef[]> {
   ]);
 
   if (defaultRes.error) {
-    throw loadFailedError(DASHBOARD_ERROR_CODES.habits, defaultRes.error);
+    throw dashboardReadError(
+      defaultRes.error,
+      DASHBOARD_ERROR_CODES.habits,
+      defaultRes.status
+    );
   }
   if (userRes.error) {
-    throw loadFailedError(DASHBOARD_ERROR_CODES.habits, userRes.error);
+    throw dashboardReadError(
+      userRes.error,
+      DASHBOARD_ERROR_CODES.habits,
+      userRes.status
+    );
   }
 
   const defaults: HabitDef[] = ((defaultRes.data ?? []) as HabitDef[]).map(

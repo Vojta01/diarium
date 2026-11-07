@@ -4,7 +4,7 @@ import { createSupabaseClient } from "./supabase/client.ts";
 import { readStoredSession } from "./auth-storage.ts";
 import {
   DASHBOARD_ERROR_CODES,
-  loadFailedError,
+  dashboardReadError,
   signedOutError,
 } from "./dashboard-errors.ts";
 import { recordedMood } from "./mood.ts";
@@ -257,13 +257,19 @@ export async function fetchDailyEntries(
     if (options.from) query = query.gte("date", options.from);
     if (options.to) query = query.lte("date", options.to);
 
-    const { data, error } = await query.range(
+    const { data, error, status } = await query.range(
       offset,
       offset + ENTRY_PAGE_SIZE - 1
     );
 
     if (error) {
-      throw loadFailedError(DASHBOARD_ERROR_CODES.entries, error);
+      // A 401 here is an expired session even though `resolveUserId` returned
+      // the stored id; it must become `signed_out`, not a retryable read error.
+      throw dashboardReadError(
+        error,
+        DASHBOARD_ERROR_CODES.entries,
+        status
+      );
     }
 
     const page = (data ?? []) as Record<string, unknown>[];
@@ -293,7 +299,7 @@ export async function fetchEntriesByDates(
   const userId = await resolveUserId(sb);
   if (!userId) throw signedOutError();
 
-  const { data, error } = await sb
+  const { data, error, status } = await sb
     .from("entries")
     .select("*")
     .eq("user_id", userId)
@@ -302,7 +308,7 @@ export async function fetchEntriesByDates(
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw loadFailedError(DASHBOARD_ERROR_CODES.entries, error);
+    throw dashboardReadError(error, DASHBOARD_ERROR_CODES.entries, status);
   }
 
   return dedupeDailyEntries(
@@ -329,7 +335,7 @@ export async function fetchGoalActivityEntries(
   let offset = 0;
 
   for (;;) {
-    const { data, error } = await sb
+    const { data, error, status } = await sb
       .from("entries")
       .select("date,activities,habits")
       .eq("user_id", userId)
@@ -339,7 +345,7 @@ export async function fetchGoalActivityEntries(
       .range(offset, offset + ENTRY_PAGE_SIZE - 1);
 
     if (error) {
-      throw loadFailedError(DASHBOARD_ERROR_CODES.goals, error);
+      throw dashboardReadError(error, DASHBOARD_ERROR_CODES.goals, status);
     }
 
     const page = (data ?? []) as Record<string, unknown>[];

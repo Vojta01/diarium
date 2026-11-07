@@ -77,6 +77,51 @@ export function toDashboardError(
     : loadFailedError(fallback, error);
 }
 
+/**
+ * True when a failed Supabase/PostgREST read means the session is gone.
+ *
+ * A stored session keeps returning a user id after its access token expires,
+ * so the query itself is the first thing to discover the problem: HTTP 401
+ * (expired JWT) or PostgREST's `PGRST301`/`PGRST302` auth codes. Treating that
+ * as a generic read failure would show "could not load" with a retry that can
+ * never succeed.
+ */
+export function isUnauthorizedRead(
+  error: unknown,
+  status?: number
+): boolean {
+  if (status === 401) return true;
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+  if (candidate.status === 401) return true;
+  if (candidate.code === "PGRST301" || candidate.code === "PGRST302") {
+    return true;
+  }
+  return (
+    typeof candidate.message === "string" &&
+    /\bjwt\b|token (?:is )?expired|not authenticated/i.test(candidate.message)
+  );
+}
+
+/**
+ * Map a failed data read: a 401/expired session becomes the coherent
+ * `signed_out` error, every other failure keeps the caller's card code.
+ */
+export function dashboardReadError(
+  error: unknown,
+  fallback: DashboardErrorCode,
+  status?: number
+): DashboardDataError {
+  return isUnauthorizedRead(error, status)
+    ? signedOutError()
+    : loadFailedError(fallback, error);
+}
+
 /** The semantic code for a bundle field; unknown errors use the card's code. */
 export function dashboardErrorCode(
   error: unknown,

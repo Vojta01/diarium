@@ -2,7 +2,7 @@ import { createSupabaseClient } from "./supabase/client.ts";
 import { readStoredSession } from "./auth-storage.ts";
 import {
   DASHBOARD_ERROR_CODES,
-  loadFailedError,
+  dashboardReadError,
   signedOutError,
 } from "./dashboard-errors.ts";
 
@@ -74,7 +74,7 @@ export async function getScalesOrThrow(): Promise<Scale[]> {
   if (!userId) throw signedOutError();
 
   const sb = await getAuthenticatedClient();
-  const { data, error } = await sb
+  const { data, error, status } = await sb
     .from("scales")
     .select("*")
     .eq("user_id", userId)
@@ -82,7 +82,7 @@ export async function getScalesOrThrow(): Promise<Scale[]> {
     .order("sort_order", { ascending: true });
 
   if (error) {
-    throw loadFailedError(DASHBOARD_ERROR_CODES.scales, error);
+    throw dashboardReadError(error, DASHBOARD_ERROR_CODES.scales, status);
   }
   return data || [];
 }

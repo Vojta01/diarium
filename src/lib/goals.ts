@@ -2,7 +2,7 @@ import { createSupabaseClient } from "./supabase/client.ts";
 import { readStoredSession } from "./auth-storage.ts";
 import {
   DASHBOARD_ERROR_CODES,
-  loadFailedError,
+  dashboardReadError,
   signedOutError,
 } from "./dashboard-errors.ts";
 
@@ -59,7 +59,7 @@ export async function getGoals(): Promise<Goal[]> {
   if (!userId) throw signedOutError();
 
   const sb = await getAuthenticatedClient();
-  const { data, error } = await sb
+  const { data, error, status } = await sb
     .from("goals")
     .select("*")
     .eq("user_id", userId)
@@ -70,7 +70,7 @@ export async function getGoals(): Promise<Goal[]> {
   // dashboard renders an error + retry state for this, while only a successful
   // empty list may show the empty-goals CTA.
   if (error) {
-    throw loadFailedError(DASHBOARD_ERROR_CODES.goals, error);
+    throw dashboardReadError(error, DASHBOARD_ERROR_CODES.goals, status);
   }
   return data || [];
 }

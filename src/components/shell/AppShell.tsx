@@ -399,7 +399,13 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
   return (
     <div className="app-shell">
-      <div className="mx-auto w-full max-w-[620px] px-4 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3">
+      <div
+        className={`mx-auto w-full px-4 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 ${
+          nav.tab === "overview" && nav.sub === null
+            ? "max-w-[620px] lg:max-w-[1040px]"
+            : "max-w-[620px]"
+        }`}
+      >
         {nav.sub === null && nav.tab !== "today" ? (
           <ScreenHeader title={t(TAB_LABEL_KEYS[nav.tab])} subtitle={subtitle} trailing={headerActions} />
         ) : null}
