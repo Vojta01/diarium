@@ -10,15 +10,10 @@ import { useTranslation } from "@/lib/i18n";
 import { DEFAULT_NAV, parseNavFromSearch, type NavState } from "@/lib/navigation";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { getSupabaseAuthTokenKey } from "@/lib/supabase-ref";
+import { clearUserLocalState } from "@/lib/local-state";
 
 function doLogout() {
-  // Clear ALL supabase auth data from localStorage
-  const keys = Object.keys(localStorage);
-  for (const key of keys) {
-    if (key.startsWith("sb-") || key.includes("supabase")) {
-      localStorage.removeItem(key);
-    }
-  }
+  clearUserLocalState(localStorage);
   // Also delete supabase cookies
   document.cookie.split(";").forEach((c) => {
     const [name] = c.trim().split("=");
