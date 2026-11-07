@@ -64,6 +64,23 @@ test("a photo or one real gratitude line qualifies; blanks do not", () => {
   assert.equal(isMemoryWorthy(entry("d", { mood: 0, note: "text" })), false);
 });
 
+test("gratitude-only and photo-only days still become the memory", () => {
+  const gratitudeOnly = pickBestMemory(TODAY, [
+    entry("2026-10-07", {
+      mood: 4,
+      gratitude: ["", "kafe", "  ", "klid"],
+    }),
+  ]);
+  assert.equal(gratitudeOnly?.date, "2026-10-07");
+  assert.equal(gratitudeOnly?.entry.note, "");
+
+  const photoOnly = pickBestMemory(TODAY, [
+    entry("2025-11-07", { mood: 3, photo_path: "https://x/y.jpg" }),
+  ]);
+  assert.equal(photoOnly?.horizon, "one_year");
+  assert.equal(photoOnly?.entry.gratitude.length, 0);
+});
+
 test("a synced row without a mood is not a memory", () => {
   const memory = pickBestMemory(TODAY, [
     entry("2025-11-07", {

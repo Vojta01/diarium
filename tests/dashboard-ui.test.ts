@@ -13,6 +13,8 @@ import type { GoalDefinition } from "../src/lib/goal-progress.ts";
 import {
   chartDays,
   chartRangeDays,
+  DASHBOARD_FULL_SPAN_CLASS,
+  DASHBOARD_GRID_CLASS,
   dashboardCardSpan,
   dayDetailSections,
   dayForm,
@@ -22,6 +24,8 @@ import {
   goalPeriodKey,
   isDashboardCardVisible,
   latestAverage,
+  memoryGratitudeLines,
+  memoryPhotoSrc,
   metricBestWorst,
   moodMovingAverage,
   movingAverageOf,
@@ -184,6 +188,46 @@ test("full-width cards span two columns; an absent partner widens its pair", () 
 
   const noReflection = all.filter((id) => id !== "reflection");
   assert.equal(dashboardCardSpan("top_apps", noReflection), 2);
+});
+
+test("the overview grid splits only at lg, never at md", () => {
+  assert.match(DASHBOARD_GRID_CLASS, /\bgrid-cols-1\b/);
+  assert.match(DASHBOARD_GRID_CLASS, /\blg:grid-cols-2\b/);
+  assert.doesNotMatch(DASHBOARD_GRID_CLASS, /\bmd:/);
+  assert.equal(DASHBOARD_FULL_SPAN_CLASS, "lg:col-span-2");
+  assert.doesNotMatch(DASHBOARD_FULL_SPAN_CLASS, /\bmd:/);
+});
+
+test("memory gratitude trims blanks and caps at three lines", () => {
+  assert.deepEqual(
+    memoryGratitudeLines(
+      entry("2025-11-07", {
+        gratitude: ["  rodina  ", "", "   ", "kafe", "klid", "moře"],
+      })
+    ),
+    ["rodina", "kafe", "klid"]
+  );
+  assert.deepEqual(memoryGratitudeLines(entry("2025-11-07")), []);
+});
+
+test("memory photos accept http(s) and inline images only", () => {
+  assert.equal(
+    memoryPhotoSrc(entry("d", { photo_path: " https://x.test/y.jpg " })),
+    "https://x.test/y.jpg"
+  );
+  assert.equal(
+    memoryPhotoSrc(entry("d", { photo_path: "data:image/jpeg;base64,AAAA" })),
+    "data:image/jpeg;base64,AAAA"
+  );
+  assert.equal(
+    memoryPhotoSrc(entry("d", { photo_path: "javascript:alert(1)" })),
+    null
+  );
+  assert.equal(
+    memoryPhotoSrc(entry("d", { photo_path: "file:///etc/passwd" })),
+    null
+  );
+  assert.equal(memoryPhotoSrc(entry("d")), null);
 });
 
 test("goal rows are unmet-first, stable, and capped at four", () => {

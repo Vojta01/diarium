@@ -138,6 +138,62 @@ export function dashboardCardSpan(
   return 1;
 }
 
+/**
+ * The overview grid: one column below 1024px, two only once the shell widens
+ * at `lg`. The shell is capped at 620px below `lg`, so splitting it earlier
+ * would squeeze every card into a phone-width half column.
+ */
+export const DASHBOARD_GRID_CLASS =
+  "grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2";
+
+/** A full-width card's span, aligned with `DASHBOARD_GRID_CLASS`. */
+export const DASHBOARD_FULL_SPAN_CLASS = "lg:col-span-2";
+
+/** How many gratitude lines the On This Day card carries, like Android. */
+export const MEMORY_GRATITUDE_LIMIT = 3;
+
+/**
+ * The gratitude lines the memory card shows: trimmed, blanks dropped, capped
+ * at three. A memory may qualify through gratitude alone, so an empty result
+ * is meaningful — the card must not fall back to a "no note" placeholder.
+ */
+export function memoryGratitudeLines(
+  entry: Pick<DailyEntry, "gratitude">
+): string[] {
+  return entry.gratitude
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, MEMORY_GRATITUDE_LIMIT);
+}
+
+/**
+ * A photo URL the browser may load: an absolute http(s) URL or an inline image
+ * data URL. Everything else (javascript:, file:, blank) is treated as missing.
+ * This is the same shape the check-in writes to `photo_path`.
+ */
+export function safePhotoSrc(
+  value: string | null | undefined
+): string | null {
+  if (typeof value !== "string") return null;
+  const src = value.trim();
+  if (!src) return null;
+  if (
+    src.startsWith("https://") ||
+    src.startsWith("http://") ||
+    src.startsWith("data:image/")
+  ) {
+    return src;
+  }
+  return null;
+}
+
+/** The memory's displayable photo, or null when it has none/is unsafe. */
+export function memoryPhotoSrc(
+  entry: Pick<DailyEntry, "photo_path">
+): string | null {
+  return safePhotoSrc(entry.photo_path);
+}
+
 /** Goals shown on the overview; the rest live in the Goals screen. */
 export const GOAL_CARD_LIMIT = 4;
 

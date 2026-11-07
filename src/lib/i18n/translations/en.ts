@@ -248,6 +248,8 @@ export const en = {
       horizon_one_month: 'A month ago',
       open: 'Open day',
       no_note: 'No note that day.',
+      photo_alt: 'Photo from {date}',
+      photo_unavailable: 'The photo could not be loaded.',
     },
     goals: {
       title: '🎯 Goals',

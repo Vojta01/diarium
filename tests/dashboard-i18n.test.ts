@@ -63,6 +63,8 @@ test("the B1 card strings all exist under dashboard.*", () => {
     "mood_chart.table_caption",
     "on_this_day.title",
     "on_this_day.horizon_one_year",
+    "on_this_day.photo_alt",
+    "on_this_day.photo_unavailable",
     "goals.title",
     "goals.empty",
     "goals.empty_hint",

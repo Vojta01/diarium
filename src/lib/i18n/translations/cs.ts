@@ -262,6 +262,8 @@ export const cs = {
       horizon_one_month: 'Před měsícem',
       open: 'Otevřít den',
       no_note: 'Ten den bez poznámky.',
+      photo_alt: 'Fotka z {date}',
+      photo_unavailable: 'Fotku se nepodařilo načíst.',
     },
     goals: {
       title: '🎯 Cíle',

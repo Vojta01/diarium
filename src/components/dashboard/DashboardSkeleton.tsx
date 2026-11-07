@@ -6,7 +6,11 @@ import {
   DASHBOARD_CARD_ORDER,
   type DashboardCardId,
 } from "@/lib/dashboard";
-import { dashboardCardSpan } from "@/lib/dashboard-ui";
+import {
+  DASHBOARD_FULL_SPAN_CLASS,
+  DASHBOARD_GRID_CLASS,
+  dashboardCardSpan,
+} from "@/lib/dashboard-ui";
 import { useTranslation } from "@/lib/i18n";
 
 const SKELETON_CARDS = DASHBOARD_CARD_ORDER;
@@ -26,7 +30,7 @@ function Block({
     <div
       data-skeleton-card={id}
       className={`glass-card animate-pulse ${height} ${
-        span === 2 ? "md:col-span-2" : ""
+        span === 2 ? DASHBOARD_FULL_SPAN_CLASS : ""
       } motion-reduce:animate-none`}
     >
       <div className="flex flex-col gap-3">
@@ -57,7 +61,7 @@ export function DashboardSkeleton() {
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2"
+      className={DASHBOARD_GRID_CLASS}
     >
       <span className="sr-only">{t("dashboard.loading")}</span>
       {visible.map((id) => {

@@ -13,6 +13,8 @@ import {
   type DashboardDataBundle,
 } from "@/lib/dashboard-data";
 import {
+  DASHBOARD_FULL_SPAN_CLASS,
+  DASHBOARD_GRID_CLASS,
   dashboardCardSpan,
   visibleDashboardCards,
 } from "@/lib/dashboard-ui";
@@ -201,13 +203,13 @@ export function Dashboard({ onNavigateToCheckIn, onOpenSub }: Props) {
         </div>
       ) : null}
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+      <div className={DASHBOARD_GRID_CLASS}>
         {visible.map((id) => {
           const span = dashboardCardSpan(id, visible);
           return (
             <div
               key={id}
-              className={`min-w-0 ${span === 2 ? "md:col-span-2" : ""}`}
+              className={`min-w-0 ${span === 2 ? DASHBOARD_FULL_SPAN_CLASS : ""}`}
             >
               {id === "hero_stats" ? (
                 <HeroStats data={data} onOpenMetric={openMetric} />
