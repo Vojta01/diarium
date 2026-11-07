@@ -23,6 +23,7 @@ export function PeriodicSummary({ userId }: Props) {
   const [reportMeta, setReportMeta] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Auto-fetch existing report on mount and when type changes
@@ -31,6 +32,7 @@ export function PeriodicSummary({ userId }: Props) {
       setLoadingReport(true);
       setAnalysis(null);
       setReportMeta(null);
+      setLoadError(null);
       setError(null);
       try {
         const tok = getAccessToken();
@@ -38,15 +40,26 @@ export function PeriodicSummary({ userId }: Props) {
           headers: { ...(tok ? { "Authorization": `Bearer ${tok}` } : {}) },
         });
         const json = await resp.json();
+        if (!resp.ok || json.error) {
+          setLoadError(json.error || t("periodicSummary.error_connection"));
+          return;
+        }
         if (json.report) {
           setAnalysis(json.report.content);
           setReportMeta(json.report);
         }
-      } catch {}
-      setLoadingReport(false);
+      } catch (e) {
+        setLoadError(
+          e instanceof Error && e.message
+            ? e.message
+            : t("periodicSummary.error_connection")
+        );
+      } finally {
+        setLoadingReport(false);
+      }
     }
     fetchExisting();
-  }, [type, userId]);
+  }, [type, userId, t]);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -65,8 +78,12 @@ export function PeriodicSummary({ userId }: Props) {
         setAnalysis(json.analysis);
         setReportMeta(null); // Live generated, no DB meta
       }
-    } catch (e: any) {
-      setError(e.message || t("periodicSummary.error_connection"));
+    } catch (e) {
+      setError(
+        e instanceof Error && e.message
+          ? e.message
+          : t("periodicSummary.error_connection")
+      );
     }
     setLoading(false);
   };
@@ -98,6 +115,15 @@ export function PeriodicSummary({ userId }: Props) {
         <div className="p-4 text-white/30 text-sm text-center">{t("periodicSummary.loading")}</div>
       )}
 
+      {!loadingReport && loadError ? (
+        <div
+          role="alert"
+          className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-4"
+        >
+          {t("periodicSummary.error_prefix", { error: loadError })}
+        </div>
+      ) : null}
+
       {analysis && (
         <div className="p-4 bg-indigo-500/5 border border-indigo-400/10 rounded-xl mb-4">
           {reportMeta && (
@@ -112,7 +138,7 @@ export function PeriodicSummary({ userId }: Props) {
         </div>
       )}
 
-      {!loadingReport && !analysis && (
+      {!loadingReport && !analysis && !loadError && (
         <div className="p-4 text-white/20 text-sm text-center mb-2">
           {t("periodicSummary.no_report", { period: periodLabel.toLowerCase() })}
         </div>

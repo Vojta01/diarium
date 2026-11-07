@@ -140,6 +140,7 @@ export const cs = {
     entries_load: 'Zápisy se nepodařilo načíst.',
     goals_load: 'Cíle se nepodařilo načíst.',
     scales_load: 'Škály se nepodařilo načíst.',
+    templates_load: 'Šablony se nepodařilo načíst.',
     habits_load: 'Návyky se nepodařilo načíst.',
   },
 
@@ -370,6 +371,20 @@ export const cs = {
       habit_not_done: 'Nesplněno',
       scales_error: 'Názvy škál se nepodařilo načíst.',
     },
+    entries: {
+      title: 'Zápisy',
+      goals: 'Cíle',
+      goals_hint: 'Cíle a kalendářní postup',
+      scales: 'Škály',
+      scales_hint: 'Sledované škály',
+      templates: 'Šablony',
+      templates_hint: 'Šablony pro check-in',
+      achievements: 'Odznaky',
+      achievements_hint: 'Získané odznaky',
+      reports: 'AI přehledy',
+      reports_hint: 'Týdenní a měsíční souhrny',
+      open: 'Otevřít {section}',
+    },
     weather: {
       slunecno: '☀️ Slunečno',
       zatazeno: '☁️ Zataženo',
@@ -379,6 +394,44 @@ export const cs = {
       horko: '🌡️ Horko',
       bourka: '🌩️ Bouřka',
       vitr: '💨 Vítr',
+    },
+  },
+
+  // ── Sub-screens opened from the Overview Entries card ──
+  screens: {
+    goals: {
+      subtitle: 'Cíle a kalendářní postup',
+      loading: 'Načítám cíle…',
+      empty_title: 'Zatím žádné cíle',
+      empty_hint: 'Nastav si cíl pro aktivitu a sleduj jeho plnění v kalendářních obdobích.',
+      add: '＋ Nový cíl',
+      edit: 'Upravit cíl: {name}',
+      error_title: 'Cíle se nepodařilo načíst',
+      retry: 'Zkusit znovu',
+      history: 'Kalendářní historie',
+      period_range: '{start} – {end}',
+      period_met: 'splněno',
+      period_missed: 'nesplněno',
+      period_no_data: 'bez dat',
+    },
+    scales: {
+      subtitle: 'Sledované hodnoty za posledních 7 dní',
+      error_title: 'Škály se nepodařilo načíst',
+      error_hint: 'Škály máš uložené. Zkus je načíst znovu.',
+      retry: 'Zkusit znovu',
+    },
+    templates: {
+      subtitle: 'Šablony pro check-in',
+      read_only: 'Jen ke čtení. Šablonu vyber při psaní check-inu.',
+      loading: 'Načítám šablony…',
+      empty_title: 'Zatím žádné šablony',
+      empty_hint: 'Šablony, které si uložíš při psaní check-inu, se objeví tady.',
+      error_title: 'Šablony se nepodařilo načíst',
+      retry: 'Zkusit znovu',
+      refresh: 'Aktualizovat',
+    },
+    reports: {
+      subtitle: 'Týdenní, měsíční a roční AI přehledy.',
     },
   },
 

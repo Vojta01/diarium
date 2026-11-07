@@ -19,6 +19,10 @@ import { NotificationSettingsButton } from "@/components/NotificationSettingsBut
 import { OnePageCheckIn } from "@/components/OnePageCheckIn";
 import { AboutScreen } from "@/components/settings/AboutScreen";
 import { SettingsView } from "@/components/settings/SettingsView";
+import { GoalsScreen } from "@/components/screens/GoalsScreen";
+import { ReportsScreen } from "@/components/screens/ReportsScreen";
+import { ScalesScreen } from "@/components/screens/ScalesScreen";
+import { TemplatesScreen } from "@/components/screens/TemplatesScreen";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { StatsDashboard } from "@/components/StatsDashboard";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -29,6 +33,7 @@ import { useTranslation } from "@/lib/i18n";
 import { ANDROID_APK_URL, GITHUB_WEB_URL } from "@/lib/links";
 import {
   DEFAULT_NAV,
+  IMPLEMENTED_SUBS,
   SHELL_NAVIGATION_EVENT,
   SUB_LABEL_KEYS,
   TAB_LABEL_KEYS,
@@ -50,11 +55,9 @@ import {
 } from "@/lib/navigation";
 
 /**
- * Sub-screens that have a real implementation today. The navigation model
- * already knows all of them; later phases flip the remaining ones on here.
+ * The shell renders a sub-screen only when it is in the navigation model's
+ * implemented list; AppShell adds no second allowlist.
  */
-const IMPLEMENTED_SUBS: readonly SubScreen[] = ["achievements", "about"];
-
 interface AppShellProps {
   user: User;
   initialNav?: NavState;
@@ -103,7 +106,10 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   }, []);
 
   const scheduleFocusRestore = useCallback(() => {
-    if (focusOpenerRef.current) pendingFocusRestoreRef.current = true;
+    // A deep link has no opener element, but Back still unmounts the sub-screen
+    // and must not leave focus on the removed Back button. The effect below
+    // falls back to the active bottom tab when there is no opener to restore.
+    pendingFocusRestoreRef.current = true;
   }, []);
 
   const markVisited = useCallback((tab: MainTab) => {
@@ -226,7 +232,16 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
     const frame = requestAnimationFrame(() => {
       pendingFocusRestoreRef.current = false;
       focusOpenerRef.current = null;
-      restoreFocus(opener);
+      // A normal Back returns focus to the row that opened the sub-screen.
+      // A deep link (`?sub=goals`) has no opener, so land on the active bottom
+      // destination instead of leaving focus on an unmounted Back button.
+      // `restoreFocus(null)` returns false, which is the deep-link path.
+      if (!restoreFocus(opener)) {
+        const activeTab = document.querySelector<HTMLElement>(
+          '[role="tab"][aria-selected="true"]'
+        );
+        activeTab?.focus({ preventScroll: true });
+      }
     });
 
     return () => cancelAnimationFrame(frame);
@@ -413,7 +428,10 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         <main className="relative z-[1]">
           {panel(
             "overview",
-            <Dashboard onNavigateToCheckIn={handleNavigateToCheckIn} />
+            <Dashboard
+              onNavigateToCheckIn={handleNavigateToCheckIn}
+              onOpenSub={handleOpenSub}
+            />
           )}
           {panel(
             "today",
@@ -438,7 +456,11 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
 
         {nav.sub ? (
           <SubScreenChrome title={t(SUB_LABEL_KEYS[nav.sub])} onBack={handleBack}>
+            {nav.sub === "goals" ? <GoalsScreen /> : null}
+            {nav.sub === "scales" ? <ScalesScreen /> : null}
+            {nav.sub === "templates" ? <TemplatesScreen /> : null}
             {nav.sub === "achievements" ? <AchievementsPanel /> : null}
+            {nav.sub === "reports" ? <ReportsScreen userId={user.id} /> : null}
             {nav.sub === "about" ? <AboutScreen /> : null}
           </SubScreenChrome>
         ) : null}

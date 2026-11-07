@@ -197,10 +197,12 @@ const DEFAULT_SCALES: Omit<Scale, 'id' | 'user_id' | 'created_at'>[] = [
 ];
 
 export async function seedDefaultScales(): Promise<Scale[]> {
-  const existing = await getScales();
+  // A failed read must reject instead of looking like an empty account: the
+  // caller would otherwise create defaults into an unknown state. Existing
+  // callers already catch (check-in) or render the error (Scales screen).
+  const existing = await getScalesOrThrow();
   
   // Delete scales that don't match the new defaults (wrong name or wrong range)
-  const allowedNames = new Set(DEFAULT_SCALES.map(s => s.name));
   for (const scale of existing) {
     const def = DEFAULT_SCALES.find(s => s.name === scale.name);
     const needsReset = !def 
@@ -212,7 +214,7 @@ export async function seedDefaultScales(): Promise<Scale[]> {
   }
   
   // Get remaining scales after cleanup
-  const remaining = await getScales();
+  const remaining = await getScalesOrThrow();
   if (remaining.length >= DEFAULT_SCALES.length) return remaining;
   
   // Create missing default scales

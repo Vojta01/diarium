@@ -126,6 +126,7 @@ export const en = {
     entries_load: 'Could not load your entries.',
     goals_load: 'Could not load your goals.',
     scales_load: 'Could not load your scales.',
+    templates_load: 'Could not load your templates.',
     habits_load: 'Could not load your habits.',
   },
 
@@ -356,6 +357,20 @@ export const en = {
       habit_not_done: 'Not done',
       scales_error: 'Scale names could not be loaded.',
     },
+    entries: {
+      title: 'Entries',
+      goals: 'Goals',
+      goals_hint: 'Targets and calendar progress',
+      scales: 'Scales',
+      scales_hint: 'Your tracked scales',
+      templates: 'Templates',
+      templates_hint: 'Reusable check-in notes',
+      achievements: 'Achievements',
+      achievements_hint: 'Badges you have unlocked',
+      reports: 'AI reports',
+      reports_hint: 'Weekly and monthly summaries',
+      open: 'Open {section}',
+    },
     weather: {
       slunecno: '☀️ Sunny',
       zatazeno: '☁️ Cloudy',
@@ -365,6 +380,44 @@ export const en = {
       horko: '🌡️ Hot',
       bourka: '🌩️ Storm',
       vitr: '💨 Windy',
+    },
+  },
+
+  // ── Sub-screens opened from the Overview Entries card ──
+  screens: {
+    goals: {
+      subtitle: 'Targets and calendar progress',
+      loading: 'Loading goals…',
+      empty_title: 'No goals yet',
+      empty_hint: 'Set a target for an activity and watch it fill up in calendar periods.',
+      add: '+ New goal',
+      edit: 'Edit goal: {name}',
+      error_title: 'Goals could not be loaded',
+      retry: 'Try again',
+      history: 'Calendar history',
+      period_range: '{start} – {end}',
+      period_met: 'met',
+      period_missed: 'missed',
+      period_no_data: 'no data',
+    },
+    scales: {
+      subtitle: 'Tracked values over the last 7 days',
+      error_title: 'Scales could not be loaded',
+      error_hint: 'Your scales are still saved. Try loading them again.',
+      retry: 'Try again',
+    },
+    templates: {
+      subtitle: 'Reusable notes for your check-in',
+      read_only: 'Read-only overview. Pick a template while writing a check-in.',
+      loading: 'Loading templates…',
+      empty_title: 'No templates yet',
+      empty_hint: 'Templates you save while writing a check-in will appear here.',
+      error_title: 'Templates could not be loaded',
+      retry: 'Try again',
+      refresh: 'Refresh',
+    },
+    reports: {
+      subtitle: 'Weekly, monthly and yearly AI summaries.',
     },
   },
 

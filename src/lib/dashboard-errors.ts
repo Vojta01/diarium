@@ -14,6 +14,7 @@ export type DashboardErrorCode =
   | "errors.entries_load"
   | "errors.goals_load"
   | "errors.scales_load"
+  | "errors.templates_load"
   | "errors.habits_load";
 
 export const DASHBOARD_ERROR_CODES = {
@@ -21,6 +22,7 @@ export const DASHBOARD_ERROR_CODES = {
   entries: "errors.entries_load",
   goals: "errors.goals_load",
   scales: "errors.scales_load",
+  templates: "errors.templates_load",
   habits: "errors.habits_load",
 } as const satisfies Record<string, DashboardErrorCode>;
 

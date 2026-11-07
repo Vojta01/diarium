@@ -1,5 +1,10 @@
 import { createSupabaseClient } from "./supabase/client";
 import { readStoredSession } from "./auth-storage";
+import {
+  DASHBOARD_ERROR_CODES,
+  dashboardReadError,
+  signedOutError,
+} from "./dashboard-errors";
 
 export interface Template {
   id: string;
@@ -59,6 +64,31 @@ export async function getTemplates(): Promise<Template[]> {
   if (error) {
     console.error("getTemplates error:", error);
     return [];
+  }
+  return data || [];
+}
+
+/**
+ * Read-only list for the Templates destination.
+ *
+ * The legacy `getTemplates` above intentionally keeps its old
+ * "empty on failure" contract for existing callers. A screen cannot tell that
+ * apart from a real empty account, so this strict variant throws a semantic
+ * dashboard error instead. It performs the same query and adds no write path.
+ */
+export async function getTemplatesOrThrow(): Promise<Template[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw signedOutError();
+
+  const sb = await getAuthenticatedClient();
+  const { data, error, status } = await sb
+    .from("templates")
+    .select("*")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw dashboardReadError(error, DASHBOARD_ERROR_CODES.templates, status);
   }
   return data || [];
 }

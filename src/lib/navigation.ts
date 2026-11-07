@@ -20,6 +20,21 @@ export const SUB_SCREENS = [
 ] as const;
 export type SubScreen = (typeof SUB_SCREENS)[number];
 
+/**
+ * Sub-screens with a real implementation in this build. The navigation model
+ * knows every Android destination; this list decides which ones may render, so
+ * a stale bookmark can never open an empty shell. Kept here (not in AppShell)
+ * so the navigation tests can pin it without importing a client component.
+ */
+export const IMPLEMENTED_SUBS: readonly SubScreen[] = [
+  "goals",
+  "scales",
+  "templates",
+  "achievements",
+  "reports",
+  "about",
+];
+
 export interface NavState {
   tab: MainTab;
   /** Sub-screen rendered on top of its parent tab, or null for the tab itself. */

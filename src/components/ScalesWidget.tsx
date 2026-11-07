@@ -18,8 +18,11 @@ export function ScalesWidget({ todayScaleValues }: ScalesWidgetProps) {
   const [entries, setEntries] = useState<Record<string, ScaleEntry[]>>({});
   const [averages, setAverages] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const loadScales = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await seedDefaultScales();
       setScales(data);
@@ -38,6 +41,8 @@ export function ScalesWidget({ todayScaleValues }: ScalesWidgetProps) {
       setAverages(avgMap);
     } catch (e) {
       console.error("Failed to load scales:", e);
+      setScales([]);
+      setLoadError(true);
     }
     setLoading(false);
   }, []);
@@ -51,8 +56,31 @@ export function ScalesWidget({ todayScaleValues }: ScalesWidgetProps) {
 
   if (loading) {
     return (
-      <div className="glass-card p-4">
+      <div className="glass-card p-4" role="status" aria-live="polite">
         <div className="text-white/40 text-sm">{t("common.loading")}</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="glass-card p-4" role="alert">
+        <h3 className="text-lg font-semibold text-white mb-2">
+          📊 {t("scales.title")}
+        </h3>
+        <p className="text-sm font-medium text-[color:var(--text-1)]">
+          {t("screens.scales.error_title")}
+        </p>
+        <p className="mt-1 text-xs leading-5 text-white/50">
+          {t("screens.scales.error_hint")}
+        </p>
+        <button
+          type="button"
+          onClick={() => void loadScales()}
+          className="mt-3 min-h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+        >
+          {t("screens.scales.retry")}
+        </button>
       </div>
     );
   }

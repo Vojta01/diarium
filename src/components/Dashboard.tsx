@@ -18,11 +18,13 @@ import {
 } from "@/lib/dashboard-ui";
 import { useTranslation } from "@/lib/i18n";
 import { pragueDateKey } from "@/lib/date";
+import type { SubScreen } from "@/lib/navigation";
 import { useDataRefresh } from "@/lib/use-data-refresh";
 
 import { DashboardMetricDialog } from "./dashboard/DashboardMetricDialog";
 import { DashboardSkeleton } from "./dashboard/DashboardSkeleton";
 import { DayDetailDialog } from "./dashboard/DayDetailDialog";
+import { EntriesCard } from "./dashboard/EntriesCard";
 import { GoalsCard } from "./dashboard/GoalsCard";
 import { HeroStats } from "./dashboard/HeroStats";
 import { MoodChartCard } from "./dashboard/MoodChartCard";
@@ -36,6 +38,7 @@ import { FOCUS_RING } from "./dashboard/primitives";
 
 interface Props {
   onNavigateToCheckIn: (date: string) => void;
+  onOpenSub: (sub: SubScreen) => void;
 }
 
 type LoadState =
@@ -50,9 +53,10 @@ type LoadState =
  * resources. A failed core read is a whole-screen error (signed-out and
  * transport failures keep their own messages); a failed optional resource stays
  * inside its card as an error with retry, never as an empty state. The Entries
- * card is deliberately absent until its sub-screens land in B2.
+ * card is the one exception to the error layout: its five destinations are
+ * static, so it stays available even when the core read fails.
  */
-export function Dashboard({ onNavigateToCheckIn }: Props) {
+export function Dashboard({ onNavigateToCheckIn, onOpenSub }: Props) {
   const { t } = useTranslation();
   const today = pragueDateKey();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -118,43 +122,51 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
 
   if (state.kind === "error") {
     return (
-      <div className="mx-auto flex min-h-[50vh] w-full max-w-[440px] flex-col items-center justify-center py-10 text-center">
-        <span aria-hidden="true" className="text-[34px] leading-none">
-          {state.error.kind === "signed_out" ? "🔒" : "⚠️"}
-        </span>
-        <h2 className="mt-3 text-[20px] font-semibold text-[color:var(--text-1)]">
-          {t(
-            state.error.kind === "signed_out"
-              ? "dashboard.signed_out_title"
-              : "dashboard.load_failed_title"
-          )}
-        </h2>
-        <p
-          role="alert"
-          className="mt-1.5 text-[13px] leading-5 text-[color:var(--text-2)]"
-        >
-          {state.error.kind === "signed_out"
-            ? t("dashboard.signed_out_message")
-            : t(state.error.code)}
-        </p>
-        <button
-          type="button"
-          onClick={() => void load("initial")}
-          className={`mt-4 min-h-11 rounded-[14px] border border-indigo-500/50 bg-indigo-500/[0.18] px-5 text-[14px] font-semibold text-[color:var(--text-1)] hover:bg-indigo-500/25 ${FOCUS_RING}`}
-        >
-          {t("dashboard.retry")}
-        </button>
+      <div className="mx-auto w-full max-w-[1040px]">
+        <div className="mx-auto flex min-h-[50vh] w-full max-w-[440px] flex-col items-center justify-center py-10 text-center">
+          <span aria-hidden="true" className="text-[34px] leading-none">
+            {state.error.kind === "signed_out" ? "🔒" : "⚠️"}
+          </span>
+          <h2 className="mt-3 text-[20px] font-semibold text-[color:var(--text-1)]">
+            {t(
+              state.error.kind === "signed_out"
+                ? "dashboard.signed_out_title"
+                : "dashboard.load_failed_title"
+            )}
+          </h2>
+          <p
+            role="alert"
+            className="mt-1.5 text-[13px] leading-5 text-[color:var(--text-2)]"
+          >
+            {state.error.kind === "signed_out"
+              ? t("dashboard.signed_out_message")
+              : t(state.error.code)}
+          </p>
+          <button
+            type="button"
+            onClick={() => void load("initial")}
+            className={`mt-4 min-h-11 rounded-[14px] border border-indigo-500/50 bg-indigo-500/[0.18] px-5 text-[14px] font-semibold text-[color:var(--text-1)] hover:bg-indigo-500/25 ${FOCUS_RING}`}
+          >
+            {t("dashboard.retry")}
+          </button>
+        </div>
+        <div className="mt-2">
+          <EntriesCard onOpenSub={onOpenSub} />
+        </div>
       </div>
     );
   }
 
   const bundle = state.bundle;
   const { data } = bundle;
-  const visible = visibleDashboardCards({
-    data,
-    goals: bundle.goals,
-    goalsError: bundle.goalsError,
-  });
+  const visible = visibleDashboardCards(
+    {
+      data,
+      goals: bundle.goals,
+      goalsError: bundle.goalsError,
+    },
+    { entries: true }
+  );
   const goalsError = bundle.goalsError ? t(bundle.goalsError) : null;
   const scalesError = bundle.scalesError ? t(bundle.scalesError) : null;
   const refresh = () => {
@@ -227,6 +239,9 @@ export function Dashboard({ onNavigateToCheckIn }: Props) {
               ) : null}
               {id === "reflection" ? (
                 <ReflectionCard data={data} onRefresh={refresh} />
+              ) : null}
+              {id === "entries" ? (
+                <EntriesCard onOpenSub={onOpenSub} />
               ) : null}
             </div>
           );

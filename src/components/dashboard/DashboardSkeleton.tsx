@@ -9,7 +9,7 @@ import {
 import { dashboardCardSpan } from "@/lib/dashboard-ui";
 import { useTranslation } from "@/lib/i18n";
 
-const SKELETON_CARDS = DASHBOARD_CARD_ORDER.filter((id) => id !== "entries");
+const SKELETON_CARDS = DASHBOARD_CARD_ORDER;
 
 function Block({
   id,
@@ -119,6 +119,26 @@ export function DashboardSkeleton() {
                 <div className="h-3 w-full rounded-full bg-white/[0.04]" />
                 <div className="h-3 w-5/6 rounded-full bg-white/[0.04]" />
                 <div className="h-3 w-3/4 rounded-full bg-white/[0.04]" />
+              </Block>
+            );
+          case "entries":
+            return (
+              <Block key={id} id={id} span={span} height="min-h-[330px]">
+                <div className="flex flex-col gap-2">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 rounded-xl border border-white/[0.04] px-2 py-2"
+                    >
+                      <div className="size-9 rounded-xl bg-white/[0.05]" />
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <div className="h-2.5 w-1/3 rounded-full bg-white/[0.07]" />
+                        <div className="h-2 w-2/3 rounded-full bg-white/[0.04]" />
+                      </div>
+                      <div className="h-4 w-2 rounded bg-white/[0.05]" />
+                    </div>
+                  ))}
+                </div>
               </Block>
             );
           default:
