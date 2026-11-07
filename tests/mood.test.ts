@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   averageMood,
+  CHART_MOOD_COLORS,
   isRecordedMood,
-  MOOD_COLORS,
   moodCounts,
   recordedMood,
   recordedMoods,
@@ -12,14 +13,45 @@ import {
 import { cs } from "../src/lib/i18n/translations/cs.ts";
 import { en } from "../src/lib/i18n/translations/en.ts";
 
+function source(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
 test("pins the Android beta5 chart palette, including cyan mood 5", () => {
-  assert.deepEqual(MOOD_COLORS, {
+  assert.deepEqual(CHART_MOOD_COLORS, {
     1: "#ef4444",
     2: "#f97316",
     3: "#fbbf24",
     4: "#34d399",
     5: "#22d3ee",
   });
+});
+
+test("chart components render the exported chart palette, not the chip palette", () => {
+  for (const file of [
+    "../src/components/AdvancedStats.tsx",
+    "../src/components/YearInPixels.tsx",
+  ]) {
+    const component = source(file);
+    assert.match(component, /\bCHART_MOOD_COLORS\b/, `${file} must use the chart palette`);
+    assert.doesNotMatch(
+      component,
+      /\bMOOD_COLORS\b/,
+      `${file} must not fall back to the chip palette`
+    );
+  }
+
+  // The chip palette still exists for chip-style UI and stays visually
+  // distinct: mood 5 is green on chips, cyan on charts.
+  const stats = source("../src/lib/stats.ts");
+  assert.match(stats, /export const MOOD_COLORS/);
+  assert.match(stats, /5: "#22c55e"/);
+  assert.notEqual(CHART_MOOD_COLORS[5], "#22c55e");
+});
+
+test("Year in Pixels count label says days with mood in both locales", () => {
+  assert.equal(cs.yearInPixels.days_tracked, "Dny s náladou");
+  assert.equal(en.yearInPixels.days_tracked, "Days with mood");
 });
 
 test("link labels and the new-tab hint exist in both locales", () => {

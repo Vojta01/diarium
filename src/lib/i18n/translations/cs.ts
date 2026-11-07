@@ -393,7 +393,7 @@ export const cs = {
     title: '🗓️ Rok {year} v pixelech',
     description: 'Každý čtvereček = jeden den. Čím zelenější, tím lepší nálada.',
     avg_mood: 'Průměrná nálada',
-    days_tracked: 'Sledovaných dní',
+    days_tracked: 'Dny s náladou',
     today: 'dnes',
     mood: 'nálada',
   },

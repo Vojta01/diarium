@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchDailyEntries, type DailyEntry, MOOD_COLORS, MOOD_EMOJIS, MOOD_LABELS } from "@/lib/stats";
-import { isRecordedMood, moodCounts as countRecordedMoods } from "@/lib/mood";
+import { fetchDailyEntries, type DailyEntry, MOOD_EMOJIS, MOOD_LABELS } from "@/lib/stats";
+import {
+  CHART_MOOD_COLORS,
+  moodCounts as countRecordedMoods,
+  recentMoodWindow,
+} from "@/lib/mood";
 import { getScales, getScaleDistribution, type Scale } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
 import { InfoPopover } from "@/components/InfoPopover";
@@ -55,8 +59,10 @@ export function AdvancedStats() {
   }
 
   // Only answered days enter mood statistics: 0 / missing moods are not a
-  // neutral 3 and must never inflate a denominator or an average.
-  const last30 = entries.slice(-30).filter((e) => isRecordedMood(e.mood));
+  // neutral 3 and must never inflate a denominator or an average. The window
+  // is the last 30 entries, so a new unanswered row shrinks the sample
+  // instead of pulling an older answered row back in.
+  const last30 = recentMoodWindow(entries);
 
   // ── Mood distribution ──
   const moodCounts = countRecordedMoods(last30);
@@ -132,8 +138,8 @@ export function AdvancedStats() {
                   className={`w-full rounded-t transition-all duration-300 ${isSelected ? "ring-2 ring-white/80" : ""}`}
                   style={{
                     height: `${Math.max(4, pct * 0.8)}%`,
-                    backgroundColor: MOOD_COLORS[mood],
-                    boxShadow: isSelected ? `0 0 18px ${MOOD_COLORS[mood]}99` : undefined,
+                    backgroundColor: CHART_MOOD_COLORS[mood],
+                    boxShadow: isSelected ? `0 0 18px ${CHART_MOOD_COLORS[mood]}99` : undefined,
                   }}
                 />
                 <span className={`text-base transition-transform duration-300 ${isSelected ? "scale-125" : ""}`}>{MOOD_EMOJIS[mood]}</span>
@@ -253,7 +259,7 @@ export function AdvancedStats() {
                   className={`w-full rounded-t transition-all ${isSelected ? "ring-1 ring-white/80" : ""}`}
                   style={{
                     height: `${Math.max(2, moodH * 0.6)}%`,
-                    backgroundColor: MOOD_COLORS[point.mood],
+                    backgroundColor: CHART_MOOD_COLORS[point.mood],
                     opacity: isSelected ? 1 : 0.7,
                   }}
                 />

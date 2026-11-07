@@ -12,16 +12,38 @@ export const MOOD_MAX = 5;
 export type Mood = 1 | 2 | 3 | 4 | 5;
 
 /**
- * Android beta5 chart/calendar palette. Kept separate from the legacy chip
- * palette in stats.ts until the screens migrate to the shared tokens.
+ * Android beta5 chart/calendar palette. This is the palette chart surfaces
+ * (bars, pixels, legends) must render; the legacy chip palette in stats.ts is
+ * deliberately different and stays with chip-style UI such as CalendarView.
  */
-export const MOOD_COLORS: Record<Mood, string> = {
+const CHART_PALETTE = {
   1: "#ef4444",
   2: "#f97316",
   3: "#fbbf24",
   4: "#34d399",
   5: "#22d3ee",
-};
+} as const satisfies Record<Mood, string>;
+
+export const CHART_MOOD_COLORS: Record<number, string> = CHART_PALETTE;
+
+/** Number of most recent entries that mood statistics look at. */
+export const MOOD_WINDOW_SIZE = 30;
+
+/**
+ * Last `size` entries, then only the answered ones.
+ *
+ * The window is selected before filtering on purpose: a newest unanswered row
+ * consumes a slot, so it reduces the answered count instead of pulling an
+ * older answered row back into the statistics. Filtering first would silently
+ * widen the window and change every average and distribution.
+ */
+export function recentMoodWindow<T extends { mood: unknown }>(
+  entries: readonly T[],
+  size: number = MOOD_WINDOW_SIZE
+): T[] {
+  if (size <= 0) return [];
+  return entries.slice(-size).filter((entry) => isRecordedMood(entry.mood));
+}
 
 export function isRecordedMood(value: unknown): value is Mood {
   return (

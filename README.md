@@ -10,7 +10,7 @@
   <p><strong>Your daily mood & diary companion — AI-powered, PWA-first, built with Next.js 16</strong></p>
 
   <p>
-    <a href="https://diarium.vercel.app">► Live Demo</a> •
+    <a href="https://diarium.digitalni-vedomi.cz">► Live Demo</a> •
     <a href="#features">Features</a> •
     <a href="#tech-stack">Tech Stack</a> •
     <a href="#architecture">Architecture</a> •
@@ -179,7 +179,7 @@ This project demonstrates full-stack Next.js development: Supabase Auth & Storag
 
 ### Prerequisites
 
-- **Node.js** 20+ (or Bun — any runtime Next.js supports)
+- **Node.js** 22.18+ (native TypeScript type stripping is required by `npm test`)
 - A **Supabase project** ([free tier](https://supabase.com) works great)
 - A **DeepSeek API key** ([platform.deepseek.com](https://platform.deepseek.com))
 - (Optional) An **Upstash Redis** instance for push notifications

@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { fetchDailyEntries, MOOD_COLORS, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
-import { averageMood, recordedMoods } from "@/lib/mood";
+import { fetchDailyEntries, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
+import { averageMood, CHART_MOOD_COLORS, recordedMoods } from "@/lib/mood";
+import { pragueDateKey, pragueYear } from "@/lib/date";
 import { useTranslation } from "@/lib/i18n";
 
 export function YearInPixels() {
   const { t, lang } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState(() => pragueYear());
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
 
   const monthNames: string[] = Array.isArray(t("calendar.month_names"))
@@ -21,7 +22,6 @@ export function YearInPixels() {
     : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
   useEffect(() => {
-    setLoading(true);
     fetchDailyEntries()
       .then(data => { setEntries(data); setLoading(false); })
       .catch(() => setLoading(false));
@@ -93,7 +93,10 @@ export function YearInPixels() {
     return { avg: avg.toFixed(1), total: recordedMoods(yearEntries).length };
   }, [entries, selectedYear]);
 
-  const today = new Date().toISOString().split("T")[0];
+  // "Today" is the Prague calendar day, never the UTC or browser-local day.
+  const today = pragueDateKey();
+  const currentYear = pragueYear();
+  const yearOptions = [currentYear, currentYear - 1, currentYear - 2];
 
   if (loading) {
     return <div className="glass-card"><div className="text-center py-8 text-white/40">{t("yearInPixels.loading")}</div></div>;
@@ -126,7 +129,7 @@ export function YearInPixels() {
             onChange={e => setSelectedYear(Number(e.target.value))}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 cursor-pointer"
           >
-            {[2026, 2025, 2024].map(y => <option key={y} value={y}>{y}</option>)}
+            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
         <p className="text-white/30 text-xs mb-2">
@@ -155,13 +158,13 @@ export function YearInPixels() {
               {month.name}
             </h3>
             <span className="text-[10px] text-white/25">
-              {monthEntryCounts[mi]}/{month.weeks.reduce((s, w) => s + w.filter(c => c.day > 0).length, 0)} {t("yearInPixels.days_tracked").toLowerCase()}
+              {monthEntryCounts[mi]}/{month.weeks.reduce((s, w) => s + w.filter(c => c.day > 0).length, 0)} {t("yearInPixels.days_tracked")}
             </span>
           </div>
 
           {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-[2px] mb-1">
-            {weekdays.map((d, i) => (
+            {weekdays.map((d) => (
               <div
                 key={d}
                 className="text-[9px] text-white/20 text-center"
@@ -198,7 +201,7 @@ export function YearInPixels() {
                         width: cellSize,
                         height: cellSize,
                         background: cell.mood
-                          ? MOOD_COLORS[cell.mood]
+                          ? CHART_MOOD_COLORS[cell.mood]
                           : "rgba(255,255,255,0.04)",
                         outline: isToday
                           ? "2px solid rgba(99,102,241,0.6)"
@@ -245,7 +248,7 @@ export function YearInPixels() {
             <span key={m} className="flex items-center gap-1 text-white/30">
               <span
                 className="w-2.5 h-2.5 rounded-sm inline-block"
-                style={{ background: MOOD_COLORS[m] }}
+                style={{ background: CHART_MOOD_COLORS[m] }}
               />
               {MOOD_EMOJIS[m]}
             </span>

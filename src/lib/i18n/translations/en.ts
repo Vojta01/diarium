@@ -396,7 +396,7 @@ export const en = {
     title: '🗓️ Year {year} in pixels',
     description: 'Each square = one day. Greener means better mood.',
     avg_mood: 'Average mood',
-    days_tracked: 'Days tracked',
+    days_tracked: 'Days with mood',
     today: 'today',
     mood: 'mood',
   },

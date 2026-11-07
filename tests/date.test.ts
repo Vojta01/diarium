@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PRAGUE_TIME_ZONE, pragueDateKey } from "../src/lib/date.ts";
+import { PRAGUE_TIME_ZONE, pragueDateKey, pragueYear } from "../src/lib/date.ts";
 
 test("uses the canonical Europe/Prague time zone", () => {
   assert.equal(PRAGUE_TIME_ZONE, "Europe/Prague");
@@ -28,4 +28,11 @@ test("handles the autumn DST transition", () => {
 test("formats the key as zero-padded YYYY-MM-DD", () => {
   assert.match(pragueDateKey(new Date("2026-01-05T12:00:00Z")), /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(pragueDateKey(new Date("2026-01-05T12:00:00Z")), "2026-01-05");
+});
+
+test("returns the Prague year across New Year midnight", () => {
+  // 2025-12-31 23:59:59 Prague is still 2025; 00:30 on 1 January is 2026.
+  assert.equal(pragueYear(new Date("2025-12-31T22:59:59Z")), 2025);
+  assert.equal(pragueYear(new Date("2025-12-31T23:30:00Z")), 2026);
+  assert.equal(pragueYear(new Date("2026-07-01T12:00:00Z")), 2026);
 });

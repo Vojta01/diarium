@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { useTranslation } from "@/lib/i18n";
+import { externalLinkNameLabel } from "@/lib/a11y";
 
 interface ExternalLinkProps {
   href: string;
@@ -25,6 +26,9 @@ export function ExternalLink({
   showIcon = true,
 }: ExternalLinkProps) {
   const { t } = useTranslation();
+  // Keep the visible text in the accessible name; only append the new-tab
+  // hint, never replace the label with destination-only wording.
+  const nameLabel = externalLinkNameLabel(children, label);
 
   return (
     <a
@@ -32,7 +36,7 @@ export function ExternalLink({
       target="_blank"
       rel="noopener noreferrer"
       referrerPolicy="no-referrer"
-      aria-label={t("links.opens_in_new_tab", { label })}
+      aria-label={t("links.opens_in_new_tab", { label: nameLabel })}
       className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${className}`}
     >
       {children ?? label}

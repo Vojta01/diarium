@@ -22,3 +22,14 @@ export function pragueDateKey(instant: Date = new Date()): string {
 
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
+
+/**
+ * Returns the Europe/Prague calendar year.
+ *
+ * Year selectors must use this instead of `new Date().getFullYear()`: around
+ * midnight on 31 December the Prague year is already the next one while the
+ * runtime's local/UTC year is not.
+ */
+export function pragueYear(instant: Date = new Date()): number {
+  return Number(pragueDateKey(instant).slice(0, 4));
+}
