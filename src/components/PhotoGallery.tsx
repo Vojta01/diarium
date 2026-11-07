@@ -1,6 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import type { DailyEntry } from "@/lib/stats";
+import { dayForm, formatDashboardDate } from "@/lib/dashboard-ui";
 import { useTranslation } from "@/lib/i18n";
 
 interface PhotoGalleryProps {
@@ -28,7 +31,9 @@ export function PhotoGallery({ entries, onNavigateToDate }: PhotoGalleryProps) {
   return (
     <div>
       <p className="text-white/30 text-xs mb-3 text-center">
-        {t("gallery.count", { count: photos.length })}
+        {t(`gallery.count_${dayForm(photos.length, lang)}`, {
+          count: photos.length,
+        })}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {photos.map((e) => (
@@ -45,11 +50,7 @@ export function PhotoGallery({ entries, onNavigateToDate }: PhotoGalleryProps) {
             />
             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 text-left">
               <span className="text-[10px] text-white/90 font-medium">
-                {new Date(e.date).toLocaleDateString(lang === "cs" ? "cs-CZ" : "en-US", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {formatDashboardDate(e.date, lang, "numeric")}
               </span>
             </div>
           </button>

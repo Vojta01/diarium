@@ -88,9 +88,42 @@ export const cs = {
   },
 
   history: {
-    subtitle: 'Kalendář a fotky',
+    subtitle: 'Kalendář a zápisy',
     loading: 'Načítám historii...',
     view_mode: 'Zobrazení historie',
+    mode_calendar: 'Kalendář',
+    mode_photos: 'Fotky',
+    today: 'Dnes',
+    goto_today: 'Přejít na dnešní měsíc',
+    previous_month: 'Předchozí měsíc',
+    next_month: 'Další měsíc',
+    calendar_aria: 'Kalendář – {month}',
+    detail_title: '📅 Detail dne',
+    empty_title: 'Zatím žádné zápisy',
+    load_error: 'Historii se nepodařilo načíst.',
+    error_title: 'Načtení historie',
+    retry: 'Zkusit znovu',
+    month_empty:
+      'V měsíci {month} nemáš žádný záznam. Klikni na den v kalendáři a zapiš, jaký byl.',
+    synced_only_title: 'Jen automatická data, žádný zápis',
+    synced_only_body:
+      'V měsíci {month} máš jen data stažená z telefonu (screen time, odemknutí). Bez vyplněné nálady se den jako zápis nepočítá — klikni na den a doplň check-in.',
+    select_day: 'Klikni na den v kalendáři a uvidíš, co jsi ten den zapsal.',
+    count_one: 'V tomto měsíci máš 1 zápis.',
+    count_few: 'V tomto měsíci máš {count} zápisy.',
+    count_many: 'V tomto měsíci máš {count} zápisů.',
+    synced_note_one:
+      'U 1 dne máš jen automatická data bez nálady — jako zápisy se nepočítají.',
+    synced_note_few:
+      'U {count} dnů máš jen automatická data bez nálady — jako zápisy se nepočítají.',
+    synced_note_many:
+      'U {count} dnů máš jen automatická data bez nálady — jako zápisy se nepočítají.',
+    aria_mood: '{date}, nálada {value} z 5 ({mood})',
+    aria_empty: '{date}, bez záznamu',
+    aria_synced: '{date}, jen automatická data, check-in nevyplněn',
+    aria_future: '{date}, budoucí den',
+    aria_photo: ', fotka',
+    aria_scales: ', škály',
   },
 
   today: {
@@ -736,7 +769,9 @@ export const cs = {
   gallery: {
     no_photos: 'Zatím žádné fotky',
     no_photos_hint: 'Přidej fotku v check-inu a objeví se tady.',
-    count: '{count} fotek',
+    count_one: '{count} fotka',
+    count_few: '{count} fotky',
+    count_many: '{count} fotek',
   },
 
   // ── ActivityMoodChart (korelace) ──

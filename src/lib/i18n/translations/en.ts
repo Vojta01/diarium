@@ -73,9 +73,42 @@ export const en = {
   },
 
   history: {
-    subtitle: 'Calendar and photos',
+    subtitle: 'Calendar and entries',
     loading: 'Loading history...',
     view_mode: 'History view',
+    mode_calendar: 'Calendar',
+    mode_photos: 'Photos',
+    today: 'Today',
+    goto_today: 'Go to the current month',
+    previous_month: 'Previous month',
+    next_month: 'Next month',
+    calendar_aria: 'Calendar for {month}',
+    detail_title: '📅 Day detail',
+    empty_title: 'No entries yet',
+    load_error: 'Could not load history.',
+    error_title: 'Loading history',
+    retry: 'Try again',
+    month_empty:
+      'No entries in {month}. Pick a day in the calendar and write what it was like.',
+    synced_only_title: 'Automatic data only, no entry',
+    synced_only_body:
+      'In {month} you only have data synced from the phone (screen time, unlocks). A day without a filled mood does not count as an entry — pick the day and complete the check-in.',
+    select_day: 'Pick a day in the calendar to see what you recorded.',
+    count_one: 'You have 1 entry this month.',
+    count_few: 'You have {count} entries this month.',
+    count_many: 'You have {count} entries this month.',
+    synced_note_one:
+      '1 day has only automatic data without a mood — it does not count as an entry.',
+    synced_note_few:
+      '{count} days have only automatic data without a mood — they do not count as entries.',
+    synced_note_many:
+      '{count} days have only automatic data without a mood — they do not count as entries.',
+    aria_mood: '{date}, mood {value} out of 5 ({mood})',
+    aria_empty: '{date}, no entry',
+    aria_synced: '{date}, automatic data only, check-in not filled',
+    aria_future: '{date}, future day',
+    aria_photo: ', photo',
+    aria_scales: ', scales',
   },
 
   today: {
@@ -740,7 +773,9 @@ export const en = {
   gallery: {
     no_photos: 'No photos yet',
     no_photos_hint: 'Add a photo in a check-in and it will appear here.',
-    count: '{count} photos',
+    count_one: '{count} photo',
+    count_few: '{count} photos',
+    count_many: '{count} photos',
   },
 
   // ── ActivityMoodChart (correlation) ──
