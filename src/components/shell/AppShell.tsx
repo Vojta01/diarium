@@ -418,9 +418,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         className={`mx-auto w-full px-4 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 ${
           nav.tab === "overview" && nav.sub === null
             ? "max-w-[620px] lg:max-w-[1040px]"
-            : nav.tab === "today" && nav.sub === null
-              ? "max-w-[620px] lg:max-w-[760px]"
-              : "max-w-[620px]"
+            : "max-w-[620px]"
         }`}
       >
         {nav.sub === null && nav.tab !== "today" ? (
@@ -442,6 +440,7 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
               initialDate={checkin.date}
               onSaveDone={handleCheckinSaved}
               onOpenGoals={() => handleOpenSub("goals")}
+              onOpenOverview={() => handleSelectTab("overview")}
             />
           )}
           {panel("history", <HistoryView onNavigateToDate={handleNavigateToCheckIn} />)}

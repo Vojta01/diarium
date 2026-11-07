@@ -6,7 +6,7 @@ import { type ReactNode } from "react";
 
 import { Markdown } from "@/components/Markdown";
 import {
-  formatSecondsLabel,
+  formatScreenTimeDuration,
   formatTopAppDuration,
 } from "@/lib/dashboard-format";
 import {
@@ -15,6 +15,7 @@ import {
   weatherKey,
 } from "@/lib/dashboard-ui";
 import { useTranslation } from "@/lib/i18n";
+import { getFeatureFlags } from "@/lib/feature-flags";
 import type { HabitDef } from "@/lib/supabase/db";
 import type { Scale } from "@/lib/scales";
 import { isRecordedMood } from "@/lib/mood";
@@ -312,13 +313,13 @@ export function DayDetail({
         />
       ) : null}
 
-      {sections.phone ? (
+      {sections.phone && getFeatureFlags().screenTime ? (
         <Section title={t("dashboard.day_detail.screen_time")}>
           <div className="flex flex-col gap-0.5">
             {entry.phone_screen_time !== null ? (
               <MetricRow
                 label={t("dashboard.day_detail.screen_time_row")}
-                value={formatSecondsLabel(entry.phone_screen_time)}
+                value={formatScreenTimeDuration(entry.phone_screen_time)}
               />
             ) : null}
             {entry.phone_unlocks !== null ? (

@@ -10,6 +10,7 @@ import {
   getHabits,
   patchEntry,
   saveEntry,
+  deleteCheckInPhoto,
   type ActivityDef,
   type Entry,
   type HabitDef,
@@ -44,6 +45,12 @@ import {
 } from "@/lib/checkin/dates";
 import { createDraftWriter, readDraft } from "@/lib/checkin/draft";
 import {
+  definitionKey,
+  isDuplicateDefinition,
+  mutateCatalogue,
+} from "@/lib/checkin/catalogue";
+import { photoSaveIntent } from "@/lib/checkin/photo-edit";
+import {
   aiEmptyError,
   aiFailedError,
   aiNetworkError,
@@ -56,6 +63,16 @@ import { CheckInForm } from "./CheckInForm";
 import { CheckInHeader } from "./CheckInHeader";
 import { StoredDayView } from "./StoredDayView";
 import { PhotoViewer } from "./dialogs/PhotoViewer";
+import { PostSaveReflectionDialog } from "./dialogs/PostSaveReflectionDialog";
+
+/** JSON POST headers for the catalogue routes, with the session token if any. */
+function authJsonHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 /**
  * Check-in orchestrator: date, load token, modes, save, draft and the
@@ -68,11 +85,14 @@ import { PhotoViewer } from "./dialogs/PhotoViewer";
 export function CheckInScreen({
   onSaveDone,
   onOpenGoals,
+  onOpenOverview,
   initialDate,
 }: {
   onSaveDone: () => void;
   /** Opens the Goals sub-screen; goals are managed there, never here. */
   onOpenGoals: () => void;
+  /** The post-save dialog's close action lands on Overview. */
+  onOpenOverview: () => void;
   initialDate?: string | null;
 }) {
   const { t, lang } = useTranslation();
@@ -94,6 +114,7 @@ export function CheckInScreen({
   const [saveError, setSaveError] = useState<CheckInError | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [postSaveOpen, setPostSaveOpen] = useState(false);
   /** True from the first edit until the next successful load/save. */
   const [dirty, setDirty] = useState(false);
   const [editing, setEditing] = useState(initialDate != null);
@@ -156,6 +177,10 @@ export function CheckInScreen({
       setData(updater);
       setSaved(false);
       setDirty(true);
+      // The restored-draft / late-night banners describe the initial state;
+      // once the user edits, they are stale.
+      setDraftRestored(false);
+      setLateNightHint(false);
     },
     [draftWriter]
   );
@@ -171,6 +196,8 @@ export function CheckInScreen({
       }));
       setSaved(false);
       setDirty(true);
+      setDraftRestored(false);
+      setLateNightHint(false);
     },
     [draftWriter]
   );
@@ -358,6 +385,8 @@ export function CheckInScreen({
       setPhotoUploading(false);
       setPhotoCleared(false);
       setDraftRestored(false);
+      setLateNightHint(false);
+      setPostSaveOpen(false);
       // Invalidate an in-flight reflection: its response belongs to the old day
       // and must never be rendered (or patched) under the new date.
       reflectionToken.current += 1;
@@ -387,8 +416,13 @@ export function CheckInScreen({
   const handleSave = async () => {
     if (loadError) return;
     const saveDate = currentDate;
+    const photoIntent = photoSaveIntent({
+      stored: storedEntry?.photo_path ?? null,
+      staged: data.photoPath,
+      cleared: photoCleared,
+    });
     const payload = buildCheckInPayload(data, saveDate, {
-      clearPhoto: photoCleared && !data.photoPath,
+      clearPhoto: photoIntent.clear_photo === true,
     });
 
     setSaveError(null);
@@ -398,7 +432,9 @@ export function CheckInScreen({
         gate: {
           loadFailed: Boolean(loadError),
           photoUploading,
-          hasContent: hasContent(data),
+          // Removing the only stored photo is a real edit even though the
+          // remaining form is empty; otherwise the removal could never save.
+          hasContent: hasContent(data) || photoIntent.clear_photo === true,
         },
         inFlight: saveInFlight,
         payload,
@@ -410,6 +446,12 @@ export function CheckInScreen({
         return;
       }
       if (result.status !== "saved") return;
+
+      // The row is the source of truth now. A replaced/cleared object may be
+      // removed best-effort; a failed cleanup is only an orphan, never a
+      // reason to roll back the save.
+      if (photoIntent.cleanup) void deleteCheckInPhoto(photoIntent.cleanup);
+
       if (saveDate !== dateRef.current) return;
 
       // Use the server row, not the local draft: it carries the normalised
@@ -423,6 +465,8 @@ export function CheckInScreen({
       setDirty(false);
       setEditing(true);
       setPhotoCleared(false);
+      setDraftRestored(false);
+      setLateNightHint(false);
       // The saved row may have changed a goal's count for this period.
       setGoalsNonce((value) => value + 1);
       setReflectionError(null);
@@ -432,6 +476,7 @@ export function CheckInScreen({
       draftWriter.markSaved(saveDate);
       notifyDataChanged("entries");
       onSaveDone();
+      setPostSaveOpen(true);
       checkAndUnlockAchievements({
         mood: savedData.mood,
         hasPhoto: Boolean(savedData.photoPath),
@@ -444,14 +489,27 @@ export function CheckInScreen({
         })
         .catch(() => {});
       // A day with no reflection yet gets one in the background; the route
-      // caches, so an existing reflection is never regenerated here.
-      if (!savedData.aiReflection) void requestReflection(saveDate);
+      // caches, so an existing reflection is never regenerated here. This is
+      // the only automatic request: the dialog only displays its state.
+      if (!savedData.aiReflection) {
+        void requestReflection(saveDate, { afterSave: true });
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  async function requestReflection(requestDate: string) {
+  async function requestReflection(
+    requestDate: string,
+    options: { afterSave?: boolean } = {}
+  ) {
+    // A reflection reads the saved row. While a save is in flight the row is
+    // still the previous version, so generating then would persist prose about
+    // stale data. The section button is also inert, but this guard covers the
+    // programmatic path. `afterSave` is the one legitimate call made before the
+    // `saving` state has re-rendered; the row is already written by then.
+    if (!options.afterSave && (saving || saveInFlight.current)) return;
+    if (photoUploading) return;
     if (reflectionInFlight.current) return;
     if (requestDate !== dateRef.current) return;
 
@@ -548,7 +606,13 @@ export function CheckInScreen({
     icon: string;
     category: string;
   }): Promise<string | null> => {
-    const key = input.name.toLowerCase().replace(/\s+/g, "_");
+    const key = definitionKey(input.name);
+    if (!userId) return "checkin.error_save_auth";
+    if (isDuplicateDefinition(activityDefs, input.name)) {
+      return "activities.error_duplicate";
+    }
+    setActivityError(null);
+
     const created: ActivityDef = {
       key,
       label: input.name,
@@ -557,82 +621,102 @@ export function CheckInScreen({
       color: "#6366f1",
       source: "custom",
     };
-    setActivityDefs((previous) => [...previous, created]);
+
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-activities", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({
+            action: "add",
+            userId,
+            key,
+            label: input.name,
+            icon: input.icon,
+            category: input.category,
+          }),
+        }),
+      apply: (body) => {
+        const returnedKey =
+          body &&
+          typeof body === "object" &&
+          typeof (body as { key?: unknown }).key === "string"
+            ? (body as { key: string }).key
+            : key;
+        setActivityDefs((previous) =>
+          previous.some((def) => def.key === returnedKey)
+            ? previous
+            : [...previous, { ...created, key: returnedKey }]
+        );
+        notifyDataChanged("activities");
+      },
+      errorCode: "activities.error_save",
+      networkCode: "activities.error_network",
+    });
+    if (failure) setActivityError(failure);
+    return failure;
+  };
+
+  const removeActivity = async (key: string): Promise<string | null> => {
+    const removed = activityDefs.find((def) => def.key === key);
+    if (!userId) return "checkin.error_save_auth";
     setActivityError(null);
 
-    if (!userId) return null;
-    try {
-      const response = await fetch("/api/manage-activities", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(getAccessToken()
-            ? { Authorization: `Bearer ${getAccessToken()}` }
-            : {}),
-        },
-        body: JSON.stringify({
-          action: "add",
-          userId,
-          key,
-          label: input.name,
-          icon: input.icon,
-          category: input.category,
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-activities", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({ action: "remove", userId, key }),
         }),
-      });
-      if (!response.ok) {
-        await response.json().catch(() => ({}));
-        setActivityError("activities.error_save");
-        return "activities.error_save";
-      }
-      return null;
-    } catch {
-      setActivityError("activities.error_network");
-      return "activities.error_network";
-    }
-  };
-
-  const removeActivity = (key: string) => {
-    const removed = activityDefs.find((def) => def.key === key);
-    setActivityDefs((previous) => previous.filter((def) => def.key !== key));
-    if (removed) {
-      setHiddenActivities((previous) => [...previous, removed]);
-      updateData((current) => ({
-        ...current,
-        activities: current.activities.filter((label) => label !== removed.label),
-      }));
-    }
-    if (!userId) return;
-    fetch("/api/manage-activities", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(getAccessToken()
-          ? { Authorization: `Bearer ${getAccessToken()}` }
-          : {}),
+      apply: () => {
+        if (!removed) return;
+        setActivityDefs((previous) => previous.filter((def) => def.key !== key));
+        setHiddenActivities((previous) => [...previous, removed]);
+        updateData((current) => ({
+          ...current,
+          activities: current.activities.filter(
+            (label) => label !== removed.label
+          ),
+        }));
+        notifyDataChanged("activities");
       },
-      body: JSON.stringify({ action: "remove", userId, key }),
-    }).catch(() => setActivityError("activities.error_remove_network"));
+      errorCode: "activities.error_remove",
+      networkCode: "activities.error_remove_network",
+    });
+    if (failure) setActivityError(failure);
+    return failure;
   };
 
-  const restoreActivity = (key: string) => {
+  const restoreActivity = async (key: string): Promise<string | null> => {
     const restored = hiddenActivities.find((def) => def.key === key);
-    if (restored) {
-      setActivityDefs((previous) => [...previous, restored]);
-      setHiddenActivities((previous) =>
-        previous.filter((def) => def.key !== key)
-      );
-    }
-    if (!userId) return;
-    fetch("/api/manage-activities", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(getAccessToken()
-          ? { Authorization: `Bearer ${getAccessToken()}` }
-          : {}),
+    if (!userId) return "checkin.error_save_auth";
+    setActivityError(null);
+
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-activities", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({ action: "restore", userId, key }),
+        }),
+      apply: () => {
+        if (!restored) return;
+        setActivityDefs((previous) =>
+          previous.some((def) => def.key === key)
+            ? previous
+            : [...previous, restored]
+        );
+        setHiddenActivities((previous) =>
+          previous.filter((def) => def.key !== key)
+        );
+        notifyDataChanged("activities");
       },
-      body: JSON.stringify({ action: "restore", userId, key }),
-    }).catch(() => setActivityError("activities.error_restore_network"));
+      errorCode: "activities.error_restore",
+      networkCode: "activities.error_restore_network",
+    });
+    if (failure) setActivityError(failure);
+    return failure;
   };
 
   // ── Habit mutations ──
@@ -643,32 +727,18 @@ export function CheckInScreen({
     }));
   };
 
-  const persistHabit = (
-    action: "add" | "update",
-    key: string,
-    label: string,
-    icon: string,
-    isNegative: boolean
-  ) => {
-    if (!userId) return;
-    fetch("/api/manage-habits", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(getAccessToken()
-          ? { Authorization: `Bearer ${getAccessToken()}` }
-          : {}),
-      },
-      body: JSON.stringify({ action, userId, key, label, icon, is_negative: isNegative }),
-    }).catch(() => setHabitError("habits.error_save"));
-  };
-
   const addHabit = async (input: {
     name: string;
     icon: string;
     isNegative: boolean;
   }): Promise<string | null> => {
-    const key = input.name.toLowerCase().replace(/\s+/g, "_");
+    const key = definitionKey(input.name);
+    if (!userId) return "checkin.error_save_auth";
+    if (isDuplicateDefinition(habitDefs, input.name)) {
+      return "habits.error_duplicate";
+    }
+    setHabitError(null);
+
     const habit: HabitDef = {
       key,
       label: input.name,
@@ -678,57 +748,113 @@ export function CheckInScreen({
       is_negative: input.isNegative,
       source: "custom",
     };
-    setHabitDefs((previous) => [...previous, habit]);
-    updateData((current) => ({
-      ...current,
-      habits: { ...current.habits, [key]: false },
-    }));
-    persistHabit("add", key, input.name, input.icon, input.isNegative);
-    notifyDataChanged("habits");
-    return null;
+
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-habits", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({
+            action: "add",
+            userId,
+            key,
+            label: input.name,
+            icon: input.icon,
+            is_negative: input.isNegative,
+          }),
+        }),
+      apply: () => {
+        // No `updateData` here: a new habit is a catalogue entry, not an
+        // answered switch. Writing `{key: false}` would persist a false value
+        // the user never touched.
+        setHabitDefs((previous) =>
+          previous.some((def) => def.key === key)
+            ? previous
+            : [...previous, habit]
+        );
+        notifyDataChanged("habits");
+      },
+      errorCode: "habits.error_save",
+      networkCode: "habits.error_save",
+    });
+    if (failure) setHabitError(failure);
+    return failure;
   };
 
   const updateHabit = async (
     key: string,
     input: { name: string; icon: string; isNegative: boolean }
   ): Promise<string | null> => {
-    setHabitDefs((previous) =>
-      previous.map((habit) =>
-        habit.key === key
-          ? {
-              ...habit,
-              label: input.name,
-              icon: input.icon,
-              is_negative: input.isNegative,
-            }
-          : habit
-      )
-    );
-    persistHabit("update", key, input.name, input.icon, input.isNegative);
-    notifyDataChanged("habits");
-    return null;
+    if (!userId) return "checkin.error_save_auth";
+    if (isDuplicateDefinition(habitDefs, input.name, key)) {
+      return "habits.error_duplicate";
+    }
+    setHabitError(null);
+
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-habits", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({
+            action: "update",
+            userId,
+            key,
+            label: input.name,
+            icon: input.icon,
+            is_negative: input.isNegative,
+          }),
+        }),
+      apply: () => {
+        setHabitDefs((previous) =>
+          previous.map((habit) =>
+            habit.key === key
+              ? {
+                  ...habit,
+                  label: input.name,
+                  icon: input.icon,
+                  is_negative: input.isNegative,
+                }
+              : habit
+          )
+        );
+        notifyDataChanged("habits");
+      },
+      errorCode: "habits.error_save",
+      networkCode: "habits.error_save",
+    });
+    if (failure) setHabitError(failure);
+    return failure;
   };
 
-  const removeHabit = (key: string) => {
-    setHabitDefs((previous) => previous.filter((habit) => habit.key !== key));
-    updateData((current) => {
-      const habits = { ...current.habits };
-      delete habits[key];
-      return { ...current, habits };
+  const removeHabit = async (key: string): Promise<string | null> => {
+    if (!userId) return "checkin.error_save_auth";
+    setHabitError(null);
+
+    const failure = await mutateCatalogue({
+      request: () =>
+        fetch("/api/manage-habits", {
+          method: "POST",
+          headers: authJsonHeaders(),
+          body: JSON.stringify({ action: "remove", userId, key }),
+        }),
+      apply: () => {
+        setHabitDefs((previous) =>
+          previous.filter((habit) => habit.key !== key)
+        );
+        // The definition is gone; its answer must go with it.
+        updateData((current) => {
+          const habits = { ...current.habits };
+          delete habits[key];
+          return { ...current, habits };
+        });
+        notifyDataChanged("habits");
+      },
+      errorCode: "habits.error_save",
+      networkCode: "habits.error_save",
     });
-    if (userId) {
-      fetch("/api/manage-habits", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(getAccessToken()
-            ? { Authorization: `Bearer ${getAccessToken()}` }
-            : {}),
-        },
-        body: JSON.stringify({ action: "remove", userId, key }),
-      }).catch(() => setHabitError("habits.error_save"));
-    }
-    notifyDataChanged("habits");
+    if (failure) setHabitError(failure);
+    return failure;
   };
 
   // ── Scales ──
@@ -835,6 +961,8 @@ export function CheckInScreen({
           onRetryScales={() => setScalesNonce((value) => value + 1)}
           saving={saving}
           photoUploading={photoUploading}
+          photoCleared={photoCleared}
+          hasStoredPhoto={Boolean(storedEntry?.photo_path)}
           saved={saved}
           loadFailed={Boolean(loadError)}
           dirty={dirty}
@@ -848,7 +976,9 @@ export function CheckInScreen({
           reflectionCached={reflectionCached}
           reflectionCanGenerate={reflectionCanGenerate}
           onGenerateReflection={() => {
-            if (reflectionCanGenerate && !dirty) void requestReflection(currentDate);
+            if (reflectionCanGenerate && !dirty && !saving) {
+              void requestReflection(currentDate);
+            }
           }}
           onSave={handleSave}
           onViewPhoto={setViewingPhoto}
@@ -860,6 +990,23 @@ export function CheckInScreen({
           src={viewingPhoto}
           alt={t("checkin.photo_alt", { date: currentDate })}
           onClose={() => setViewingPhoto(null)}
+        />
+      ) : null}
+
+      {postSaveOpen ? (
+        <PostSaveReflectionDialog
+          reflection={data.aiReflection}
+          loading={reflectionLoading}
+          error={reflectionError}
+          cached={reflectionCached}
+          canGenerate={reflectionCanGenerate}
+          onGenerate={() => {
+            if (!saving) void requestReflection(currentDate);
+          }}
+          onClose={() => {
+            setPostSaveOpen(false);
+            onOpenOverview();
+          }}
         />
       ) : null}
     </div>

@@ -9,10 +9,12 @@ import type { CheckInData } from "@/lib/types";
 import type { ActivityDef, HabitDef } from "@/lib/supabase/db";
 import type { Scale } from "@/lib/scales";
 import { useTranslation } from "@/lib/i18n";
+import { getFeatureFlags } from "@/lib/feature-flags";
 import { toggleWeatherKey } from "@/lib/checkin/options";
 import {
-  CHECKIN_SECTION_ORDER,
   hasContent,
+  shouldRenderGoalsSection,
+  visibleCheckInSections,
   type CheckInSectionId,
 } from "@/lib/checkin/model";
 
@@ -44,8 +46,8 @@ export interface CheckInFormProps {
     icon: string;
     category: string;
   }) => Promise<string | null>;
-  onRemoveActivity: (key: string) => void;
-  onRestoreActivity: (key: string) => void;
+  onRemoveActivity: (key: string) => string | null | Promise<string | null>;
+  onRestoreActivity: (key: string) => string | null | Promise<string | null>;
   habits: readonly HabitDef[];
   habitError: string | null;
   onToggleHabit: (key: string, checked: boolean) => void;
@@ -58,7 +60,7 @@ export interface CheckInFormProps {
     key: string,
     input: { name: string; icon: string; isNegative: boolean }
   ) => Promise<string | null>;
-  onRemoveHabit: (key: string) => void;
+  onRemoveHabit: (key: string) => string | null | Promise<string | null>;
   scales: readonly Scale[];
   scalesLoading: boolean;
   scalesError: string | null;
@@ -67,6 +69,10 @@ export interface CheckInFormProps {
   onRetryScales: () => void;
   saving: boolean;
   photoUploading: boolean;
+  /** The user removed the stored photo in this edit. */
+  photoCleared: boolean;
+  /** The loaded row has a stored photo that can be cleared. */
+  hasStoredPhoto: boolean;
   saved: boolean;
   loadFailed: boolean;
   /** The form has edits that are not saved yet. */
@@ -188,7 +194,7 @@ export function CheckInForm(props: CheckInFormProps) {
         onChange={(note) => setData((current) => ({ ...current, note }))}
       />
     ),
-    goals: (
+    goals: shouldRenderGoalsSection(props.goalsError) ? (
       <GoalsReadonlySection
         rows={props.goals}
         loading={props.goalsLoading}
@@ -196,7 +202,7 @@ export function CheckInForm(props: CheckInFormProps) {
         onRetry={props.onRetryGoals}
         onOpenGoals={props.onOpenGoals}
       />
-    ),
+    ) : null,
     screenTime: <ScreenTimeSection data={data} />,
     reflection: (
       <ReflectionSection
@@ -212,14 +218,32 @@ export function CheckInForm(props: CheckInFormProps) {
   };
 
   const content = hasContent(data);
-  const canSave = content && !props.saving && !props.photoUploading && !props.loadFailed;
+  const clearingPhoto = props.photoCleared && props.hasStoredPhoto;
+  const canSave =
+    (content || clearingPhoto) &&
+    !props.saving &&
+    !props.photoUploading &&
+    !props.loadFailed;
+  const order = visibleCheckInSections(getFeatureFlags());
 
   return (
     <div aria-busy={props.saving} className="space-y-3 pb-8">
-      {CHECKIN_SECTION_ORDER.map((id) => {
-        const section = sections[id];
-        return section ? <Fragment key={id}>{section}</Fragment> : null;
-      })}
+      {/*
+        While a save is in flight every field is locked, not just the button.
+        `disabled` covers native controls and `inert` covers custom clickable
+        elements, so an edit made after the POST started cannot be silently
+        overwritten by the server row that comes back.
+      */}
+      <fieldset
+        disabled={props.saving}
+        inert={props.saving}
+        className="m-0 min-w-0 space-y-3 border-0 p-0"
+      >
+        {order.map((id) => {
+          const section = sections[id];
+          return section ? <Fragment key={id}>{section}</Fragment> : null;
+        })}
+      </fieldset>
 
       <div className="pt-2">
         <button
@@ -235,7 +259,7 @@ export function CheckInForm(props: CheckInFormProps) {
               : t("checkin.save_checkin")}
         </button>
 
-        {!content ? (
+        {!content && !clearingPhoto ? (
           <p className="mt-2 text-center text-[12px] text-[color:var(--text-3)]">
             {t("checkin.error_empty")}
           </p>

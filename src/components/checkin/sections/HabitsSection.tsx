@@ -37,7 +37,7 @@ export function HabitsSection({
     key: string,
     input: { name: string; icon: string; isNegative: boolean }
   ) => Promise<string | null>;
-  onRemove: (key: string) => void;
+  onRemove: (key: string) => string | null | Promise<string | null>;
 }) {
   const { t, lang } = useTranslation();
   const [dialog, setDialog] = useState<{ open: boolean; habit: HabitDef | null }>(

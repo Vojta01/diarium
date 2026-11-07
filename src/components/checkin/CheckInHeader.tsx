@@ -97,7 +97,7 @@ export function CheckInHeader({
           <div className="relative mt-0.5 inline-flex">
             <span
               aria-hidden="true"
-              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11px] text-indigo-300"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-[11px] text-indigo-300"
             >
               📅 {t("checkin.date_pick")}
             </span>

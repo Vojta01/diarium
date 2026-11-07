@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  formatSecondsLabel,
+  formatScreenTimeDuration,
   formatTopAppDuration,
 } from "@/lib/dashboard-format";
 import { screenTimeSnapshot } from "@/lib/checkin/readonly";
@@ -45,7 +45,7 @@ export function ScreenTimeSection({
                 {t("checkin.screen_time_total")}
               </dt>
               <dd className="mt-0.5 text-[22px] font-bold leading-7 tabular-nums text-[color:var(--text-1)]">
-                {formatSecondsLabel(snapshot.screenTime)}
+                {formatScreenTimeDuration(snapshot.screenTime)}
               </dd>
               {snapshot.screenTime === null ? (
                 <p className="mt-0.5 text-[10px] leading-4 text-[color:var(--text-3)]">

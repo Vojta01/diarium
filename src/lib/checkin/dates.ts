@@ -37,6 +37,18 @@ export function clampCheckInDate(
   return value > today ? today : value;
 }
 
+/**
+ * Server-side guard for the write path. The UI clamps dates, but a direct API
+ * caller must still be rejected: a future `entries` row would poison streaks,
+ * goals and the dashboard's "today" queries.
+ */
+export function isFutureDateKey(
+  value: string,
+  today: string = pragueDateKey()
+): boolean {
+  return isValidDateKey(value) && value > today;
+}
+
 /** Hour 0–23 in Europe/Prague. Used by the after-midnight hint. */
 export function pragueHour(instant: Date = new Date()): number {
   const hour = pragueHourFormatter

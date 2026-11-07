@@ -46,6 +46,21 @@ export function formatSecondsLabel(seconds: number | null | undefined): string {
   return formatCompactMinutes(Math.trunc(seconds / 60));
 }
 
+/**
+ * The check-in total reads as a sentence, not a chart axis:
+ * `13140` seconds -> `"3 h 39 min"`, `2700` -> `"45 min"`.
+ */
+export function formatScreenTimeDuration(
+  seconds: number | null | undefined
+): string {
+  if (seconds === null || seconds === undefined) return EM_DASH;
+  const total = Math.max(0, Math.trunc(seconds / 60));
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
 /** The web/Android average keeps a dot (`toFixed(1)`), not a Czech comma. */
 export function formatAverageMood(value: number | null | undefined): string {
   return value === null || value === undefined ? EM_DASH : value.toFixed(1);

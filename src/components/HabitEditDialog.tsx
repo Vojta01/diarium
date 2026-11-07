@@ -18,7 +18,7 @@ interface HabitEditDialogProps {
     isNegative: boolean;
   }) => string | null | Promise<string | null>;
   /** Present in edit mode; removes the habit after confirmation. */
-  onDelete?: () => void;
+  onDelete?: () => string | null | Promise<string | null>;
   habit?: HabitDef | null;
 }
 
@@ -36,9 +36,11 @@ export function HabitEditDialog({
   const [isNegative, setIsNegative] = useState(habit?.is_negative ?? false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const submit = async () => {
+    if (saving || deleting) return;
     if (!name.trim()) {
       setError(t("habits.error_name"));
       return;
@@ -50,6 +52,24 @@ export function HabitEditDialog({
       isNegative,
     });
     setSaving(false);
+    if (failure) {
+      setError(t(failure));
+      return;
+    }
+    onClose();
+  };
+
+  const remove = async () => {
+    if (!onDelete || saving || deleting) return;
+    setDeleting(true);
+    setError(null);
+    let failure: string | null;
+    try {
+      failure = await onDelete();
+    } catch {
+      failure = "habits.error_save";
+    }
+    setDeleting(false);
     if (failure) {
       setError(t(failure));
       return;
@@ -90,6 +110,7 @@ export function HabitEditDialog({
             id={`${titleId}-name`}
             value={name}
             maxLength={40}
+            disabled={saving || deleting}
             onChange={(event) => {
               setName(event.target.value);
               setError(null);
@@ -108,6 +129,7 @@ export function HabitEditDialog({
         <button
           type="button"
           aria-pressed={isNegative}
+          disabled={saving || deleting}
           onClick={() => setIsNegative(!isNegative)}
           className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 ${
             isNegative ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-white/5"
@@ -147,17 +169,16 @@ export function HabitEditDialog({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm text-[color:var(--text-2)]"
+                disabled={deleting}
+                className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm text-[color:var(--text-2)] disabled:opacity-50"
               >
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onDelete();
-                  onClose();
-                }}
-                className="min-h-11 flex-1 rounded-xl bg-red-500/80 text-sm font-medium text-white hover:bg-red-500"
+                onClick={() => void remove()}
+                disabled={deleting}
+                className="min-h-11 flex-1 rounded-xl bg-red-500/80 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
               >
                 {t("common.remove")}
               </button>
@@ -178,14 +199,15 @@ export function HabitEditDialog({
         <button
           type="button"
           onClick={onClose}
-          className="min-h-11 flex-1 rounded-xl bg-white/10 text-sm font-medium text-[color:var(--text-2)] transition-colors hover:bg-white/20"
+          disabled={saving || deleting}
+          className="min-h-11 flex-1 rounded-xl bg-white/10 text-sm font-medium text-[color:var(--text-2)] transition-colors hover:bg-white/20 disabled:opacity-50"
         >
           {t("common.cancel")}
         </button>
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={saving}
+          disabled={saving || deleting}
           className="min-h-11 flex-1 rounded-xl bg-indigo-500 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:opacity-50"
         >
           {t("common.save")}

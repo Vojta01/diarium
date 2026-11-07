@@ -4,6 +4,7 @@ import { verifyAuth } from '@/lib/auth';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { buildEntryRow } from '@/lib/entry-row';
 import { isCheckInError } from '@/lib/checkin/errors';
+import { isFutureDateKey, isValidDateKey } from '@/lib/checkin/dates';
 import { PHOTO_BUCKET } from '@/lib/checkin/photo';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -30,6 +31,16 @@ export async function POST(req: NextRequest) {
 
     if (!user_id || !date) {
       return NextResponse.json({ error: 'Missing user_id or date' }, { status: 400 });
+    }
+
+    if (!isValidDateKey(date)) {
+      return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+    }
+
+    // Prague "today", not UTC: the client clamps too, but a direct caller must
+    // never be able to create a future entry.
+    if (isFutureDateKey(date)) {
+      return NextResponse.json({ error: 'Future date not allowed' }, { status: 400 });
     }
 
     // Verify the caller owns this user_id (skip for cron)

@@ -45,8 +45,8 @@ export function ActivitiesSection({
   error: string | null;
   onToggle: (label: string) => void;
   onAdd: (input: NewActivityInput) => Promise<string | null>;
-  onRemove: (key: string) => void;
-  onRestore: (key: string) => void;
+  onRemove: (key: string) => string | null | Promise<string | null>;
+  onRestore: (key: string) => string | null | Promise<string | null>;
 }) {
   const { t, lang } = useTranslation();
   const titleId = useId();

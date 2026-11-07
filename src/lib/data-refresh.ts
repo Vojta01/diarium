@@ -10,7 +10,7 @@
 
 export const DATA_CHANGED_EVENT = "diarium:data-changed";
 
-export const DATA_KINDS = ["entries", "goals", "habits", "templates", "scales"] as const;
+export const DATA_KINDS = ["entries", "goals", "habits", "templates", "scales", "activities"] as const;
 export type DataKind = (typeof DATA_KINDS)[number];
 
 export interface DataChangedDetail {

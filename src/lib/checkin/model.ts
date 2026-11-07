@@ -40,6 +40,24 @@ export type CheckInSectionId = (typeof CHECKIN_SECTION_ORDER)[number];
 export const CHECKIN_RENDERED_SECTIONS: readonly CheckInSectionId[] =
   CHECKIN_SECTION_ORDER;
 
+/**
+ * The rendered order for the active feature flags. The canonical 13-section
+ * order never changes; a disabled feature is simply omitted (screen time is
+ * personal-mode data, not a core check-in field).
+ */
+export function visibleCheckInSections(flags: {
+  screenTime: boolean;
+}): readonly CheckInSectionId[] {
+  return CHECKIN_SECTION_ORDER.filter(
+    (id) => id !== "screenTime" || flags.screenTime
+  );
+}
+
+/** Goals are a read-only report; a failed read must not render an empty block. */
+export function shouldRenderGoalsSection(error: string | null): boolean {
+  return !error;
+}
+
 
 export const EMPTY_CHECKIN: CheckInData = {
   mood: 0,

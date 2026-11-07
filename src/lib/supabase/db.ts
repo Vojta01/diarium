@@ -17,7 +17,7 @@ import {
   saveFailedError,
   saveNetworkError,
 } from "../checkin/errors.ts";
-import { isStoredPhotoUrl, PHOTO_BUCKET, photoStoragePath } from "../checkin/photo.ts";
+import { isStoredPhotoUrl, PHOTO_BUCKET, photoUploadStoragePath, photoStoragePathFromUrl } from "../checkin/photo.ts";
 
 export type { CheckInPayload } from "../types.ts";
 
@@ -220,11 +220,18 @@ export async function uploadCheckInPhoto(
   }
 
   const sb = await getAuthenticatedClientReady();
-  const path = photoStoragePath(user.id, date);
+  // A fresh object per pick: an abandoned edit must not overwrite the stored
+  // photo, and a replacement URL must change so the <img> cache cannot show the
+  // previous image.
+  const nonce =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const path = photoUploadStoragePath(user.id, date, nonce);
 
   const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
     contentType: "image/jpeg",
-    upsert: true,
+    upsert: false,
   });
   if (error) {
     throw photoError("checkin.photo_error_upload", error);
@@ -235,6 +242,22 @@ export async function uploadCheckInPhoto(
     throw photoError("checkin.photo_error_upload", "invalid public URL");
   }
   return data.publicUrl.trim();
+}
+
+/**
+ * Best-effort removal of a replaced/cleared object. Never throws: the row is
+ * already the source of truth, and a failed cleanup is only an orphan.
+ */
+export async function deleteCheckInPhoto(url: string | null): Promise<void> {
+  const path = photoStoragePathFromUrl(url);
+  if (!path) return;
+  try {
+    const sb = await getAuthenticatedClientReady();
+    const { error } = await sb.storage.from(PHOTO_BUCKET).remove([path]);
+    if (error) console.error("photo cleanup error:", error);
+  } catch (error) {
+    console.error("photo cleanup error:", error);
+  }
 }
 
 /** Načte entries pro dané období */

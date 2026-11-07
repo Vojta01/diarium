@@ -54,12 +54,51 @@ export function isLegacyPhotoValue(value: unknown): boolean {
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The single storage object for a user's day. */
+/** The legacy deterministic storage object for a user's day. */
 export function photoStoragePath(userId: string, date: string): string {
   if (!userId.trim()) throw new Error("photoStoragePath: missing userId");
   if (!DATE_KEY.test(date)) throw new Error("photoStoragePath: invalid date");
   return `${userId}/${date}.jpg`;
 }
+
+/**
+ * A replacement upload goes to a fresh object. Reusing `{date}.jpg` with
+ * `upsert` would destroy the stored photo before the user saves, so an
+ * abandoned edit could never restore it.
+ */
+export function photoUploadStoragePath(
+  userId: string,
+  date: string,
+  nonce: string
+): string {
+  if (!userId.trim()) throw new Error("photoUploadStoragePath: missing userId");
+  if (!DATE_KEY.test(date)) throw new Error("photoUploadStoragePath: invalid date");
+  const token = nonce.trim().replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!token) throw new Error("photoUploadStoragePath: missing nonce");
+  return `${userId}/${date}-${token}.jpg`;
+}
+
+/**
+ * Extract the Storage object path from a public bucket URL, or null when the
+ * URL does not belong to this bucket. Used for best-effort cleanup after a
+ * successful replacement/clear.
+ */
+export function photoStoragePathFromUrl(
+  url: string | null | undefined
+): string | null {
+  if (!isStoredPhotoUrl(url)) return null;
+  try {
+    const parsed = new URL(url.trim());
+    const marker = `/storage/v1/object/public/${PHOTO_BUCKET}/`;
+    const index = parsed.pathname.indexOf(marker);
+    if (index < 0) return null;
+    const path = decodeURIComponent(parsed.pathname.slice(index + marker.length));
+    return path.trim() ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 
 function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
