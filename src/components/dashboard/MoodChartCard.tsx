@@ -18,6 +18,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { CHART_MOOD_COLORS, isRecordedMood } from "@/lib/mood";
 import { MOOD_EMOJIS } from "@/lib/stats";
+import { segmentRuns } from "@/lib/analysis/geometry";
 
 import {
   ACCENT,
@@ -66,18 +67,7 @@ function moodPoints(days: readonly DashboardDay[]): Point[] {
 
 /** Split into runs so a missing day is a gap, not a straight lie. */
 function segments(points: readonly Point[]): Point[][] {
-  const runs: Point[][] = [];
-  let current: Point[] = [];
-  points.forEach((point, index) => {
-    const previous = points[index - 1];
-    if (previous && point.index !== previous.index + 1) {
-      if (current.length > 0) runs.push(current);
-      current = [];
-    }
-    current.push(point);
-  });
-  if (current.length > 0) runs.push(current);
-  return runs;
+  return segmentRuns(points);
 }
 
 function averageMood(days: readonly DashboardDay[]): number | null {

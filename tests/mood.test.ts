@@ -29,7 +29,7 @@ test("pins the Android beta5 chart palette, including cyan mood 5", () => {
 
 test("chart components render the exported chart palette, not the chip palette", () => {
   for (const file of [
-    "../src/components/AdvancedStats.tsx",
+    "../src/components/stats/MetricTimelineCard.tsx",
     "../src/components/YearInPixels.tsx",
   ]) {
     const component = source(file);
