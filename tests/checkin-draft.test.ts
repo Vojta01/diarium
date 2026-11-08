@@ -10,6 +10,8 @@ import {
 import { emptyCheckIn } from "../src/lib/checkin/model.ts";
 
 const DATE = "2026-11-06";
+const STAGED_PHOTO =
+  "https://project.supabase.co/storage/v1/object/public/diary-photos/user-1/2026-11-06-upload-a.jpg";
 
 function memoryStorage(): DraftStorage & { dump(): Map<string, string> } {
   const map = new Map<string, string>();
@@ -96,6 +98,19 @@ test("navigating away keeps the saved day suppressed but drafts the new day", ()
   assert.equal(readDraft(storage, DATE), null);
   assert.equal(writer.flush(other, filled()), true);
   assert.ok(storage.getItem(draftKey(other)));
+});
+
+test("an abandoned staged photo URL is never persisted in a local draft", () => {
+  const storage = memoryStorage();
+  const writer = createDraftWriter(() => storage);
+  const data = filled();
+  data.photoPath = STAGED_PHOTO;
+
+  assert.equal(writer.flush(DATE, data), true);
+  const restored = readDraft(storage, DATE);
+  assert.equal(restored?.note, data.note);
+  assert.equal(restored?.photoPath, null);
+  assert.equal(JSON.parse(storage.getItem(draftKey(DATE))!).photoPath, null);
 });
 
 test("an empty form removes the draft instead of storing a blank one", () => {

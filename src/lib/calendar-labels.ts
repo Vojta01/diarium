@@ -43,3 +43,13 @@ export function weekdayNames(lang: "cs" | "en"): string[] {
   // 2024-01-01 was a Monday.
   return Array.from({ length: 7 }, (_, day) => formatter.format(utcDate(2024, 0, 1 + day)));
 }
+
+/** Full weekday names in Monday-first order, for accessible abbreviations. */
+export function weekdayFullNames(lang: "cs" | "en"): string[] {
+  const formatter = new Intl.DateTimeFormat(intlLocale(lang), {
+    weekday: "long",
+    timeZone: "UTC",
+  });
+  // 2024-01-01 was a Monday.
+  return Array.from({ length: 7 }, (_, day) => formatter.format(utcDate(2024, 0, 1 + day)));
+}

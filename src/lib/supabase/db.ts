@@ -19,6 +19,7 @@ import {
   saveNetworkError,
 } from "../checkin/errors.ts";
 import { isStoredPhotoUrl, PHOTO_BUCKET, photoUploadStoragePath, photoStoragePathFromUrl } from "../checkin/photo.ts";
+import { createStagedPhotoCleanup } from "../checkin/photo-edit.ts";
 
 export type { CheckInPayload } from "../types.ts";
 
@@ -230,19 +231,26 @@ export async function uploadCheckInPhoto(
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const path = photoUploadStoragePath(user.id, date, nonce);
 
-  const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
-    contentType: "image/jpeg",
-    upsert: false,
-  });
-  if (error) {
+  const { data } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  const publicUrl = data.publicUrl.trim();
+  if (!isStoredPhotoUrl(publicUrl)) {
+    throw photoError("checkin.photo_error_upload", "invalid public URL");
+  }
+
+  try {
+    const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+    if (error) throw error;
+  } catch (error) {
+    // A failed response can follow a server-side write. The generated URL is
+    // still checked against the row and the authenticated owner before removal.
+    await deleteStagedCheckInPhoto(publicUrl, date);
     throw photoError("checkin.photo_error_upload", error);
   }
 
-  const { data } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-  if (!isStoredPhotoUrl(data.publicUrl)) {
-    throw photoError("checkin.photo_error_upload", "invalid public URL");
-  }
-  return data.publicUrl.trim();
+  return publicUrl;
 }
 
 /**
@@ -258,6 +266,49 @@ export async function deleteCheckInPhoto(url: string | null): Promise<void> {
     if (error) console.error("photo cleanup error:", error);
   } catch (error) {
     console.error("photo cleanup error:", error);
+  }
+}
+
+const cleanupStagedPhoto = createStagedPhotoCleanup({
+  getOwner: async () => (await getCurrentUser())?.id ?? null,
+  readCurrentPhoto: async (ownerId, date) => {
+    const user = await getCurrentUser();
+    if (!user || user.id !== ownerId) {
+      throw new Error("Photo cleanup owner changed before row verification");
+    }
+    const entry = await getEntryOrThrow(date);
+    if (entry && entry.user_id !== ownerId) {
+      throw new Error("Photo cleanup row is not owned by the current user");
+    }
+    return entry?.photo_path ?? null;
+  },
+  remove: async (ownerId, path) => {
+    const user = await getCurrentUser();
+    if (!user || user.id !== ownerId) {
+      throw new Error("Photo cleanup owner changed before object removal");
+    }
+    const sb = await getAuthenticatedClientReady();
+    const { error } = await sb.storage.from(PHOTO_BUCKET).remove([path]);
+    if (error) throw error;
+  },
+  expectedOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+});
+
+/**
+ * Best-effort deletion of an uncommitted staged object. Cleanup is restricted
+ * to the authenticated owner's unique date-scoped upload and first verifies
+ * that the current row does not reference it. A failed read leaves the object
+ * untouched rather than risking deletion of a committed photo.
+ */
+export async function deleteStagedCheckInPhoto(
+  url: string | null,
+  date: string
+): Promise<void> {
+  if (!url) return;
+  try {
+    await cleanupStagedPhoto(url, date);
+  } catch (error) {
+    console.error("staged photo cleanup error:", error);
   }
 }
 

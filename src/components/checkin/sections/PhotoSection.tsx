@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslation } from "@/lib/i18n";
-import { uploadCheckInPhoto } from "@/lib/supabase/db";
+import {
+  deleteStagedCheckInPhoto,
+  uploadCheckInPhoto,
+} from "@/lib/supabase/db";
 import { isCheckInError } from "@/lib/checkin/errors";
 import { compressPhoto, validatePhotoFile } from "@/lib/checkin/photo";
+import { finishPhotoUpload } from "@/lib/checkin/photo-edit";
 
 import { CheckInSection } from "../CheckInSection";
 
@@ -26,7 +30,7 @@ export function PhotoSection({
   currentPhoto: string | null;
   date: string;
   legacyPhoto?: boolean;
-  onPhotoSelected: (url: string | null) => void;
+  onPhotoSelected: (url: string | null, uploadDate?: string) => void;
   onUploadingChange?: (uploading: boolean) => void;
   onView: (url: string) => void;
 }) {
@@ -38,21 +42,32 @@ export function PhotoSection({
   const [error, setError] = useState<string | null>(null);
   const dateRef = useRef(date);
   const previewRef = useRef<string | null>(null);
+  const uploadGeneration = useRef(0);
+  const mounted = useRef(false);
 
-  useEffect(() => {
-    dateRef.current = date;
-  }, [date]);
-
-  const releasePreview = useCallback(() => {
+  const releasePreview = useCallback((updateState = true) => {
     if (previewRef.current) {
       URL.revokeObjectURL(previewRef.current);
       previewRef.current = null;
     }
-    setPreview(null);
+    if (updateState && mounted.current) setPreview(null);
   }, []);
 
-  // A date change or unmount must not leave a blob URL behind.
-  useEffect(() => releasePreview, [date, releasePreview]);
+  useEffect(() => {
+    dateRef.current = date;
+    uploadGeneration.current += 1;
+    releasePreview();
+  }, [date, releasePreview]);
+
+  // A date change or unmount must not leave a blob URL or live upload behind.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      uploadGeneration.current += 1;
+      releasePreview(false);
+    };
+  }, [releasePreview]);
 
   const setUploadingState = useCallback(
     (value: boolean) => {
@@ -76,32 +91,41 @@ export function PhotoSection({
       }
 
       const uploadDate = dateRef.current;
+      const generation = ++uploadGeneration.current;
+      const isCurrent = () =>
+        mounted.current &&
+        generation === uploadGeneration.current &&
+        uploadDate === dateRef.current;
       setError(null);
       setUploadingState(true);
       try {
         const blob = await compressPhoto(file);
+        if (!isCurrent()) return;
         const localUrl = URL.createObjectURL(blob);
         previewRef.current = localUrl;
         setPreview(localUrl);
 
-        const url = await uploadCheckInPhoto(blob, uploadDate);
-        // The user changed the date while the upload was in flight; discard the
-        // result rather than attaching yesterday's photo to today's entry.
-        if (uploadDate !== dateRef.current) {
-          releasePreview();
-          return;
-        }
+        await finishPhotoUpload({
+          date: uploadDate,
+          upload: () => uploadCheckInPhoto(blob, uploadDate),
+          isCurrent,
+          onStage: (url) => onPhotoSelected(url, uploadDate),
+          cleanup: deleteStagedCheckInPhoto,
+        });
         releasePreview();
-        onPhotoSelected(url);
       } catch (uploadError) {
         releasePreview();
-        setError(
-          isCheckInError(uploadError)
-            ? uploadError.code
-            : "checkin.photo_error_upload"
-        );
+        if (isCurrent()) {
+          setError(
+            isCheckInError(uploadError)
+              ? uploadError.code
+              : "checkin.photo_error_upload"
+          );
+        }
       } finally {
-        setUploadingState(false);
+        if (mounted.current && generation === uploadGeneration.current) {
+          setUploadingState(false);
+        }
       }
     },
     [onPhotoSelected, releasePreview, setUploadingState]
@@ -110,7 +134,13 @@ export function PhotoSection({
   const removePhoto = () => {
     setError(null);
     releasePreview();
-    onPhotoSelected(null);
+    onPhotoSelected(null, dateRef.current);
+  };
+
+  const cancelUpload = () => {
+    uploadGeneration.current += 1;
+    releasePreview();
+    setUploadingState(false);
   };
 
   const shown = preview ?? currentPhoto;
@@ -154,9 +184,18 @@ export function PhotoSection({
       </div>
 
       {uploading ? (
-        <p role="status" className="mt-2 text-[12px] text-[color:var(--text-2)]">
-          {t("checkin.photo_uploading")}
-        </p>
+        <div className="mt-2 flex items-center gap-3">
+          <p role="status" className="text-[12px] text-[color:var(--text-2)]">
+            {t("checkin.photo_uploading")}
+          </p>
+          <button
+            type="button"
+            onClick={cancelUpload}
+            className="min-h-11 text-[12px] text-[color:var(--text-2)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80"
+          >
+            {t("checkin.photo_cancel_upload")}
+          </button>
+        </div>
       ) : null}
 
       {error ? (

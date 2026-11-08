@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchDailyEntries, MOOD_EMOJIS, type DailyEntry } from "@/lib/stats";
 import { averageMood, CHART_MOOD_COLORS, recordedMoods } from "@/lib/mood";
 import { pragueDateKey, pragueYear } from "@/lib/date";
-import { monthNames, weekdayNames } from "@/lib/calendar-labels";
+import { monthNames, weekdayFullNames, weekdayNames } from "@/lib/calendar-labels";
 import { useTranslation } from "@/lib/i18n";
 import { useDataRefresh } from "@/lib/use-data-refresh";
 
@@ -17,6 +17,7 @@ export function YearInPixels() {
 
   const months = monthNames(lang, selectedYear);
   const weekdays = weekdayNames(lang);
+  const fullWeekdays = weekdayFullNames(lang);
 
   const load = useCallback(() => {
     fetchDailyEntries()
@@ -105,8 +106,9 @@ export function YearInPixels() {
     return <div className="glass-card"><div className="text-center py-8 text-white/40">{t("yearInPixels.loading")}</div></div>;
   }
 
-  const cellSize = "15px";
-  const gapSize = "2px";
+  const cellSize = 15;
+  const gapSize = 2;
+  const weekWidth = cellSize * 7 + gapSize * 6;
 
   // Calculate counts per month for a mini summary
   const monthEntryCounts = monthsData.map(m => {
@@ -166,22 +168,33 @@ export function YearInPixels() {
           </div>
 
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-[2px] mb-1">
-            {weekdays.map((d) => (
-              <div
-                key={d}
-                className="text-[9px] text-white/20 text-center"
+          <div
+            role="group"
+            aria-label={t("yearInPixels.weekdays_label")}
+            className="mx-auto mb-1 grid"
+            style={{
+              gridTemplateColumns: `repeat(7, ${cellSize}px)`,
+              gap: `${gapSize}px`,
+              width: `${weekWidth}px`,
+            }}
+          >
+            {weekdays.map((day, index) => (
+              <abbr
+                key={`${index}-${day}`}
+                aria-label={fullWeekdays[index]}
+                title={fullWeekdays[index]}
+                className="text-[8px] leading-none text-white/20 text-center no-underline"
                 style={{ width: cellSize, justifySelf: "center" }}
               >
-                {d}
-              </div>
+                {day}
+              </abbr>
             ))}
           </div>
 
           {/* Day cells */}
           <div className="flex flex-col" style={{ gap: gapSize }}>
             {month.weeks.map((week, wi) => (
-              <div key={wi} className="flex justify-center" style={{ gap: gapSize }}>
+              <div key={wi} className="flex justify-center" style={{ gap: `${gapSize}px` }}>
                 {week.map((cell, ci) => {
                   if (cell.day === 0) {
                     // Padding cell

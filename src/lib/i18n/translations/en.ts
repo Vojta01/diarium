@@ -531,6 +531,8 @@ export const en = {
     sleep_3: 'Great',
     sleep_2: 'Normal',
     sleep_1: 'Poor',
+    sleep_5: 'Excellent',
+    sleep_4: 'Very good',
     sleep_3e: 'Great 😴',
     sleep_2e: 'Normal 🥱',
     sleep_1e: 'Poor 😪',
@@ -768,6 +770,7 @@ export const en = {
     photo_camera: '📷 Take photo',
     photo_gallery: '🖼️ From gallery',
     photo_uploading: '⏳ Uploading photo...',
+    photo_cancel_upload: 'Cancel upload',
     photo_remove: '🗑 Remove',
     photo_empty: 'No photo yet.',
     photo_error_type: 'This photo format is not supported. Use JPEG, PNG or WebP.',
@@ -909,6 +912,7 @@ export const en = {
 
   // ── YearInPixels ──
   yearInPixels: {
+    weekdays_label: 'Weekdays',
     loading: 'Loading...',
     title: '🗓️ Year {year} in pixels',
     description: 'Each square = one day. Greener means better mood.',

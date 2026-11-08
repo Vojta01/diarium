@@ -99,6 +99,54 @@ export function photoStoragePathFromUrl(
   }
 }
 
+/**
+ * A path is eligible for abandoned-upload cleanup only when it is a unique
+ * staging object owned by this user and (when supplied) this date. The legacy
+ * canonical `{user}/{date}.jpg` object is deliberately excluded.
+ */
+export function stagedPhotoStoragePathFromUrl(
+  url: string | null | undefined,
+  userId: string,
+  date?: string,
+  expectedOrigin?: string
+): string | null {
+  if (!isStoredPhotoUrl(url) || !userId.trim()) return null;
+  if (date !== undefined && !isCalendarDateKey(date)) return null;
+
+  try {
+    const parsed = new URL(url.trim());
+    if (expectedOrigin !== undefined) {
+      if (!expectedOrigin.trim()) return null;
+      if (parsed.origin !== new URL(expectedOrigin).origin) return null;
+    }
+
+    const path = photoStoragePathFromUrl(url);
+    if (!path) return null;
+    const segments = path.split("/");
+    if (segments.length !== 2 || segments[0] !== userId) return null;
+
+    const match = /^(\d{4}-\d{2}-\d{2})-([a-zA-Z0-9_-]+)\.jpg$/.exec(
+      segments[1]
+    );
+    if (!match || !isCalendarDateKey(match[1])) return null;
+    if (date !== undefined && match[1] !== date) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+function isCalendarDateKey(value: string): boolean {
+  if (!DATE_KEY.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 
 function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

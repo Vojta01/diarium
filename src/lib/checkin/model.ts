@@ -253,7 +253,9 @@ export function toDraft(data: CheckInData): Record<string, unknown> {
     gratitude: data.gratitude,
     note: data.note,
     weather: data.weather,
-    photoPath: isStoredPhotoUrl(data.photoPath) ? data.photoPath.trim() : null,
+    // Storage objects are not draft state: if an edit is abandoned, its staged
+    // upload is removed. Persisting this URL would restore a broken image later.
+    photoPath: null,
     scaleValues: data.scaleValues,
   };
 }

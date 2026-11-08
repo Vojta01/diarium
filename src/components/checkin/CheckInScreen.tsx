@@ -11,6 +11,7 @@ import {
   patchEntry,
   saveEntry,
   deleteCheckInPhoto,
+  deleteStagedCheckInPhoto,
   type ActivityDef,
   type Entry,
   type HabitDef,
@@ -49,7 +50,10 @@ import {
   isDuplicateDefinition,
   mutateCatalogue,
 } from "@/lib/checkin/catalogue";
-import { photoSaveIntent } from "@/lib/checkin/photo-edit";
+import {
+  createPhotoEditLifecycle,
+  photoSaveIntent,
+} from "@/lib/checkin/photo-edit";
 import {
   aiEmptyError,
   aiFailedError,
@@ -154,12 +158,20 @@ export function CheckInScreen({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoCleared, setPhotoCleared] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [photoLifecycle] = useState(() =>
+    createPhotoEditLifecycle(
+      (url, date) => deleteStagedCheckInPhoto(url, date),
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+    )
+  );
+  const stagedPhotoByDate = useRef(new Map<string, string>());
 
   const saveInFlight = useRef(false);
   const loadToken = useRef(0);
   const reflectionToken = useRef(0);
   const reflectionInFlight = useRef(false);
   const dateRef = useRef(currentDate);
+  const previousDateRef = useRef(currentDate);
   const lateNightChecked = useRef(false);
   const saveErrorRef = useRef<HTMLDivElement | null>(null);
   // Draft writes are arbitrated by a synchronous flag, never by the `saved`
@@ -186,7 +198,32 @@ export function CheckInScreen({
   );
 
   const onPhotoSelected = useCallback(
-    (url: string | null) => {
+    (url: string | null, uploadDate?: string) => {
+      const photoDate = uploadDate ?? dateRef.current;
+      if (photoDate !== dateRef.current) {
+        if (url) void deleteStagedCheckInPhoto(url, photoDate);
+        return;
+      }
+      const previousStaged = stagedPhotoByDate.current.get(photoDate) ?? null;
+
+      if (url) {
+        // `track` accepts only this owner's unique per-date staged path. An
+        // unexpected URL is rejected instead of entering editable form state.
+        if (!photoLifecycle.track(userId, photoDate, url)) {
+          void deleteStagedCheckInPhoto(url, photoDate);
+          return;
+        }
+        stagedPhotoByDate.current.set(photoDate, url);
+        if (previousStaged && previousStaged !== url) {
+          void photoLifecycle.discard(userId, photoDate, previousStaged);
+        }
+      } else {
+        stagedPhotoByDate.current.delete(photoDate);
+        if (previousStaged) {
+          void photoLifecycle.discard(userId, photoDate, previousStaged);
+        }
+      }
+
       draftWriter.markEdited();
       setPhotoCleared(url === null);
       setData((current) => ({
@@ -199,12 +236,28 @@ export function CheckInScreen({
       setDraftRestored(false);
       setLateNightHint(false);
     },
-    [draftWriter]
+    [draftWriter, photoLifecycle, userId]
   );
 
   useEffect(() => {
     dateRef.current = currentDate;
   }, [currentDate]);
+
+  useEffect(() => {
+    const previousDate = previousDateRef.current;
+    if (previousDate === currentDate) return;
+    void photoLifecycle.abandonDate(previousDate);
+    stagedPhotoByDate.current.delete(previousDate);
+    previousDateRef.current = currentDate;
+  }, [currentDate, photoLifecycle]);
+
+  useEffect(
+    () => () => {
+      void photoLifecycle.abandonAll();
+      stagedPhotoByDate.current.clear();
+    },
+    [photoLifecycle]
+  );
 
   // ── Catalogue + session ──
   useEffect(() => {
@@ -307,11 +360,21 @@ export function CheckInScreen({
         draftWriter.markSaved(currentDate);
       } else {
         const draft = readDraft(localStorage, currentDate);
-        setData(draft ?? emptyCheckIn());
+        let restoredDraft = draft;
+        if (draft?.photoPath) {
+          if (photoLifecycle.track(userId, currentDate, draft.photoPath)) {
+            stagedPhotoByDate.current.set(currentDate, draft.photoPath);
+          } else {
+            // Old drafts could contain a stored or foreign URL. Only a validated
+            // staged object may be restored into the editable form.
+            restoredDraft = { ...draft, photoPath: null };
+          }
+        }
+        setData(restoredDraft ?? emptyCheckIn());
         setStoredEntry(null);
         setEditing(true);
         draftWriter.markEdited();
-        setDraftRestored(Boolean(draft && hasContent(draft)));
+        setDraftRestored(Boolean(restoredDraft && hasContent(restoredDraft)));
       }
 
       // Late-night step: only on a plain Today arrival, once, and only when
@@ -335,7 +398,7 @@ export function CheckInScreen({
       lateNightChecked.current = true;
       setLoadedKey(key);
     });
-  }, [currentDate, requestKey, initialDate, today, draftWriter]);
+  }, [currentDate, requestKey, initialDate, today, draftWriter, photoLifecycle, userId]);
 
   // ── Draft: local only, 1,200 ms, flushed on hide/unmount ──
   useEffect(() => {
@@ -374,6 +437,12 @@ export function CheckInScreen({
     (next: string) => {
       const clamped = clampCheckInDate(next, today);
       if (clamped === currentDate) return;
+      // The form date is changing, so every unsaved staged upload for the
+      // previous date is now abandoned. An active save lease defers deletion.
+      void photoLifecycle.abandonDate(currentDate);
+      stagedPhotoByDate.current.delete(currentDate);
+      dateRef.current = clamped;
+      previousDateRef.current = clamped;
       // Every per-day bit of state resets with the date; the load effect then
       // owns `data`, `storedEntry` and the mode. The draft guard is deliberately
       // untouched here: the old day's cleanup still runs, and it must keep
@@ -396,7 +465,7 @@ export function CheckInScreen({
       setReflectionCached(false);
       setCurrentDate(clamped);
     },
-    [currentDate, today]
+    [currentDate, photoLifecycle, today]
   );
 
   const shiftDay = (offset: number) => {
@@ -424,6 +493,18 @@ export function CheckInScreen({
     const payload = buildCheckInPayload(data, saveDate, {
       clearPhoto: photoIntent.clear_photo === true,
     });
+    const photoSaveLease = photoLifecycle.beginSave(
+      userId,
+      saveDate,
+      photoIntent.photo_path ?? null
+    );
+    let photoLeaseSettled = false;
+    const settlePhotoLease = async (committed: boolean | "unknown") => {
+      if (!photoSaveLease || photoLeaseSettled) return;
+      photoLeaseSettled = true;
+      await photoSaveLease.finish(committed);
+      if (committed) stagedPhotoByDate.current.delete(saveDate);
+    };
 
     setSaveError(null);
     setSaving(true);
@@ -442,10 +523,22 @@ export function CheckInScreen({
       });
 
       if (result.status === "failed") {
+        await settlePhotoLease(
+          result.error.code === "checkin.error_save_network" ? "unknown" : false
+        );
         setSaveError(result.error);
         return;
       }
-      if (result.status !== "saved") return;
+      if (result.status !== "saved") {
+        await settlePhotoLease(false);
+        return;
+      }
+
+      const returnedEntry = result.entry as Entry;
+      const stagedPhotoCommitted =
+        Boolean(photoIntent.photo_path) &&
+        returnedEntry.photo_path === photoIntent.photo_path;
+      await settlePhotoLease(stagedPhotoCommitted);
 
       // The row is the source of truth now. A replaced/cleared object may be
       // removed best-effort; a failed cleanup is only an orphan, never a
@@ -457,10 +550,10 @@ export function CheckInScreen({
       // Use the server row, not the local draft: it carries the normalised
       // photo URL, weather keys and the read-only phone/AI fields.
       const savedData = fromEntry(
-        result.entry as unknown as Record<string, unknown>
+        returnedEntry as unknown as Record<string, unknown>
       );
       setData(savedData);
-      setStoredEntry(result.entry as Entry);
+      setStoredEntry(returnedEntry);
       setSaved(true);
       setDirty(false);
       setEditing(true);
@@ -495,6 +588,7 @@ export function CheckInScreen({
         void requestReflection(saveDate, { afterSave: true });
       }
     } finally {
+      if (!photoLeaseSettled) void settlePhotoLease("unknown");
       setSaving(false);
     }
   };

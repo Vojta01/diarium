@@ -35,7 +35,7 @@ export interface CheckInFormProps {
   /** The date being edited; photo uploads are scoped to it. */
   date: string;
   setData: (updater: (data: CheckInData) => CheckInData) => void;
-  onPhotoSelected: (url: string | null) => void;
+  onPhotoSelected: (url: string | null, uploadDate?: string) => void;
   onPhotoUploading: (uploading: boolean) => void;
   activities: readonly ActivityDef[];
   hiddenActivities: readonly ActivityDef[];

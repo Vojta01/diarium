@@ -545,6 +545,8 @@ export const cs = {
     sleep_3: 'Skvělý',
     sleep_2: 'Normální',
     sleep_1: 'Špatný',
+    sleep_5: 'Výborný',
+    sleep_4: 'Velmi dobrý',
     sleep_3e: 'Skvělý 😴',
     sleep_2e: 'Normální 🥱',
     sleep_1e: 'Špatný 😪',
@@ -764,6 +766,7 @@ export const cs = {
     photo_camera: '📷 Vyfotit',
     photo_gallery: '🖼️ Z galerie',
     photo_uploading: '⏳ Nahrávám fotku...',
+    photo_cancel_upload: 'Zrušit nahrávání',
     photo_remove: '🗑 Odebrat',
     photo_empty: 'Zatím žádná fotka.',
     photo_error_type: 'Tento formát fotky nepodporujeme. Použij JPEG, PNG nebo WebP.',
@@ -905,6 +908,7 @@ export const cs = {
 
   // ── YearInPixels ──
   yearInPixels: {
+    weekdays_label: 'Dny v týdnu',
     loading: 'Načítám...',
     title: '🗓️ Rok {year} v pixelech',
     description: 'Každý čtvereček = jeden den. Čím zelenější, tím lepší nálada.',
