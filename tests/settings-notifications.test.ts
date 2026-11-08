@@ -120,9 +120,22 @@ test("no global push prompt or floating dot is mounted outside Settings", () => 
   assert.match(settings, /NotificationsCard/);
 });
 
+test("an existing browser subscription is server-registered before the UI marks it active", () => {
+  const card = readFileSync(
+    new URL("../src/components/settings/NotificationsCard.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.match(card, /pushManager\.getSubscription\(\)/);
+  assert.match(card, /method: "POST"[\s\S]*?JSON\.stringify\(\{ subscription \}\)/);
+  assert.match(card, /if \(!response\.ok\) throw new Error\(`subscribe \$\{response\.status\}`\)/);
+  assert.ok(card.indexOf("if (!response.ok) throw new Error(`subscribe ${response.status}`)")
+    < card.indexOf("setSubscribed(true)"));
+  assert.match(card, /setSubscribed\(false\);[\s\S]*?setFailed\(true\)/);
+});
+
 test("subscribe, delete, manual send and the cron use the per-user key", () => {
   const subscribe = readFileSync(
-    new URL("../src/app/api/push/subscribe/route.ts", import.meta.url),
+    new URL("../src/lib/push-subscription-handler.ts", import.meta.url),
     "utf8"
   );
   const send = readFileSync(
@@ -140,7 +153,10 @@ test("subscribe, delete, manual send and the cron use the per-user key", () => {
   }
 
   assert.match(subscribe, /redis\.srem\(pushSubscriptionsKey\(user\.id\)/);
+  assert.match(subscribe, /redis\.sadd\(pushSubscriptionsKey\(user\.id\)/);
   assert.match(send, /userId is required/);
   assert.match(send, /pushSubscriptionsKey\(userId\)/);
+  assert.match(send, /deliverStoredWebPushSubscriptions/);
   assert.match(cron, /pushSubscriptionsKey\(userId\)/);
+  assert.match(cron, /deliverStoredWebPushSubscriptions/);
 });

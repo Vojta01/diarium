@@ -9,9 +9,10 @@ import { pragueDateKey } from "@/lib/date";
 interface CalendarViewProps {
   entries: DailyEntry[];
   onNavigateToDate?: (date: string) => void;
+  onViewMonth?: (year: number, month: number) => void;
 }
 
-export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
+export function CalendarView({ entries, onNavigateToDate, onViewMonth }: CalendarViewProps) {
   const { lang } = useTranslation();
   const todayKey = pragueDateKey();
   const [viewYear, setViewYear] = useState(Number(todayKey.slice(0, 4)));
@@ -48,21 +49,27 @@ export function CalendarView({ entries, onNavigateToDate }: CalendarViewProps) {
   }, [viewYear, viewMonth]);
 
   const prevMonth = () => {
+    const nextMonth = (viewMonth + 11) % 12;
+    const nextYear = viewMonth === 0 ? viewYear - 1 : viewYear;
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear(viewYear - 1);
     } else {
       setViewMonth(viewMonth - 1);
     }
+    onViewMonth?.(nextYear, nextMonth + 1);
   };
 
   const nextMonth = () => {
+    const nextMonth = (viewMonth + 1) % 12;
+    const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear(viewYear + 1);
     } else {
       setViewMonth(viewMonth + 1);
     }
+    onViewMonth?.(nextYear, nextMonth + 1);
   };
 
   const dayNames = weekdayNames(lang);

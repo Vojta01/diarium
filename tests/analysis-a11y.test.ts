@@ -69,8 +69,15 @@ test("comparison tiles call absent metric readings no data, not not-tracked", ()
   assert.equal(comparison.includes('t("analysis.compare.not_tracked")'), false);
 });
 
-test("the analysis read is bounded to 180 days and never unbounded", () => {
+test("the bounded 180-day overview is fetched once and shared with analysis", () => {
   const section = source("../src/components/stats/AnalysisSection.tsx");
-  assert.match(section, /const ANALYSIS_READ_DAYS = 180/);
-  assert.match(section, /fetchDailyEntries\(\{ from, to: today \}\)/);
+  const dashboard = source("../src/components/StatsDashboard.tsx");
+  assert.match(dashboard, /createStatsOverviewLoader\(fetchDailyEntries\)/);
+  assert.match(dashboard, /loadOverview\(currentToday, forceFresh\)/);
+  assert.match(dashboard, /fullHistoryRequested\.current[\s\S]*?fetchDailyEntries\(\)/);
+  assert.match(dashboard, /entries=\{entries\}/);
+  assert.doesNotMatch(section, /fetchDailyEntries/);
+  assert.match(section, /useDataRefresh\(\["habits"\], loadHabits\)/);
+  assert.match(dashboard, /fetchDailyEntries\(\)/, "full history remains available on demand");
+  assert.match(dashboard, /next === "photos" \|\| next === "screentime"/);
 });

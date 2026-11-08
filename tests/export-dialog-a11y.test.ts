@@ -21,6 +21,14 @@ test("format choice is a labelled group with pressed state", () => {
   assert.match(dialog, /t\("export\.pdf_web_only"\)/);
 });
 
+test("CSV mode explicitly distinguishes the faithful backup from spreadsheet-safe output", () => {
+  assert.match(dialog, /value="faithful"/);
+  assert.match(dialog, /value="spreadsheet-safe"/);
+  assert.match(dialog, /params\.set\("mode", "spreadsheet-safe"\)/);
+  assert.match(dialog, /csv_safe_hint/);
+  assert.match(dialog, /csv_hint/);
+});
+
 test("states are announced and never surface a raw server message", () => {
   assert.match(dialog, /role="alert"/);
   assert.match(dialog, /role="status"/);
@@ -57,6 +65,10 @@ test("export routes page through all entries instead of a 10k cap", () => {
     "utf8"
   );
   const pdf = readFileSync(
+    new URL("../src/lib/export-pdf.ts", import.meta.url),
+    "utf8"
+  );
+  const pdfRoute = readFileSync(
     new URL("../src/app/api/export/pdf/route.ts", import.meta.url),
     "utf8"
   );
@@ -66,6 +78,10 @@ test("export routes page through all entries instead of a 10k cap", () => {
     assert.doesNotMatch(source, /\.limit\(10000\)/);
     assert.match(source, /X-Diarium-Entry-Count/);
   }
+  assert.match(csv, /url\.searchParams\.get\("mode"\) === "spreadsheet-safe"/);
+  assert.match(csv, /"X-Diarium-CSV-Mode": mode/);
+  assert.match(pdfRoute, /createPdfExportHandler/);
   assert.match(csv, /buildCsv/);
+  assert.match(csv, /buildSpreadsheetSafeCsv/);
   assert.match(csv, /csvFileName/);
 });

@@ -4,6 +4,7 @@ import { VAPID_PUBLIC_KEY, VAPID_EMAIL } from "@/lib/vapid";
 import { getRedis } from "@/lib/redis";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { pushSubscriptionsKey } from "@/lib/push";
+import { deliverStoredWebPushSubscriptions } from "@/lib/push-delivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,32 +57,20 @@ export async function GET(request: NextRequest) {
     const redis = getRedis();
     const key = pushSubscriptionsKey(userId);
     if (redis && ensureVapid()) {
-      const rawSubs: any[] = await redis.smembers(key);
-      const subscriptions = rawSubs.map((s: any) => {
-        if (typeof s === "string") {
-          try { return JSON.parse(s); } catch { return null; }
-        }
-        return s;
-      }).filter(Boolean);
-
+      const rawSubs: unknown[] = await redis.smembers(key);
       const payload = JSON.stringify({ title, body });
-      const results = await Promise.allSettled(
-        subscriptions.map((sub: any) =>
-          webpush.sendNotification(sub, payload).then(() => { webSent++; }).catch((err: any) => {
-            webErrors++;
-            throw err;
-          })
-        )
-      );
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        if (r.status === "rejected") {
-          const err = (r as PromiseRejectedResult).reason;
-          if (err?.statusCode === 410 || err?.statusCode === 404) {
-            await redis.srem(key, rawSubs[i]);
-          }
-        }
-      }
+      const result = await deliverStoredWebPushSubscriptions({
+        key,
+        stored: rawSubs,
+        redis,
+        payload,
+        // web-push makes a direct HTTPS request; non-2xx redirects are errors,
+        // never followed to a caller-controlled destination.
+        sendNotification: (subscription, messagePayload) =>
+          webpush.sendNotification(subscription, messagePayload),
+      });
+      webSent = result.sent;
+      webErrors = result.errors;
     }
 
     return Response.json({

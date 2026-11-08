@@ -6,6 +6,7 @@ import {
   signedOutError,
 } from "../dashboard-errors.ts";
 import { isPersonalMode, SENSITIVE_HABIT_KEYS } from "../feature-flags.ts";
+import { mergeActiveHabitCatalog } from "../analysis/habit-catalog.ts";
 import { pragueDateKey } from "../date.ts";
 import { buildEntryRow, type EntryRowInput } from "../entry-row.ts";
 import type { CheckInPayload } from "../types.ts";
@@ -532,61 +533,16 @@ export async function getHabits(): Promise<HabitDef[]> {
     fetch("/api/seed-habits", { method: "POST" }).catch(() => {});
   }
   
-  // Build a map of user overrides: habit key → is_active
-  const overrides: Record<string, boolean> = {};
-  userHabits.forEach((h: any) => { overrides[h.key] = h.is_active; });
-  
-  // Default habits ALWAYS show (no filtering). User custom habits show in addition.
-  const defaultKeys = new Set(defaults.map(d => d.key));
-  
-  // Rows that collide with a default habit are normally stale duplicates → delete.
-  // Exception: an ACTIVE row whose label/icon/is_negative differs from the catalog
-  // entry means the user customised that habit (own icon or renamed). Keep it and
-  // apply it as an override, otherwise the customisation would be wiped on load.
-  const overridesByKey = new Map<string, any>();
-  for (const uh of userHabits) {
-    if (!defaultKeys.has(uh.key)) continue;
+  // Apply active overrides without deleting user rows or touching entries.habits.
+  const visible = mergeActiveHabitCatalog(defaults, userHabits);
 
-    const def = defaults.find(d => d.key === uh.key);
-    const customised =
-      !!uh.is_active &&
-      !!def &&
-      ((uh.icon && uh.icon !== def.icon) ||
-        (uh.label && uh.label !== def.label) ||
-        (typeof uh.is_negative === "boolean" && uh.is_negative !== def.is_negative));
-
-    if (customised) {
-      overridesByKey.set(uh.key, uh);
-    } else {
-      try { await sb.from("user_habits").delete().eq("id", uh.id); } catch {}
-    }
-  }
-
-  if (overridesByKey.size > 0) {
-    defaults = defaults.map(d => {
-      const o = overridesByKey.get(d.key);
-      if (!o) return d;
-      return {
-        ...d,
-        label: o.label || d.label,
-        icon: o.icon || d.icon,
-        is_negative: typeof o.is_negative === "boolean" ? o.is_negative : d.is_negative,
-      };
-    });
-  }
-  
-  // Add user's custom active habits (not in defaults)
-  const customs: HabitDef[] = userHabits
-    .filter((h: any) => h.is_active && !defaultKeys.has(h.key))
-    .map((h: any) => ({ ...h, source: "custom" as const })) ?? [];
-  
   // In core mode, filter out sensitive habits (kouření, studená sprcha)
   if (!isPersonalMode()) {
     const sensitiveSet = new Set(SENSITIVE_HABIT_KEYS);
-    defaults = defaults.filter(d => !sensitiveSet.has(d.key));
+    return visible.filter((habit) => !sensitiveSet.has(habit.key));
   }
-  
-  return [...defaults, ...customs];
+
+  return visible;
 }
 
 /**
@@ -619,41 +575,20 @@ export async function getHabitsOrThrow(): Promise<HabitDef[]> {
     );
   }
 
-  const defaults: HabitDef[] = ((defaultRes.data ?? []) as HabitDef[]).map(
-    (habit) => ({ ...habit, source: "default" as const })
-  );
-  type UserHabitRow = HabitDef & { is_active?: boolean };
-  const userHabits = (userRes.data ?? []) as UserHabitRow[];
-  const overrides = new Map(userHabits.map((habit) => [habit.key, habit]));
-
-  const mergedDefaults = defaults.map((habit) => {
-    const override = overrides.get(habit.key);
-    if (!override) return habit;
-    return {
+  const visible = mergeActiveHabitCatalog(
+    ((defaultRes.data ?? []) as HabitDef[]).map((habit) => ({
       ...habit,
-      label: override.label || habit.label,
-      icon: override.icon || habit.icon,
-      is_negative:
-        typeof override.is_negative === "boolean"
-          ? override.is_negative
-          : habit.is_negative,
-    };
-  });
-
-  const defaultKeys = new Set(mergedDefaults.map((habit) => habit.key));
-  const customs: HabitDef[] = userHabits
-    .filter((habit) => habit.is_active && !defaultKeys.has(habit.key))
-    .map((habit) => ({ ...habit, source: "custom" as const }));
+      source: "default" as const,
+    })),
+    (userRes.data ?? []) as (HabitDef & { is_active?: boolean })[]
+  );
 
   if (!isPersonalMode()) {
     const sensitive = new Set(SENSITIVE_HABIT_KEYS);
-    return [
-      ...mergedDefaults.filter((habit) => !sensitive.has(habit.key)),
-      ...customs.filter((habit) => !sensitive.has(habit.key)),
-    ];
+    return visible.filter((habit) => !sensitive.has(habit.key));
   }
 
-  return [...mergedDefaults, ...customs];
+  return visible;
 }
 
 /** Toggle a habit's visibility for the current user.

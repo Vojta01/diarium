@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "@/lib/auth";
-import { buildCsv, CSV_HEADERS, csvFileName } from "@/lib/export-csv";
+import {
+  buildCsv,
+  buildSpreadsheetSafeCsv,
+  CSV_HEADERS,
+  csvFileName,
+} from "@/lib/export-csv";
 import { fetchAllExportPages } from "@/lib/export-query";
 import { pragueDateKey } from "@/lib/date";
 
@@ -54,7 +59,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const csv = buildCsv(entries as unknown as Record<string, unknown>[]);
+    const mode = url.searchParams.get("mode") === "spreadsheet-safe"
+      ? "spreadsheet-safe"
+      : "faithful";
+    const rows = entries as unknown as Record<string, unknown>[];
+    const csv = mode === "spreadsheet-safe"
+      ? buildSpreadsheetSafeCsv(rows)
+      : buildCsv(rows);
 
     return new NextResponse(csv, {
       headers: {
@@ -64,6 +75,7 @@ export async function GET(request: NextRequest) {
         )}"`,
         // The dialog reads this so its success state can name the real row count.
         "X-Diarium-Entry-Count": String(entries.length),
+        "X-Diarium-CSV-Mode": mode,
         "Cache-Control": "no-store",
       },
     });

@@ -34,12 +34,12 @@ test("CSV header matches Android CsvExport exactly", () => {
   );
 });
 
-test("plain text is quoted only for comma, quote or newline", () => {
+test("plain text is quoted for comma, quote, carriage return or newline", () => {
   assert.equal(csvEscape("plain"), "plain");
   assert.equal(csvEscape("a,b"), '"a,b"');
   assert.equal(csvEscape('say "hi"'), '"say ""hi"""');
   assert.equal(csvEscape("line\nbreak"), '"line\nbreak"');
-  assert.equal(csvEscape("carriage\rreturn"), "carriage\rreturn");
+  assert.equal(csvEscape("carriage\rreturn"), '"carriage\rreturn"');
   assert.equal(csvEscape(null), "");
   assert.equal(csvEscape(undefined), "");
   assert.equal(csvEscape(0), "0");

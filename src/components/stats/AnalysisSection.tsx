@@ -5,13 +5,12 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { comparePeriods } from "@/lib/analysis/compare";
 import { analysisWindows, dayAxis } from "@/lib/analysis/stats-window";
 import type { AnalysisRange } from "@/lib/analysis/stats-window";
-import { shiftDateKey, pragueDateKey } from "@/lib/date";
 import {
   DashboardDataError,
   isDashboardAuthError,
 } from "@/lib/dashboard-errors";
 import { useTranslation } from "@/lib/i18n";
-import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
+import type { DailyEntry } from "@/lib/stats";
 import { getHabitsOrThrow, type HabitDef } from "@/lib/supabase/db";
 import { useDataRefresh } from "@/lib/use-data-refresh";
 
@@ -28,71 +27,55 @@ import { PeriodComparisonCard } from "./PeriodComparisonCard";
 
 type LoadState = "loading" | "ready" | "error";
 
-/** 90-day analysis max + 90-day baseline = one bounded 180-day read. */
-const ANALYSIS_READ_DAYS = 180;
-
 /**
- * The analysis section owns the one bounded read and all shared UI state:
- * range, baseline visibility and the selected day. M1–M3 are pure views over
- * the same entries, so they can never disagree about a day or a window.
+ * The dashboard owns the one bounded read shared by analysis and the other
+ * stats tabs. This section owns analysis view state and the habit catalogue.
  */
 export function AnalysisSection({
   onOpenDay,
+  today,
+  entries,
+  entriesLoading,
+  entriesError,
+  onRetryEntries,
 }: {
   onOpenDay?: (date: string) => void;
+  today: string;
+  entries: DailyEntry[];
+  entriesLoading: boolean;
+  entriesError: DashboardDataError | null;
+  onRetryEntries: () => void;
 }) {
   const { t } = useTranslation();
   const headingId = useId();
   const peekRef = useRef<HTMLDivElement>(null);
 
-  const [today] = useState(() => pragueDateKey());
   const [range, setRange] = useState<AnalysisRange>(30);
   const [showBaseline, setShowBaseline] = useState(true);
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<DashboardDataError | null>(null);
-  const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [habits, setHabits] = useState<HabitDef[] | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const from = useMemo(
-    () => shiftDateKey(today, -(ANALYSIS_READ_DAYS - 1)),
-    [today]
-  );
-
-  const load = useCallback(() => {
-    Promise.allSettled([
-      fetchDailyEntries({ from, to: today }),
-      getHabitsOrThrow(),
-    ]).then(([entriesResult, habitsResult]) => {
-      if (entriesResult.status === "rejected") {
-        const failure = entriesResult.reason;
-        setError(
-          failure instanceof DashboardDataError
-            ? failure
-            : new DashboardDataError("load_failed", "errors.entries_load", 500, {
-                cause: failure,
-              })
-        );
-        setState("error");
-        return;
-      }
-      setEntries(entriesResult.value);
-      setHabits(habitsResult.status === "fulfilled" ? habitsResult.value : null);
-      setState("ready");
-    });
-  }, [from, today]);
+  const loadHabits = useCallback(() => {
+    getHabitsOrThrow().then(setHabits).catch(() => setHabits(null));
+  }, []);
 
   const retry = useCallback(() => {
-    setState("loading");
-    setError(null);
-    load();
-  }, [load]);
+    onRetryEntries();
+    loadHabits();
+  }, [onRetryEntries, loadHabits]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadHabits();
+  }, [loadHabits]);
 
-  useDataRefresh(["entries"], load);
+  useDataRefresh(["habits"], loadHabits);
+
+  const state: LoadState = entriesLoading
+    ? "loading"
+    : entriesError
+      ? "error"
+      : "ready";
+  const error = entriesError;
 
   const windows = useMemo(() => analysisWindows(today, range), [today, range]);
   const axis = dayAxis(windows.current);

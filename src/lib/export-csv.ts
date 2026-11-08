@@ -1,13 +1,13 @@
 /**
  * CSV writer shared by the export route and its tests.
  *
- * Byte-for-byte the format Android `CsvExport.kt` writes (and the format the
- * old route produced): same header order, bare LF, no trailing newline, no
+ * Faithful backup format: same header order, bare LF, no trailing newline, no
  * UTF-8 BOM, `null` → empty field, object columns always quoted compact JSON,
- * text quoted only for `,`, `"` or `\n`.
+ * and text quoted for comma, quote, CR or LF. Quoting CR is stricter than the
+ * former Android twin because leaving it bare can break CSV record boundaries.
  *
- * No BOM on purpose: Android compares downloads against this exact byte
- * sequence, and Excel's BOM preference is not worth breaking that parity.
+ * No BOM on purpose: keep the established Diarium CSV dialect; formula-safe
+ * cell transformation is a separate, explicit export mode.
  */
 
 export const CSV_HEADERS = [
@@ -42,12 +42,12 @@ export function quoteCsv(text: string): string {
 
 /**
  * Plain text field: empty for `null`/`undefined`, quoted only when it holds a
- * comma, a double quote or a newline (same test as the Android twin).
+ * comma, a double quote, carriage return or newline (faithful backup).
  */
 export function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return "";
   const text = String(value);
-  return text.includes(",") || text.includes('"') || text.includes("\n")
+  return text.includes(",") || text.includes('"') || text.includes("\n") || text.includes("\r")
     ? quoteCsv(text)
     : text;
 }
@@ -74,6 +74,32 @@ export function csvRow(entry: Record<string, unknown>): string {
 /** The whole document: header line, then one line per entry. */
 export function buildCsv(entries: readonly Record<string, unknown>[]): string {
   return [CSV_HEADERS.join(","), ...entries.map(csvRow)].join(CSV_LINE_SEPARATOR);
+}
+
+/**
+ * Spreadsheet-compatible export is deliberately opt-in: prefix only strings
+ * whose first non-whitespace/control character is an Excel formula marker.
+ * The faithful `buildCsv` remains byte-preserving for backup/re-import use.
+ */
+function spreadsheetSafeText(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return /^[\s\u0000-\u001f\u007f-\u009f]*[=+\-@]/u.test(value)
+    ? `'${value}`
+    : value;
+}
+
+function spreadsheetSafeRow(entry: Record<string, unknown>): string {
+  return CSV_HEADERS.map((header) => {
+    const value = entry[header];
+    if (CSV_JSON_COLUMNS.has(header)) return csvJsonField(value);
+    return csvEscape(spreadsheetSafeText(value));
+  }).join(",");
+}
+
+export function buildSpreadsheetSafeCsv(
+  entries: readonly Record<string, unknown>[]
+): string {
+  return [CSV_HEADERS.join(","), ...entries.map(spreadsheetSafeRow)].join(CSV_LINE_SEPARATOR);
 }
 
 /**

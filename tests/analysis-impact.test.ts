@@ -94,7 +94,7 @@ test("days without a recorded mood enter no impact group", () => {
   assert.equal(meditation.nWithout, 0);
 });
 
-test("a habit missing from HabitDef is excluded (deleted/hidden does not resurrect)", () => {
+test("missing definitions fail closed instead of resurrecting hidden historical keys", () => {
   const axis = ["2026-11-01", "2026-11-02"];
   const entries = [
     entry(axis[0], { mood: 5, habits: { koureni: true } }),
@@ -104,12 +104,9 @@ test("a habit missing from HabitDef is excluded (deleted/hidden does not resurre
   const withDefinitions = habitImpacts(entries, axis, [habit("cteni", "Čtení")]);
   assert.deepEqual(withDefinitions.map((row) => row.key), ["cteni"]);
 
-  // With no definitions (failed label read), raw keys are analysed.
+  // A failed definition read cannot prove a key is still active.
   const withoutDefinitions = habitImpacts(entries, axis, null);
-  assert.deepEqual(
-    withoutDefinitions.map((row) => row.key).sort(),
-    ["cteni", "koureni"]
-  );
+  assert.deepEqual(withoutDefinitions, []);
 });
 
 test("activity labels normalize, merge only exact keys, and keep one spelling", () => {

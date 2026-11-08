@@ -4,6 +4,7 @@ import { ANALYSIS_METRICS, metricValue } from "@/lib/analysis/metric-series";
 import { formatLongDate, formatMetric } from "@/lib/analysis/format";
 import { useTranslation } from "@/lib/i18n";
 import type { DailyEntry } from "@/lib/stats";
+import { answeredHabitEntries } from "@/lib/analysis/habit-catalog";
 import type { HabitDef } from "@/lib/supabase/db";
 
 import {
@@ -34,25 +35,15 @@ export function DayPeek({
 }) {
   const { t, lang } = useTranslation();
 
-  const answeredHabits = (() => {
-    if (!entry) return [];
-    const definitions = new Map((habits ?? []).map((habit) => [habit.key, habit]));
-    const keys =
-      habits === null
-        ? Object.keys(entry.habits)
-        : habits.map((habit) => habit.key).filter((key) => key in entry.habits);
-    return keys
-      .filter((key) => typeof entry.habits[key] === "boolean")
-      .map((key) => {
-        const definition = definitions.get(key);
-        const label = definition
-          ? lang === "en" && definition.labelEn
-            ? definition.labelEn
-            : definition.label
-          : key;
-        return { key, label, value: entry.habits[key] };
-      });
-  })();
+  const answeredHabits = entry
+    ? answeredHabitEntries(entry.habits, habits).map((habit) => ({
+        ...habit,
+        label:
+          lang === "en"
+            ? habits?.find((definition) => definition.key === habit.key)?.labelEn || habit.label
+            : habit.label,
+      }))
+    : [];
 
   return (
     <div className="mt-4 scroll-mt-24">

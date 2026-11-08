@@ -31,6 +31,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [format, setFormat] = useState<"csv" | "pdf">("csv");
+  const [spreadsheetSafe, setSpreadsheetSafe] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [count, setCount] = useState(0);
 
@@ -57,6 +58,9 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
       if (to) params.set("to", to);
+      if (format === "csv" && spreadsheetSafe) {
+        params.set("mode", "spreadsheet-safe");
+      }
 
       // The export routes derive the user from the verified JWT (they no longer
       // accept a user_id query param), so the access token must be sent.
@@ -233,8 +237,37 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
             </button>
           ))}
         </div>
+        {format === "csv" ? (
+          <fieldset className="mt-3 rounded-xl border border-white/10 p-3">
+            <legend className="px-1 text-xs text-[color:var(--text-2)]">
+              {t("export.csv_mode")}
+            </legend>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[color:var(--text-1)]">
+              <input
+                type="radio"
+                name={`${titleId}-csv-mode`}
+                value="faithful"
+                checked={!spreadsheetSafe}
+                onChange={() => setSpreadsheetSafe(false)}
+              />
+              {t("export.csv_faithful")}
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[color:var(--text-1)]">
+              <input
+                type="radio"
+                name={`${titleId}-csv-mode`}
+                value="spreadsheet-safe"
+                checked={spreadsheetSafe}
+                onChange={() => setSpreadsheetSafe(true)}
+              />
+              {t("export.csv_spreadsheet_safe")}
+            </label>
+          </fieldset>
+        ) : null}
         <p className="mt-2 text-xs leading-5 text-[color:var(--text-2)]">
-          {format === "csv" ? t("export.csv_hint") : t("export.pdf_web_only")}
+          {format === "csv"
+            ? t(spreadsheetSafe ? "export.csv_safe_hint" : "export.csv_hint")
+            : t("export.pdf_web_only")}
         </p>
       </div>
 

@@ -167,25 +167,25 @@ export function habitImpacts(
   axis: readonly string[],
   habits: readonly HabitDef[] | null
 ): ImpactResult[] {
+  // Without a readable active catalogue, raw historical keys may include
+  // habits that were hidden or removed. Fail closed; preserve entry JSON.
+  if (habits === null) return [];
   const days = moodDays(entries, axis);
   const tracked = habitKeysInWindow(entries, axis);
-  const definitions = habits
-    ? new Map(habits.map((habit) => [habit.key, habit]))
-    : null;
-  const keys = definitions
-    ? tracked.filter((key) => definitions.has(key))
-    : tracked;
+  const definitions = new Map(habits.map((habit) => [habit.key, habit]));
+  const keys = tracked.filter((key) => definitions.has(key));
 
   const results: ImpactResult[] = [];
   for (const key of keys) {
     const withDays = days.filter((day) => day.entry.habits[key] === true);
     const withoutDays = days.filter((day) => day.entry.habits[key] === false);
-    const definition = definitions?.get(key);
+    const definition = definitions.get(key);
+    if (!definition) continue;
     results.push(
       buildResult(
         "habit",
         key,
-        definition?.label ?? key,
+        definition.label,
         withDays,
         withoutDays,
         definition

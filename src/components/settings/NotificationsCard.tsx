@@ -84,20 +84,40 @@ export function NotificationsCard() {
       };
     }
 
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => {
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          if (cancelled) return;
+          setSupport(next);
+          setSubscribed(false);
+          setState("ready");
+          return;
+        }
+
+        // Re-register this browser's current subscription under the signed-in
+        // user's scoped Redis key. A local browser subscription alone is not
+        // proof that the server has a valid, deliverable registration.
+        const response = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ subscription }),
+        });
+        if (!response.ok) throw new Error(`subscribe ${response.status}`);
         if (cancelled) return;
         setSupport(next);
-        setSubscribed(Boolean(subscription));
+        setSubscribed(true);
+        setFailed(false);
         setState("ready");
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return;
         setSupport(next);
         setSubscribed(false);
+        setFailed(true);
         setState("ready");
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

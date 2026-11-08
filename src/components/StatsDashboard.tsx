@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { YearInPixels } from "@/components/YearInPixels";
 import { CalendarView } from "@/components/CalendarView";
 import { ScreenTimeChart } from "@/components/ScreenTimeChart";
@@ -11,6 +11,9 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { AnalysisSection } from "@/components/stats/AnalysisSection";
 import { FOCUS_RING } from "@/components/dashboard/primitives";
 import { fetchDailyEntries, type DailyEntry } from "@/lib/stats";
+import { createStatsOverviewLoader, statsOverviewRange } from "@/lib/stats-dashboard-data";
+import { pragueDateKey } from "@/lib/date";
+import { DASHBOARD_ERROR_CODES, toDashboardError, type DashboardDataError } from "@/lib/dashboard-errors";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { useTranslation } from "@/lib/i18n";
 import { readStoredSession } from "@/lib/auth-storage";
@@ -22,40 +25,94 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
   const { t } = useTranslation();
   const [entries, setEntries] = useState<DailyEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [entriesError, setEntriesError] = useState<DashboardDataError | null>(null);
   const [tab, setTab] = useState<StatsTab>("calendar");
   const [showExport, setShowExport] = useState(false);
-  const [userId, setUserId] = useState<string>("");
-  const [userEmail, setUserEmail] = useState<string>("");
+  const [userId] = useState(() => readStoredSession()?.user?.id || "");
   const flags = getFeatureFlags();
+  const [today, setToday] = useState(() => pragueDateKey());
+  const overviewRange = useMemo(() => statsOverviewRange(today), [today]);
+  const loadOverview = useMemo(
+    () => createStatsOverviewLoader(fetchDailyEntries),
+    []
+  );
+  const fullHistoryRequested = useRef(false);
+  const fullHistoryRequest = useRef<Promise<void> | null>(null);
+  const loadSequence = useRef(0);
 
-  const load = useCallback(() => {
-    fetchDailyEntries()
+  const loadFullHistory = useCallback((forceFresh = false) => {
+    if (!forceFresh) {
+      if (fullHistoryRequest.current) return fullHistoryRequest.current;
+      if (fullHistoryRequested.current) return null;
+    }
+
+    fullHistoryRequested.current = true;
+    const requestId = ++loadSequence.current;
+    const request: Promise<void> = fetchDailyEntries()
       .then((data) => {
+        if (requestId !== loadSequence.current) return;
         setEntries(data);
+        setEntriesError(null);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((failure) => {
+        if (requestId !== loadSequence.current) return;
+        setEntriesError(toDashboardError(failure, DASHBOARD_ERROR_CODES.entries));
+        setLoading(false);
+      })
+      .finally(() => {
+        if (fullHistoryRequest.current === request) fullHistoryRequest.current = null;
+      });
+    fullHistoryRequest.current = request;
+    return request;
   }, []);
+
+  const load = useCallback((forceFresh = false) => {
+    if (fullHistoryRequested.current) {
+      void loadFullHistory(forceFresh);
+      return;
+    }
+
+    const requestId = ++loadSequence.current;
+    const currentToday = pragueDateKey();
+    setToday(currentToday);
+    loadOverview(currentToday, forceFresh)
+      .then((data) => {
+        if (requestId !== loadSequence.current || fullHistoryRequested.current) return;
+        setEntries(data);
+        setEntriesError(null);
+        setLoading(false);
+      })
+      .catch((failure) => {
+        if (requestId !== loadSequence.current || fullHistoryRequested.current) return;
+        setEntriesError(toDashboardError(failure, DASHBOARD_ERROR_CODES.entries));
+        setLoading(false);
+      });
+  }, [loadFullHistory, loadOverview]);
+
+  const retryLoad = useCallback(() => {
+    setLoading(true);
+    setEntriesError(null);
+    load(true);
+  }, [load]);
+
+  const selectTab = useCallback((next: StatsTab) => {
+    setTab(next);
+    if (next === "photos" || next === "screentime") void loadFullHistory();
+  }, [loadFullHistory]);
+
+  const ensureCalendarHistory = useCallback((year: number, month: number) => {
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    if (monthKey <= overviewRange.from.slice(0, 7)) void loadFullHistory();
+  }, [loadFullHistory, overviewRange.from]);
 
   useEffect(() => {
     load();
-
-    const session = readStoredSession();
-    if (session?.user) {
-      if (session.user.id) setUserId(session.user.id);
-      if (session.user.email) setUserEmail(session.user.email);
-    }
   }, [load]);
 
-  useDataRefresh(["entries"], load);
+  const refreshEntries = useCallback(() => load(true), [load]);
+  useDataRefresh(["entries"], refreshEntries);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-white/40 text-lg">{t("statsDashboard.loading")}</div>
-      </div>
-    );
-  }
 
   const tabs: { key: StatsTab; label: string }[] = [
     { key: "calendar", label: t("statsDashboard.tab_calendar") },
@@ -79,7 +136,7 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
             key={item.key}
             type="button"
             aria-pressed={tab === item.key}
-            onClick={() => setTab(item.key)}
+            onClick={() => selectTab(item.key)}
             className={`flex min-h-11 items-center justify-center rounded-xl px-1.5 py-2 text-center text-[11px] font-medium leading-tight transition-all sm:text-sm ${FOCUS_RING} ${
               tab === item.key
                 ? "border border-indigo-400/30 bg-indigo-500/20 text-white"
@@ -92,14 +149,35 @@ export function StatsDashboard({ onNavigateToDate }: { onNavigateToDate?: (date:
       </div>
 
       <div className="mx-auto max-w-2xl pb-2">
-        {tab === "calendar" && <CalendarView entries={entries} onNavigateToDate={onNavigateToDate} />}
-        {tab === "photos" && <PhotoGallery entries={entries} onNavigateToDate={onNavigateToDate} />}
-        {tab === "screentime" && flags.screenTime && <ScreenTimeChart entries={entries} />}
-        {tab === "ai" && <PeriodicSummary userId={userId} />}
-        {tab === "year" && <YearInPixels />}
+        {loading && entries.length === 0 ? (
+          <div aria-busy="true" className="flex min-h-40 items-center justify-center">
+            <div className="text-white/40 text-lg">{t("statsDashboard.loading")}</div>
+          </div>
+        ) : (
+          <>
+            {tab === "calendar" && (
+              <CalendarView
+                entries={entries}
+                onNavigateToDate={onNavigateToDate}
+                onViewMonth={ensureCalendarHistory}
+              />
+            )}
+            {tab === "photos" && <PhotoGallery entries={entries} onNavigateToDate={onNavigateToDate} />}
+            {tab === "screentime" && flags.screenTime && <ScreenTimeChart entries={entries} />}
+            {tab === "ai" && <PeriodicSummary userId={userId} />}
+            {tab === "year" && <YearInPixels />}
+          </>
+        )}
       </div>
 
-      <AnalysisSection onOpenDay={onNavigateToDate} />
+      <AnalysisSection
+        onOpenDay={onNavigateToDate}
+        today={today}
+        entries={entries}
+        entriesLoading={loading}
+        entriesError={entriesError}
+        onRetryEntries={retryLoad}
+      />
 
       <div className="mx-auto mt-6 max-w-2xl pb-2">
         <AchievementsPanel />

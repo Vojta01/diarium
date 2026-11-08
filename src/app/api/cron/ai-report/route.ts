@@ -7,6 +7,7 @@ import { guardAIUser } from "@/lib/ai-guard";
 import { getAIModel } from "@/lib/ai-config";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { pushSubscriptionsKey } from "@/lib/push";
+import { deliverStoredWebPushSubscriptions } from "@/lib/push-delivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -305,7 +306,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
     try {
       const json = JSON.parse(raw);
       analysis = json.choices?.[0]?.message?.content?.trim() || "";
-    } catch (_) {}
+    } catch {}
 
     if (!analysis) {
       console.log(`AI returned empty analysis for ${type} (user ${userId}), attempt ${attempt}, resp status ${resp.status}, raw head: ${raw.slice(0, 300)}`);
@@ -337,7 +338,7 @@ async function generateAndSaveReport(userId: string, type: string, userEmail?: s
   return { analysis, fromDate, periodEnd };
 }
 
-async function sendPushNotification(userId: string, title: string, body: string, deepLink?: string) {
+async function sendPushNotification(userId: string, title: string, body: string) {
   try {
     // Variant A: the Android app polls ai_reports itself and shows LOCAL
     // notifications at user-chosen times. The server keeps web push only for
@@ -348,16 +349,7 @@ async function sendPushNotification(userId: string, title: string, body: string,
     // Per-user set: this report belongs to one account, so its push must never
     // reach another account's devices.
     const key = pushSubscriptionsKey(userId);
-    const rawSubs: any[] = await redis.smembers(key);
-    const subscriptions = rawSubs.map((s: any) => {
-      if (typeof s === "string") {
-        try { return JSON.parse(s); } catch { return null; }
-      }
-      return s;
-    }).filter(Boolean);
-
-    if (!subscriptions.length) return;
-
+    const rawSubs: unknown[] = await redis.smembers(key);
     const webpush = await import("web-push");
     webpush.setVapidDetails(
       VAPID_EMAIL,
@@ -367,22 +359,14 @@ async function sendPushNotification(userId: string, title: string, body: string,
 
     const payload = JSON.stringify({ title, body, icon: "/icon-192.png" });
 
-    const results = await Promise.allSettled(
-      subscriptions.map((sub: any) =>
-        webpush.sendNotification(sub, payload)
-      )
-    );
-
-    // Clean up expired subscriptions
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      if (r.status === "rejected") {
-        const err = (r as PromiseRejectedResult).reason;
-        if (err?.statusCode === 410 || err?.statusCode === 404) {
-          await redis.srem(key, rawSubs[i]);
-        }
-      }
-    }
+    await deliverStoredWebPushSubscriptions({
+      key,
+      stored: rawSubs,
+      redis,
+      payload,
+      sendNotification: (subscription, messagePayload) =>
+        webpush.sendNotification(subscription, messagePayload),
+    });
   } catch {}
 }
 
