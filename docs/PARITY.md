@@ -1,35 +1,31 @@
-# Web ↔ Android parity matrix
+# Web ↔ Android feature comparison
 
-Basis: web `0.1.0` and Android `2.0.0-beta5`. Android source of truth:
-`ui/DiariumApp.kt` (Settings order) and `ui/onboarding/OnboardingState.kt`.
+This matrix compares the web implementation in this repository with the separately maintained [native Android project](https://github.com/Vojta01/diarium-android). Web details are checked against the current source here; Android details use that project's public README and the current platform notes in the web app. Confirm release-specific details in the Android repository because it evolves independently.
 
-| Area | Web | Android | Notes |
-|---|---|---|---|
-| Google sign-in | yes | yes | Supabase OAuth in both |
-| Five destinations | yes | yes | Overview, Today, History, Stats, Settings |
-| Language | yes | yes | Web stores `diarium-lang`; Android stores its own preference |
-| Journal data | yes | yes | Same Supabase tables |
-| Goals / scales / templates / achievements | yes | yes | Reachable from Settings → Deník |
-| AI weekly/monthly reports | yes | yes | Server-side DeepSeek on web |
-| CSV export | server-generated | on-device | Same columns, order, quoting, LF, no BOM |
-| PDF export | yes (reduced summary) | no | Web-only |
-| Google Photos picker | yes | no | Web-only |
-| Yearly overview | yes | no | Web-only |
-| About / version / public links | yes | no | Web-only screen |
-| Profile (name, birth year) | no | yes | Android stores it on the phone only |
-| First-run onboarding | no | yes | Android has 4 steps: profile, AI, habits, goals |
-| BYOK AI key | no | yes | Android keeps it encrypted on-device |
-| Notification scheduling | no | yes | Web push is transport only; Android schedules locally |
-| Screen-time collection | no | yes | Android `UsageStatsManager`; web only displays synced data |
-| Theme switch | no | no | Both are dark-only by design |
-| Account deletion | no | no | Known gap — see below |
+| Area | Web app | Native Android |
+|---|---|---|
+| Platform | Next.js 16 installable PWA | Kotlin/Jetpack Compose app; not a WebView wrapper |
+| Sign-in and account | Google sign-in through Supabase Auth; web uses the Diarium Supabase account | Google login to the Diarium account; journal data syncs to the account |
+| Check-in | Mood, stress, sleep, activities, habits, gratitude, notes, weather, custom scales and photos | Mood, activities and habits; optional stress, sleep, gratitude and notes; scales, templates and photos |
+| History and analysis | Dashboard, history/calendar, Year in Pixels, goals, achievements, mood/activity/habit analysis and photo gallery | Mood trends, activity/habit correlations, screen-time insights and yearly pixel calendar |
+| Phone usage data | Does not collect device usage. In `personal` mode it can display phone-usage data synced from Android. | Reads usage statistics on-device through `UsageStatsManager`; Usage Access permission is required for those statistics. |
+| AI reflections/reports | Daily reflection and on-demand weekly, monthly and yearly summaries use server-side DeepSeek routes. | The Android app can schedule weekly/monthly report requests locally. Android also has an encrypted, device-local BYOK AI-key option; the web app has no BYOK setting. |
+| Notifications and scheduling | Browser Web Push can deliver messages to subscribed browsers, but the web app does not schedule reminders. | Schedules reminders and screen-time sync locally; weekly/monthly report requests can run on a local schedule. |
+| Export | CSV plus a reduced-summary PDF. The CSV compatibility test checks the Android column order and formatting. | CSV export; the web test documents and checks its compatibility format. |
+| Photos | Browser camera/file selection and Supabase Storage upload. No Google Photos picker is implemented. | The native project lists photos as a check-in feature; see its repository for storage details. |
+| Profile and first-run setup | Google account sign-in; no web profile form or four-step onboarding flow. | Profile and first-run onboarding are Android-only; the name and birth year are kept on the phone according to the app's platform notes. |
 
-## Known gap: account deletion
+## Web-specific behavior
 
-Neither the web nor Android beta5 can delete an account. Supabase cascades
-`auth.users` → `profiles` / `entries` / goals, but `diary-photos` Storage objects
-are **not** cascaded and would need explicit removal. Because a button that only
-signed the user out would be dishonest, Settings shows no delete action; About
-states the gap in plain language. Implementing deletion requires an
-authenticated `DELETE /api/account/delete` that verifies the user, removes the
-`<userId>/` Storage prefix, deletes the auth user and returns counts.
+- `NEXT_PUBLIC_FEATURES` defaults to `core`. Setting it to `personal` enables the web-only display flags for synced screen time, phone unlocks and sensitive habits; it does not make the browser collect phone-usage data. See [`src/lib/feature-flags.ts`](../src/lib/feature-flags.ts).
+- The web service worker uses a network-first strategy for GET requests, with a timeout and cache fallback. It does not provide an offline write queue.
+- Web Push is a delivery mechanism, not a reminder scheduler. The web UI lets users manage a browser subscription; `vercel.json` currently declares no scheduled jobs.
+- The web PDF is explicitly a reduced summary; do not describe it as a full journal backup. CSV is available separately.
+
+## Source references
+
+- [Android app README](https://github.com/Vojta01/diarium-android) — current native-app requirements and feature overview.
+- [`tests/export-csv-parity.test.ts`](../tests/export-csv-parity.test.ts) — web CSV header/order and formatting compatibility checks.
+- [`src/components/checkin/sections/PhotoSection.tsx`](../src/components/checkin/sections/PhotoSection.tsx) — web camera/gallery file selection and upload behavior.
+- [`src/components/settings/NativeOnlyCard.tsx`](../src/components/settings/NativeOnlyCard.tsx) — platform-specific features the web app does not provide.
+- [`src/components/settings/NotificationsCard.tsx`](../src/components/settings/NotificationsCard.tsx) — web push subscription behavior and lack of a web scheduler.

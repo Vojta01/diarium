@@ -1,4 +1,10 @@
-# Diarium — Code Review & Documentation
+# Archived: Diarium — Code Review & Documentation
+
+> **Historical review snapshot (4 July 2026), not current implementation documentation.** Its
+> project URL, file inventory, endpoint list, findings and recommendations are stale. Use the
+> [current web README](../../README.md) and current source instead.
+
+---
 
 ## 📋 Rychlý přehled
 

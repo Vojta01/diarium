@@ -1,4 +1,10 @@
-# Diarium — BRD (Business Requirements Document)
+# Archived: Diarium — BRD (Business Requirements Document)
+
+> **Historical specification, not current product documentation.** This describes an early
+> GitHub/Obsidian-based design that has since been replaced. Use the [current web README](../../README.md)
+> and [web/Android parity matrix](../PARITY.md) for the implemented product.
+
+---
 
 > Náhrada Daylia — open-source, privacy-first denní check-in app s integrací do Obsidian vaultu.
 > Poslední aktualizace: 2. 7. 2026
