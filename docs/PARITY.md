@@ -29,3 +29,7 @@ This matrix compares the web implementation in this repository with the separate
 - [`src/components/checkin/sections/PhotoSection.tsx`](../src/components/checkin/sections/PhotoSection.tsx) — web camera/gallery file selection and upload behavior.
 - [`src/components/settings/NativeOnlyCard.tsx`](../src/components/settings/NativeOnlyCard.tsx) — platform-specific features the web app does not provide.
 - [`src/components/settings/NotificationsCard.tsx`](../src/components/settings/NotificationsCard.tsx) — web push subscription behavior and lack of a web scheduler.
+
+## Rendered web screenshots
+
+See [English web UI screenshots](screenshots/web/README.md) for desktop and mobile captures rendered from the app's actual components with synthetic local fixtures. The linked page documents the capture method, seed-data scope, and viewport limitations.

@@ -123,6 +123,26 @@ test("Settings has no duplicate public links; About is the canonical home", () =
   assert.match(about, /WEB_PACKAGE_NAME/);
 });
 
+test("About platform copy only claims verified web-only features in both languages", () => {
+  const czechParity = String(lookup(cs, "about.parity"));
+  const englishParity = String(lookup(en, "about.parity"));
+  const czechWebOnly = String(lookup(cs, "about.web_only_body"));
+  const englishWebOnly = String(lookup(en, "about.web_only_body"));
+
+  assert.match(czechParity, /PDF export/);
+  assert.match(englishParity, /PDF export/);
+  assert.match(czechWebOnly, /PDF export je dostupný jen na webu/);
+  assert.match(englishWebOnly, /PDF export is available only on the web/);
+  assert.match(czechWebOnly, /O aplikaci/);
+  assert.match(englishWebOnly, /About screen/);
+  assert.match(czechParity, /Rok v pixelech/);
+  assert.match(englishParity, /Year in Pixels/);
+  assert.doesNotMatch(czechParity, /Google Photos/i);
+  assert.doesNotMatch(englishParity, /Google Photos/i);
+  assert.doesNotMatch(czechWebOnly, /Google Photos|roční přehled|Rok v pixelech/i);
+  assert.doesNotMatch(englishWebOnly, /Google Photos|yearly overview|Year in Pixels/i);
+});
+
 test("About lists honest native-only capabilities without fake controls", () => {
   const native = readFileSync(
     new URL("../src/components/settings/NativeOnlyCard.tsx", import.meta.url),
