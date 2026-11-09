@@ -22,9 +22,12 @@ test("every declared data kind is a non-empty unique string", () => {
 
 test("subscribers receive matching events and stop after unsubscribe", () => {
   const target = new EventTarget();
-  const previousWindow = globalThis.window;
+  const testGlobal = globalThis as unknown as {
+    window: EventTarget | undefined;
+  };
+  const previousWindow = testGlobal.window;
   // subscribeDataChanged only touches `window`; a bare EventTarget is enough.
-  (globalThis as any).window = target;
+  testGlobal.window = target;
 
   let calls = 0;
   const unsubscribe = subscribeDataChanged(["entries"], () => calls++);
@@ -48,5 +51,5 @@ test("subscribers receive matching events and stop after unsubscribe", () => {
   );
   assert.equal(calls, 1, "unsubscribed listener must be removed");
 
-  (globalThis as any).window = previousWindow;
+  testGlobal.window = previousWindow;
 });
