@@ -1,13 +1,33 @@
-const CACHE = "diarium-v7";
+const CACHE = "diarium-v8";
 const PREVIOUS_CACHES = [
   "diarium-v1",
   "diarium-v3",
   "diarium-v4",
   "diarium-v5",
   "diarium-v6",
+  "diarium-v7",
 ];
 const OWNED_CACHES = [CACHE, ...PREVIOUS_CACHES];
 const FETCH_TIMEOUT_MS = 8000;
+
+// These are the app's public shell resources. Arbitrary same-origin paths are
+// deliberately network-only; only immutable Next build assets use a prefix.
+const PUBLIC_STATIC_PATHS = new Set([
+  "/favicon.ico",
+  "/manifest.json",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-512-maskable.png",
+]);
+const SAFE_VARY_HEADERS = new Set([
+  "accept-encoding",
+  "accept-language",
+  "rsc",
+  "next-router-state-tree",
+  "next-router-prefetch",
+  "next-router-segment-prefetch",
+]);
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -59,9 +79,53 @@ function hasPrivateCacheDirective(response) {
   );
 }
 
+function hasUnsafeVary(response) {
+  if (!response.headers.has("Vary")) return false;
+  const vary = response.headers.get("Vary") || "";
+  return vary.split(",").some((header) => {
+    const name = header.trim().toLowerCase();
+    return !name || !SAFE_VARY_HEADERS.has(name);
+  });
+}
+
+function isCacheablePublicResponse(response) {
+  return response.status === 200
+    && response.ok
+    && !response.redirected
+    && !hasPrivateCacheDirective(response)
+    && !hasUnsafeVary(response)
+    && !response.headers.has("Set-Cookie");
+}
+
+function isWhitelistedPublicRequest(request, url) {
+  if (
+    request.method !== "GET"
+    || url.origin !== self.location.origin
+    || url.search
+  ) {
+    return false;
+  }
+
+  if (url.pathname === "/") return request.mode === "navigate";
+  if (PUBLIC_STATIC_PATHS.has(url.pathname)) return true;
+
+  if (!url.pathname.startsWith("/_next/static/")) return false;
+  if (url.pathname.split("/").some((segment) => segment === "." || segment === "..")) return false;
+  return /\.(?:js|css|woff2?|ttf|ico|svg|png|webp|avif)$/i.test(url.pathname);
+}
+
+function createCredentiallessShellRequest(request) {
+  return new Request(request.url, {
+    method: "GET",
+    headers: request.headers,
+    mode: "same-origin",
+    credentials: "omit",
+    redirect: "follow",
+  });
+}
+
 /**
- * Fetch with a timeout. If the network request exceeds the timeout,
- * fall back to the cache (if available) or return a minimal offline page.
+ * Fetch with a timeout. The public shell may use a cached copy if this times out.
  */
 function fetchWithTimeout(request, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -69,67 +133,85 @@ function fetchWithTimeout(request, timeoutMs) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     fetch(request, { signal: controller.signal })
-      .then((res) => {
+      .then((response) => {
         clearTimeout(timer);
-        resolve(res);
+        resolve(response);
       })
-      .catch((err) => {
+      .catch((error) => {
         clearTimeout(timer);
-        reject(err);
+        reject(error);
       });
   });
 }
 
 /**
- * Minimal offline fallback HTML — shown when network-first timeout
- * fires for a navigation request and no cache is available.
- * Links to /sw-reset so the user can recover.
+ * Minimal offline fallback HTML — used only for a root navigation when there
+ * is no safely cached public app shell.
  */
 const OFFLINE_FALLBACK_HTML =
   '<!DOCTYPE html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diarium — offline</title><style>body{background:#0f0f23;color:#a5b4fc;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:2rem}a{color:#6366f1;text-decoration:underline}</style></head><body><div><p>Aplikace je momentálně offline.</p><p style="margin-top:1rem;font-size:0.85rem;color:rgba(165,180,252,0.5)">Zkus <a href="/sw-reset">obnovit aplikaci</a> nebo to zopakuj později.</p></div></body></html>';
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
+  const publicShellNavigation = request.mode === "navigate"
+    && url.pathname === "/"
+    && !url.search;
 
-  // APIs, authenticated requests, and cross-origin requests are network-only.
-  // In particular, never consult an older cache for a user-scoped API result.
+  // Sensitive, authenticated, cross-origin, and non-GET requests are always
+  // network-only. In particular, never consult a prior cache for API exports.
   if (
     isApiRequest(url)
-    || event.request.headers.has("Authorization")
-    || event.request.credentials === "include"
+    || isAuthCallbackRequest(url)
+    || url.pathname === "/sw-reset"
+    || url.pathname === "/sw-reset.html"
+    || request.headers.has("Authorization")
+    || (request.credentials === "include" && !publicShellNavigation)
+    || request.method !== "GET"
     || url.origin !== self.location.origin
   ) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(request));
     return;
   }
 
-  if (event.request.method !== "GET") return;
-
-  // Auth callbacks and reset pages must never be served from CacheStorage.
-  if (isAuthCallbackRequest(url) || url.pathname === "/sw-reset" || url.pathname === "/sw-reset.html") {
-    event.respondWith(fetch(event.request).catch(() => new Response(OFFLINE_FALLBACK_HTML, {
-      status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    })));
+  // An explicit allowlist keeps default same-origin cookies away from generic
+  // routes whose contents may depend on the signed-in account. Navigations are
+  // credentialed by browsers even when the JS default is "same-origin". For
+  // the verified static root shell only, make a credentialless network request
+  // so no account cookie can affect the response that enters CacheStorage.
+  if (!isWhitelistedPublicRequest(request, url)) {
+    event.respondWith(fetch(request));
     return;
   }
+  const cacheRequest = publicShellNavigation && request.credentials === "include"
+    ? createCredentiallessShellRequest(request)
+    : request;
 
-  // For same-origin public GETs: network-first with timeout, cache as fallback.
-  const networkResponse = fetchWithTimeout(event.request, FETCH_TIMEOUT_MS);
-  event.waitUntil(
-    networkResponse
-      .then((res) => {
-        if (!res.ok || hasPrivateCacheDirective(res)) return;
-        return caches.open(CACHE).then((cache) => cache.put(event.request, res.clone()));
-      })
-      .catch(() => {})
-  );
-  event.respondWith(
-    networkResponse.catch(() =>
-      caches.match(event.request).then((cached) => {
-        if (cached && !hasPrivateCacheDirective(cached)) return cached;
-        // For navigation requests, show offline fallback
-        if (event.request.mode === "navigate") {
+  const networkResponse = fetchWithTimeout(cacheRequest, FETCH_TIMEOUT_MS);
+  let cacheWrite = Promise.resolve();
+  const responseForClient = networkResponse.then((response) => {
+    if (isCacheablePublicResponse(response)) {
+      // Clone synchronously before handing the response to respondWith(). Cache
+      // open/write is asynchronous, and must not race with the page consuming it.
+      try {
+        const cacheCopy = response.clone();
+        cacheWrite = caches.open(CACHE)
+          .then((cache) => cache.put(cacheRequest, cacheCopy))
+          .catch(() => {});
+      } catch {}
+    }
+    return response;
+  });
+
+  // Register lifetime synchronously. The clone above occurs in the shared
+  // response promise before the page receives the original body stream.
+  event.waitUntil(responseForClient.then(() => cacheWrite, () => {}));
+  event.respondWith(responseForClient.catch(() =>
+    caches.open(CACHE)
+      .then((cache) => cache.match(cacheRequest))
+      .then((cached) => {
+        if (cached && isCacheablePublicResponse(cached)) return cached;
+        if (publicShellNavigation) {
           return new Response(OFFLINE_FALLBACK_HTML, {
             status: 200,
             headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -137,8 +219,7 @@ self.addEventListener("fetch", (event) => {
         }
         return new Response("Offline", { status: 503 });
       })
-    )
-  );
+  ));
 });
 
 // --- PUSH NOTIFICATIONS ---

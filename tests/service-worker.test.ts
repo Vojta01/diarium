@@ -184,7 +184,7 @@ test("authenticated non-API requests never use stale cache on success or failure
   const request = new Request(url, { headers: { Authorization: "Bearer user-B" } });
 
   let dispatched = dispatchFetch(worker, request);
-  let response = await dispatched.responsePromise;
+  const response = await dispatched.responsePromise;
   await dispatched.lifetimePromise;
   assert.equal(await response.text(), "current account export");
 
@@ -215,9 +215,78 @@ test("credentialed same-origin requests never use stale cache on failure", async
   assert.equal(worker.cacheWrites.length, 0);
 });
 
-test("private and no-store responses are neither cached nor served offline", async () => {
+test("default same-origin credentials do not make an arbitrary GET cacheable", async () => {
+  const url = `${ORIGIN}/account/export.csv`;
+  const worker = createWorker({
+    fetchImpl: async () => {
+      throw new Error("network unavailable");
+    },
+    cacheEntries: {
+      "diarium-v7": [[url, new Response("stale account A export")]],
+      "diarium-v8": [[url, new Response("stale account A export")]],
+    },
+  });
+  const request = new Request(url);
+
+  assert.equal(request.credentials, "same-origin");
+  const dispatched = dispatchFetch(worker, request);
+  await assert.rejects(dispatched.responsePromise, /network unavailable/);
+  await dispatched.lifetimePromise;
+  assert.equal(worker.cacheMatches.length, 0, "non-whitelisted paths must not read CacheStorage");
+  assert.equal(worker.cacheWrites.length, 0, "non-whitelisted paths must not write CacheStorage");
+});
+
+test("public whitelist responses with private or sensitive Vary headers are not cached", async () => {
+  const unsafeHeaders = [
+    { "Cache-Control": "private" },
+    { "Cache-Control": "no-store" },
+    { "Cache-Control": "no-cache" },
+    { Vary: "Cookie" },
+    { Vary: "Authorization" },
+    { Vary: "Accept-Encoding, cOoKiE" },
+    { Vary: "*" },
+    { "Set-Cookie": "synthetic=1; Path=/" },
+  ];
+
+  for (const headers of unsafeHeaders) {
+    const url = `${ORIGIN}/icon-192.png`;
+    const worker = createWorker({
+      fetchImpl: async () => new Response("public-looking but unsafe", { headers }),
+    });
+    const dispatched = dispatchFetch(worker, new Request(url));
+    const response = await dispatched.responsePromise;
+    await dispatched.lifetimePromise;
+    assert.equal(await response.text(), "public-looking but unsafe");
+    assert.equal(worker.cacheWrites.length, 0, JSON.stringify(headers));
+  }
+});
+
+test("Authorization and include-credentialed allowlisted assets bypass CacheStorage", async () => {
+  const url = `${ORIGIN}/icon-192.png`;
+  const cases = [
+    new Request(url, { credentials: "include" }),
+    new Request(url, { headers: { Authorization: "Bearer synthetic-user-B" } }),
+  ];
+
+  for (const request of cases) {
+    const worker = createWorker({
+      fetchImpl: async () => new Response("network public asset"),
+      cacheEntries: {
+        "diarium-v8": [[url, new Response("stale synthetic user-A asset")]],
+      },
+    });
+    const dispatched = dispatchFetch(worker, request);
+    const response = await dispatched.responsePromise;
+    await dispatched.lifetimePromise;
+    assert.equal(await response.text(), "network public asset");
+    assert.equal(worker.cacheMatches.length, 0);
+    assert.equal(worker.cacheWrites.length, 0);
+  }
+});
+
+test("private and no-store whitelisted responses are not served from cache offline", async () => {
   for (const directive of ["private", "no-store", "no-cache", "private, no-store"]) {
-    const url = `${ORIGIN}/account/summary?policy=${encodeURIComponent(directive)}`;
+    const url = `${ORIGIN}/icon-192.png`;
     let online = true;
     const worker = createWorker({
       fetchImpl: async () => {
@@ -227,7 +296,7 @@ test("private and no-store responses are neither cached nor served offline", asy
         });
       },
       cacheEntries: {
-        "diarium-v7": [[
+        "diarium-v8": [[
           url,
           new Response("stale private response", { headers: { "Cache-Control": directive } }),
         ]],
@@ -251,7 +320,7 @@ test("private and no-store responses are neither cached nor served offline", asy
   }
 });
 
-test("OAuth callback URLs bypass CacheStorage on success and failure", async () => {
+test("OAuth callback URLs are network-only on success and failure", async () => {
   const successUrl = `${ORIGIN}/auth-callback.html?code=synthetic-code`;
   const failureUrl = `${ORIGIN}/auth/callback?code=synthetic-code`;
   let online = true;
@@ -261,7 +330,7 @@ test("OAuth callback URLs bypass CacheStorage on success and failure", async () 
       return new Response(`network:${new URL(request.url).pathname}`);
     },
     cacheEntries: {
-      "diarium-v7": [
+      "diarium-v8": [
         [successUrl, new Response("stale callback response")],
         [failureUrl, new Response("stale callback response")],
       ],
@@ -269,16 +338,14 @@ test("OAuth callback URLs bypass CacheStorage on success and failure", async () 
   });
 
   let dispatched = dispatchFetch(worker, new Request(successUrl));
-  let response = await dispatched.responsePromise;
+  const response = await dispatched.responsePromise;
   await dispatched.lifetimePromise;
   assert.equal(await response.text(), "network:/auth-callback.html");
 
   online = false;
   dispatched = dispatchFetch(worker, new Request(failureUrl));
-  response = await dispatched.responsePromise;
+  await assert.rejects(dispatched.responsePromise, /network unavailable/);
   await dispatched.lifetimePromise;
-  assert.equal(response.status, 200);
-  assert.match(await response.text(), /momentálně offline/);
   assert.equal(worker.cacheMatches.length, 0);
   assert.equal(worker.cacheWrites.length, 0);
 });
@@ -307,14 +374,14 @@ test("public same-origin static assets retain cache and offline fallback behavio
   let response = await dispatched.responsePromise;
   await dispatched.lifetimePromise;
   assert.equal(await response.text(), "public asset");
-  assert.deepEqual(worker.cacheWrites, [{ name: "diarium-v7", url: assetUrl }]);
+  assert.deepEqual(worker.cacheWrites, [{ name: "diarium-v8", url: assetUrl }]);
 
   const offlineWorker = createWorker({
     fetchImpl: async () => {
       throw new Error("network unavailable");
     },
     cacheEntries: {
-      "diarium-v7": [[assetUrl, new Response("cached public asset")]],
+      "diarium-v8": [[assetUrl, new Response("cached public asset")]],
     },
   });
   dispatched = dispatchFetch(offlineWorker, new Request(assetUrl));
@@ -332,6 +399,7 @@ test("public same-origin static assets retain cache and offline fallback behavio
     url: `${ORIGIN}/`,
     method: "GET",
     headers: new Headers(),
+    credentials: "same-origin",
     mode: "navigate",
   };
   dispatched = dispatchFetch(offlineNavigationWorker, navigationRequest);
@@ -339,6 +407,55 @@ test("public same-origin static assets retain cache and offline fallback behavio
   await dispatched.lifetimePromise;
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Aplikace je momentálně offline/);
+});
+
+test("public shell is cached and served offline while an unlisted URL is not", async () => {
+  const rootUrl = `${ORIGIN}/`;
+  const navigationRequest = {
+    url: rootUrl,
+    method: "GET",
+    headers: new Headers(),
+    credentials: "same-origin",
+    mode: "navigate",
+  };
+  const worker = createWorker({
+    fetchImpl: async () => new Response("public app shell"),
+  });
+
+  let dispatched = dispatchFetch(worker, navigationRequest);
+  let response = await dispatched.responsePromise;
+  await dispatched.lifetimePromise;
+  assert.equal(await response.text(), "public app shell");
+  assert.deepEqual(worker.cacheWrites, [{ name: "diarium-v8", url: rootUrl }]);
+
+  const offlineWorker = createWorker({
+    fetchImpl: async () => {
+      throw new Error("network unavailable");
+    },
+    cacheEntries: {
+      "diarium-v8": [[rootUrl, new Response("cached public app shell")]],
+    },
+  });
+  dispatched = dispatchFetch(offlineWorker, navigationRequest);
+  response = await dispatched.responsePromise;
+  await dispatched.lifetimePromise;
+  assert.equal(await response.text(), "cached public app shell");
+  assert.deepEqual(offlineWorker.cacheMatches, [{ name: "diarium-v8", url: rootUrl }]);
+
+  const privateUrl = `${ORIGIN}/account/export.csv`;
+  const privateWorker = createWorker({
+    fetchImpl: async () => {
+      throw new Error("network unavailable");
+    },
+    cacheEntries: {
+      "diarium-v8": [[privateUrl, new Response("synthetic account A export")]],
+    },
+  });
+  dispatched = dispatchFetch(privateWorker, new Request(privateUrl));
+  await assert.rejects(dispatched.responsePromise, /network unavailable/);
+  await dispatched.lifetimePromise;
+  assert.equal(privateWorker.cacheMatches.length, 0);
+  assert.equal(privateWorker.cacheWrites.length, 0);
 });
 
 test("service worker does not clear browser storage outside its own caches", () => {
@@ -349,13 +466,14 @@ test("activation removes only known prior Diarium caches and activates the worke
   const worker = createWorker({
     fetchImpl: async () => new Response("unused"),
     cacheEntries: {
-      "diarium-v7": [],
+      "diarium-v8": [],
       "diarium-v1": [],
       "diarium-v2": [],
       "diarium-v3": [],
       "diarium-v4": [],
       "diarium-v5": [],
       "diarium-v6": [],
+      "diarium-v7": [],
       "other-app-cache": [],
     },
   });
@@ -371,8 +489,9 @@ test("activation removes only known prior Diarium caches and activates the worke
     "diarium-v4",
     "diarium-v5",
     "diarium-v6",
+    "diarium-v7",
   ]);
-  assert.deepEqual([...worker.cacheStore.keys()], ["diarium-v7", "diarium-v2", "other-app-cache"]);
+  assert.deepEqual([...worker.cacheStore.keys()], ["diarium-v8", "diarium-v2", "other-app-cache"]);
   assert.deepEqual(worker.lifecycleCalls, ["skipWaiting", "clients.claim"]);
 });
 
@@ -380,13 +499,14 @@ test("self-unregister removes only this app's known caches", async () => {
   const worker = createWorker({
     fetchImpl: async () => new Response("unused"),
     cacheEntries: {
-      "diarium-v7": [],
+      "diarium-v8": [],
       "diarium-v1": [],
       "diarium-v2": [],
       "diarium-v3": [],
       "diarium-v4": [],
       "diarium-v5": [],
       "diarium-v6": [],
+      "diarium-v7": [],
       "other-app-cache": [],
     },
   });
@@ -398,12 +518,13 @@ test("self-unregister removes only this app's known caches", async () => {
   await messageLifetime;
 
   assert.deepEqual(worker.deletedCaches, [
-    "diarium-v7",
+    "diarium-v8",
     "diarium-v1",
     "diarium-v3",
     "diarium-v4",
     "diarium-v5",
     "diarium-v6",
+    "diarium-v7",
   ]);
   assert.deepEqual([...worker.cacheStore.keys()], ["diarium-v2", "other-app-cache"]);
   assert.deepEqual(worker.lifecycleCalls, ["skipWaiting", "registration.unregister"]);
