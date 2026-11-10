@@ -1,4 +1,12 @@
-const CACHE = "diarium-v6";
+const CACHE = "diarium-v7";
+const PREVIOUS_CACHES = [
+  "diarium-v1",
+  "diarium-v3",
+  "diarium-v4",
+  "diarium-v5",
+  "diarium-v6",
+];
+const OWNED_CACHES = [CACHE, ...PREVIOUS_CACHES];
 const FETCH_TIMEOUT_MS = 8000;
 
 self.addEventListener("install", () => {
@@ -7,11 +15,12 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => caches.delete(k)))
-    )
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((key) => PREVIOUS_CACHES.includes(key)).map((key) => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("message", (event) => {
@@ -19,15 +28,36 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
   if (event.data?.type === "UNREGISTER_SELF") {
-    // Graceful self-unregister: skip waiting, delete all caches, unregister
+    // Graceful self-unregister: remove only this app's known caches.
     self.skipWaiting();
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => caches.delete(k)))
-    ).then(() => {
-      self.registration.unregister();
-    });
+    event.waitUntil(
+      caches.keys()
+        .then((keys) => Promise.all(
+          keys.filter((key) => OWNED_CACHES.includes(key)).map((key) => caches.delete(key))
+        ))
+        .then(() => self.registration.unregister())
+    );
   }
 });
+
+function isApiRequest(url) {
+  return url.pathname === "/api" || url.pathname.startsWith("/api/");
+}
+
+function isAuthCallbackRequest(url) {
+  return url.pathname.startsWith("/auth/")
+    || url.pathname === "/auth-callback.html"
+    || url.searchParams.has("code")
+    || url.searchParams.has("access_token")
+    || url.searchParams.has("refresh_token");
+}
+
+function hasPrivateCacheDirective(response) {
+  const cacheControl = response.headers.get("Cache-Control") || "";
+  return cacheControl.split(",").some((directive) =>
+    /^(?:private|no-store|no-cache)(?:\s*=|\s|$)/i.test(directive.trim())
+  );
+}
 
 /**
  * Fetch with a timeout. If the network request exceeds the timeout,
@@ -59,12 +89,24 @@ const OFFLINE_FALLBACK_HTML =
   '<!DOCTYPE html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diarium — offline</title><style>body{background:#0f0f23;color:#a5b4fc;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:2rem}a{color:#6366f1;text-decoration:underline}</style></head><body><div><p>Aplikace je momentálně offline.</p><p style="margin-top:1rem;font-size:0.85rem;color:rgba(165,180,252,0.5)">Zkus <a href="/sw-reset">obnovit aplikaci</a> nebo to zopakuj později.</p></div></body></html>';
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-
   const url = new URL(event.request.url);
 
-  // NEVER cache auth-related pages — they must always hit the network
-  if (url.pathname.startsWith("/auth/") || url.pathname === "/sw-reset" || url.pathname === "/sw-reset.html") {
+  // APIs, authenticated requests, and cross-origin requests are network-only.
+  // In particular, never consult an older cache for a user-scoped API result.
+  if (
+    isApiRequest(url)
+    || event.request.headers.has("Authorization")
+    || event.request.credentials === "include"
+    || url.origin !== self.location.origin
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (event.request.method !== "GET") return;
+
+  // Auth callbacks and reset pages must never be served from CacheStorage.
+  if (isAuthCallbackRequest(url) || url.pathname === "/sw-reset" || url.pathname === "/sw-reset.html") {
     event.respondWith(fetch(event.request).catch(() => new Response(OFFLINE_FALLBACK_HTML, {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -72,29 +114,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For everything else: network-first with timeout, cache as fallback
-  event.respondWith(
-    fetchWithTimeout(event.request, FETCH_TIMEOUT_MS)
+  // For same-origin public GETs: network-first with timeout, cache as fallback.
+  const networkResponse = fetchWithTimeout(event.request, FETCH_TIMEOUT_MS);
+  event.waitUntil(
+    networkResponse
       .then((res) => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, clone));
-        }
-        return res;
+        if (!res.ok || hasPrivateCacheDirective(res)) return;
+        return caches.open(CACHE).then((cache) => cache.put(event.request, res.clone()));
       })
-      .catch(() =>
-        caches.match(event.request).then((cached) => {
-          if (cached) return cached;
-          // For navigation requests, show offline fallback
-          if (event.request.mode === "navigate") {
-            return new Response(OFFLINE_FALLBACK_HTML, {
-              status: 200,
-              headers: { "Content-Type": "text/html; charset=utf-8" },
-            });
-          }
-          return new Response("Offline", { status: 503 });
-        })
-      )
+      .catch(() => {})
+  );
+  event.respondWith(
+    networkResponse.catch(() =>
+      caches.match(event.request).then((cached) => {
+        if (cached && !hasPrivateCacheDirective(cached)) return cached;
+        // For navigation requests, show offline fallback
+        if (event.request.mode === "navigate") {
+          return new Response(OFFLINE_FALLBACK_HTML, {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+        return new Response("Offline", { status: 503 });
+      })
+    )
   );
 });
 
