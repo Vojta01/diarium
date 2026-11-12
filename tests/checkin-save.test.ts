@@ -8,7 +8,7 @@ import {
   type SaveGate,
 } from "../src/lib/checkin/save.ts";
 import { loadCheckIn } from "../src/lib/checkin/load.ts";
-import { emptyCheckIn } from "../src/lib/checkin/model.ts";
+import { emptyCheckIn, hasContent } from "../src/lib/checkin/model.ts";
 import { CheckInError } from "../src/lib/checkin/errors.ts";
 import type { CheckInPayload } from "../src/lib/types.ts";
 
@@ -80,6 +80,13 @@ test("a photo upload blocks saving until the URL is ready", () => {
 
 test("an empty form is not saveable", () => {
   assert.equal(canSave(gate({ hasContent: false })), false);
+});
+
+test("an explicit scale clear is saveable even when it is the only result", () => {
+  const data = emptyCheckIn();
+  data.scaleValues = { "scale-id": 0 };
+  assert.equal(hasContent(data), true);
+  assert.equal(canSave(gate({ hasContent: hasContent(data) })), true);
 });
 
 test("two simultaneous saves produce one POST and one busy result", async () => {

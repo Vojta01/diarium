@@ -35,83 +35,13 @@
     statusEl.appendChild(link);
   }
 
-  function decodePayload(token) {
-    try {
-      var part = token.split(".")[1];
-      if (!part) return null;
-      var normalized = part.replace(/-/g, "+").replace(/_/g, "/");
-      while (normalized.length % 4) normalized += "=";
-      return JSON.parse(atob(normalized));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // The project ref is never hardcoded: prefer the token issuer, then an
-  // existing Supabase session key, so previews/custom domains keep working.
-  function projectRefFromToken(token) {
-    var payload = decodePayload(token);
-    var issuer = payload && typeof payload.iss === "string" ? payload.iss : "";
-    var match = issuer.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co(?:\/|$)/i);
-    return match ? match[1] : null;
-  }
-
-  function projectRefFromStorage() {
-    try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var key = localStorage.key(i) || "";
-        var match = key.match(/^sb-([a-z0-9-]+)-auth-token$/i);
-        if (match) return match[1];
-      }
-    } catch (e) {}
-    return null;
-  }
-
-  function storeImplicitSession(accessToken, hashParams) {
-    var payload = decodePayload(accessToken);
-    if (!payload) return false;
-
-    var ref = projectRefFromToken(accessToken) || projectRefFromStorage();
-    if (!ref) return false;
-
-    var expiresAt = parseInt(hashParams.get("expires_at") || "0", 10);
-    if (!expiresAt && payload.exp) expiresAt = payload.exp;
-    if (!expiresAt) expiresAt = Math.floor(Date.now() / 1000) + 3600;
-
-    var session = {
-      access_token: accessToken,
-      refresh_token: hashParams.get("refresh_token") || "",
-      expires_at: expiresAt,
-      token_type: hashParams.get("token_type") || "bearer",
-      user: {
-        id: payload.sub,
-        email: payload.email,
-        user_metadata: payload.user_metadata || {},
-        app_metadata: payload.app_metadata || {},
-        aud: payload.aud || "authenticated",
-        role: payload.role || "authenticated"
-      }
-    };
-
-    try {
-      localStorage.setItem("sb-" + ref + "-auth-token", JSON.stringify(session));
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   try {
     var hash = window.location.hash.replace(/^#/, "");
     if (hash) {
       var hashParams = new URLSearchParams(hash);
-      var accessToken = hashParams.get("access_token");
-      if (accessToken) {
-        if (storeImplicitSession(accessToken, hashParams)) {
-          window.location.replace("/");
-          return;
-        }
-        // Unknown project ref: let the app callback resolve it from env.
+      if (hashParams.get("access_token")) {
+        // Never interpret JWT claims here. The app route asks Supabase Auth to
+        // validate the token before it stores an identity or opens account data.
         window.location.replace("/auth/callback" + window.location.search + window.location.hash);
         return;
       }
@@ -119,8 +49,7 @@
 
     var params = new URLSearchParams(window.location.search);
     if (params.get("code")) {
-      // PKCE: hand the one-time code to the app route that owns the anon key
-      // and code verifier. Never print it or any session data to the DOM.
+      // PKCE: the app route owns the anon key and code verifier.
       window.location.replace("/auth/callback" + window.location.search);
       return;
     }

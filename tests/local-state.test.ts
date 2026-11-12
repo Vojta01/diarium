@@ -24,12 +24,17 @@ function fakeStorage(initial: Record<string, string>) {
   };
 }
 
-test("logout removes auth tokens, drafts, local goals and the Google token", () => {
+test("logout removes auth tokens, local goals and the Google token, but keeps drafts", () => {
   const storage = fakeStorage({
     "sb-abc-auth-token": "{}",
     "supabase.auth.token": "{}",
-    "diarium_draft_2026-11-07": "{}",
+    "diarium_draft_2026-11-07": "legacy draft",
+    "diarium_draft_2026-11-07_account-a": "account draft",
     "diarium_goals": "[]",
+    "diarium_verified_workspace_v1": JSON.stringify({
+      version: 1,
+      ownerId: "verified-account-a",
+    }),
     "diarium_google_token": "ya29.secret",
     "diarium_google_token_expires_at": "1760000000000",
     "diarium-lang": "cs",
@@ -39,6 +44,8 @@ test("logout removes auth tokens, drafts, local goals and the Google token", () 
   clearUserLocalState(storage);
 
   assert.deepEqual(storage.snapshot(), {
+    "diarium_draft_2026-11-07": "legacy draft",
+    "diarium_draft_2026-11-07_account-a": "account draft",
     "diarium-lang": "cs",
     unrelated: "keep",
   });

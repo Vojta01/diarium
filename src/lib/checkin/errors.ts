@@ -13,6 +13,7 @@ export type CheckInErrorKind =
   | "signed_out"
   | "load_failed"
   | "save_failed"
+  | "conflict"
   | "photo_failed"
   | "ai_failed";
 
@@ -23,7 +24,12 @@ export type CheckInErrorCode =
   | "checkin.error_save_validation"
   | "checkin.error_save_server"
   | "checkin.error_save_network"
+  | "checkin.error_save_conflict"
   | "checkin.error_save_generic"
+  | "checkin.error_pending_storage"
+  | "checkin.error_pending_record"
+  | "checkin.error_pending_cleanup"
+  | "checkin.error_draft_storage"
   | "checkin.photo_error_type"
   | "checkin.photo_error_size"
   | "checkin.photo_error_read"
@@ -77,14 +83,16 @@ export function saveFailedError(status: number, cause?: unknown): CheckInError {
       ? "checkin.error_save_auth"
       : status === 403
         ? "checkin.error_save_forbidden"
-        : status === 400 || status === 422
+        : status === 409
+          ? "checkin.error_save_conflict"
+          : status === 400 || status === 422
           ? "checkin.error_save_validation"
           : status >= 500
             ? "checkin.error_save_server"
             : "checkin.error_save_generic";
 
   return new CheckInError(
-    status === 401 ? "signed_out" : "save_failed",
+    status === 401 ? "signed_out" : status === 409 ? "conflict" : "save_failed",
     code,
     status,
     { cause }
@@ -155,10 +163,28 @@ export function aiPersistError(cause?: unknown): CheckInError {
   );
 }
 
-/**
- * Pass a check-in error through; wrap anything else with the caller's fallback.
- * A raw `TypeError` from `fetch` is a network failure, not a validation one.
- */
+export function isDefinitiveConditionalSaveRejection(
+  error: CheckInError
+): boolean {
+  if (
+    error.code === "checkin.error_save_validation" &&
+    (error.status === 400 || error.status === 422)
+  ) {
+    return true;
+  }
+  if (
+    error.code !== "checkin.error_save_server" ||
+    error.status !== 503 ||
+    !error.cause ||
+    typeof error.cause !== "object" ||
+    Array.isArray(error.cause)
+  ) {
+    return false;
+  }
+  return (error.cause as { code?: unknown }).code === "conditional_save_unavailable";
+}
+
+/** A raw `TypeError` from `fetch` is a network failure, not a validation one. */
 export function toCheckInError(
   error: unknown,
   fallback: CheckInErrorCode = "checkin.error_save_generic"

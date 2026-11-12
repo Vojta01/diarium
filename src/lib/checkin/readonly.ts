@@ -13,6 +13,12 @@ import {
   type GoalProgressData,
 } from "../goal-progress.ts";
 import type { CheckInData, CheckInTopApp } from "../types.ts";
+import { fromEntry } from "./model.ts";
+import { rebaseCheckInData } from "./draft-recovery.ts";
+import {
+  baselineFromEntry,
+  type EntrySaveBaseline,
+} from "./save-v2.ts";
 
 /** Goal progress for the calendar period that contains `date`. */
 export function checkInGoalRows<G extends GoalDefinition>(
@@ -90,6 +96,40 @@ export function reflectionPatch(
 ): ReflectionPatch | null {
   const trimmed = text.trim();
   return trimmed ? { date, ai_reflection: trimmed } : null;
+}
+
+/**
+ * Reconcile the form against the full row returned by the reflection patch.
+ * The reflection endpoint advances the row revision; adopting its current row
+ * prevents our own write from looking like a stale CAS conflict. If another
+ * writer changed form fields meanwhile, untouched values adopt that server row
+ * while post-request local edits remain local.
+ */
+export function reconcileReflectionEntry(input: {
+  ownerId: string;
+  date: string;
+  currentData: CheckInData;
+  previousBaseline: CheckInData;
+  updatedEntry: Record<string, unknown>;
+}): {
+  data: CheckInData;
+  serverData: CheckInData;
+  baseline: EntrySaveBaseline;
+} {
+  if (
+    input.updatedEntry.user_id !== input.ownerId ||
+    input.updatedEntry.date !== input.date
+  ) {
+    throw new TypeError("Reflection patch returned a row outside its owner/date scope");
+  }
+  const baseline = baselineFromEntry(input.updatedEntry);
+  const serverData = fromEntry(input.updatedEntry);
+  const data = rebaseCheckInData(
+    input.currentData,
+    input.previousBaseline,
+    serverData
+  );
+  return { data, serverData, baseline };
 }
 
 export type ReflectionMode =

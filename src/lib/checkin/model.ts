@@ -70,6 +70,7 @@ export const EMPTY_CHECKIN: CheckInData = {
   note: "",
   weather: [],
   photoPath: null,
+  photoCleared: false,
   scaleValues: {},
   phoneScreenTime: null,
   phoneUnlocks: null,
@@ -85,6 +86,7 @@ export function emptyCheckIn(): CheckInData {
     habits: {},
     gratitude: ["", "", ""],
     weather: [],
+    photoCleared: false,
     scaleValues: {},
     phoneTopApps: [],
   };
@@ -191,6 +193,7 @@ export function fromEntry(row: Record<string, unknown>): CheckInData {
     note: typeof row.note === "string" ? row.note : "",
     weather: normalizeWeather(row.weather),
     photoPath: isStoredPhotoUrl(rawPhoto) ? rawPhoto.trim() : null,
+    photoCleared: false,
     scaleValues: numericMap(row.scale_values),
     phoneScreenTime: optionalNumber(row.phone_screen_time),
     phoneUnlocks: optionalNumber(row.phone_unlocks),
@@ -230,6 +233,7 @@ export function fromDraft(raw: unknown): CheckInData {
     note: typeof draft.note === "string" ? draft.note : "",
     weather: normalizeWeather(draft.weather),
     photoPath,
+    photoCleared: draft.photoCleared === true && photoPath === null,
     scaleValues: numericMap(draft.scaleValues),
     // Drafts deliberately exclude worker/AI fields; restoring them from
     // localStorage would show stale data from a previous sync.
@@ -253,9 +257,10 @@ export function toDraft(data: CheckInData): Record<string, unknown> {
     gratitude: data.gratitude,
     note: data.note,
     weather: data.weather,
-    // Storage objects are not draft state: if an edit is abandoned, its staged
-    // upload is removed. Persisting this URL would restore a broken image later.
-    photoPath: null,
+    // Staged uploads survive a reload as owner/date-scoped draft intent. The
+    // lifecycle keeps a persisted staged object until it is saved or discarded.
+    photoPath: isStoredPhotoUrl(data.photoPath) ? data.photoPath : null,
+    photoCleared: data.photoCleared,
     scaleValues: data.scaleValues,
   };
 }
@@ -291,7 +296,8 @@ export function hasContent(data: CheckInData): boolean {
     Object.values(data.habits).some(Boolean) ||
     data.note.trim().length > 0 ||
     data.gratitude.some((value) => value.trim().length > 0) ||
-    Object.values(data.scaleValues).some((value) => value > 0) ||
+    Object.values(data.scaleValues).some((value) => value >= 0) ||
+    data.photoCleared ||
     isStoredPhotoUrl(data.photoPath) ||
     data.weather.length > 0
   );

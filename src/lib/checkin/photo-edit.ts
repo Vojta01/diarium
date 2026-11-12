@@ -1,15 +1,12 @@
 /**
  * Photo replacement is a two-phase edit.
  *
- * Picking a photo uploads it to a NEW object; the entry row is untouched until
- * Save. Abandoning the edit (date change, cancellation, unmount) removes only
- * owner-scoped, unique staged objects. Active saves hold cleanup until their
- * result is known, and cleanup verifies that the URL is not the row's current
- * photo before touching Storage.
+ * Picking a photo uploads a new object; the entry row is untouched until Save.
+ * Abandoning an edit removes only local selection/tracking. Because this browser
+ * cannot prove global references or ownership, no client path deletes objects.
  */
 import {
   isStoredPhotoUrl,
-  photoStoragePathFromUrl,
   stagedPhotoStoragePathFromUrl,
 } from "./photo.ts";
 
@@ -25,8 +22,6 @@ export interface PhotoEditState {
 export interface PhotoSaveIntent {
   photo_path?: string;
   clear_photo?: boolean;
-  /** Previous object that may be deleted after a successful save. */
-  cleanup: string | null;
 }
 
 export function beginPhotoEdit(stored: string | null): PhotoEditState {
@@ -47,143 +42,80 @@ export function clearPhoto(state: PhotoEditState): PhotoEditState {
 }
 
 /**
- * What Save should send, and which old object (if any) can be removed after the
- * row is written. An untouched edit sends nothing and cleans up nothing.
+ * What Save should send. Physical object cleanup is deliberately not part of
+ * this client intent: removing a row reference does not prove the blob is unused.
  */
 export function photoSaveIntent(state: PhotoEditState): PhotoSaveIntent {
   const stored = state.stored;
   const staged = state.staged;
 
   if (staged) {
-    return {
-      photo_path: staged,
-      cleanup: stored && stored !== staged ? stored : null,
-    };
+    return { photo_path: staged };
   }
 
   if (state.cleared && stored) {
-    return { clear_photo: true, cleanup: stored };
+    return { clear_photo: true };
   }
 
-  return { cleanup: null };
+  return {};
 }
 
 /**
- * Abandoning an edit never touches the stored row/object. The staged object is
- * an orphan and may be removed best-effort.
+ * Abandoning an edit changes only local selection. Both remote objects are
+ * retained; the staged URL is exposed so callers can explain the orphan tradeoff.
  */
 export function photoAbandonIntent(state: PhotoEditState): {
-  cleanupStaged: string | null;
-  cleanupStored: null;
+  retainedStaged: string | null;
+  retainedStored: string | null;
 } {
-  return { cleanupStaged: state.staged, cleanupStored: null };
-}
-
-export type StagedPhotoCleanup = (
-  url: string,
-  date: string
-) => Promise<unknown>;
-
-export interface StagedPhotoCleanupDependencies {
-  /** The currently authenticated owner, resolved from the client session. */
-  getOwner: () => Promise<string | null>;
-  /** Must throw if the row cannot be read; unknown is not safe to delete. */
-  readCurrentPhoto: (ownerId: string, date: string) => Promise<string | null>;
-  /** Remove exactly one validated path from the existing photo bucket. */
-  remove: (ownerId: string, path: string) => Promise<unknown>;
-  /** Supabase project origin used to reject foreign URLs. */
-  expectedOrigin: string;
-}
-
-/**
- * Create the secure cleanup callback used for uncommitted uploads. It fails
- * closed on auth/read errors, rejects originals and foreign owners, and checks
- * the current row immediately before removal to protect a save whose response
- * may have been lost.
- */
-export function createStagedPhotoCleanup(
-  dependencies: StagedPhotoCleanupDependencies
-): (url: string, date: string) => Promise<boolean> {
-  return async (url, date) => {
-    let ownerId: string | null;
-    try {
-      ownerId = await dependencies.getOwner();
-    } catch {
-      return false;
-    }
-    if (!ownerId) return false;
-
-    const path = stagedPhotoStoragePathFromUrl(
-      url,
-      ownerId,
-      date,
-      dependencies.expectedOrigin
-    );
-    if (!path) return false;
-
-    let currentPhoto: string | null;
-    try {
-      currentPhoto = await dependencies.readCurrentPhoto(ownerId, date);
-    } catch {
-      // A failed read is not proof that the staged URL is unused.
-      return false;
-    }
-    if (photoStoragePathFromUrl(currentPhoto) === path) return false;
-
-    await dependencies.remove(ownerId, path);
-    return true;
-  };
+  return { retainedStaged: state.staged, retainedStored: state.stored };
 }
 
 interface StagedUpload {
   ownerId: string;
   date: string;
   url: string;
-  abandoned: boolean;
+  /** A durable local draft or pending request references this staged object. */
+  persisted: boolean;
   committed: boolean;
   /** The server may still commit after the client lost the response. */
   uncertain: boolean;
   saves: number;
-  cleaning: boolean;
+  /** A local selection was discarded while a save lease was still active. */
+  discardRequested: boolean;
 }
 
 export interface PhotoSaveLease {
-  /** Call exactly once when the save settles; unknown preserves the object. */
+  /** Call exactly once when the save settles; unknown keeps it tracked. */
   finish(outcome: boolean | "unknown"): Promise<void>;
 }
 
 /**
- * Tracks staged uploads in one mounted check-in. A cleanup request is deferred
- * while a save for that URL is pending; a successful save permanently protects
- * its object. An ambiguous network failure also keeps the object because the
- * server may still commit it after the client loses the response. The injected
- * cleanup callback remains the security boundary.
+ * Tracks staged uploads in one mounted check-in. This browser has no globally
+ * authoritative reference/ownership view, so discard and abandonment remove
+ * only in-memory tracking; remote storage objects are never deleted here.
  */
 export function createPhotoEditLifecycle(
-  cleanup: StagedPhotoCleanup,
   expectedOrigin?: string
 ) {
   const staged = new Map<string, StagedUpload>();
   const keyFor = (ownerId: string, url: string) => `${ownerId}\u0000${url}`;
 
-  const cleanupIfSafe = (item: StagedUpload): Promise<void> => {
+  const forgetTrackingAfterDiscard = (item: StagedUpload): Promise<void> => {
     if (
-      !item.abandoned ||
+      !item.discardRequested ||
       item.committed ||
       item.uncertain ||
-      item.saves > 0 ||
-      item.cleaning
+      item.saves > 0
     ) {
       return Promise.resolve();
     }
 
-    item.cleaning = true;
-    return Promise.resolve()
-      .then(() => cleanup(item.url, item.date))
-      .then(() => undefined, () => undefined)
-      .finally(() => {
-        staged.delete(keyFor(item.ownerId, item.url));
-      });
+    // This is a local bookkeeping operation only. Do not call Storage.remove:
+    // drafts or pending requests on other dates, accounts, tabs, or devices
+    // may still reference this URL, including from an older client bundle.
+    staged.delete(keyFor(item.ownerId, item.url));
+    return Promise.resolve();
   };
 
   return {
@@ -197,31 +129,47 @@ export function createPhotoEditLifecycle(
       }
       const key = keyFor(ownerId, url);
       const existing = staged.get(key);
-      if (existing) return !existing.abandoned && !existing.cleaning;
+      if (existing) {
+        if (existing.persisted) {
+          existing.discardRequested = false;
+        }
+        return !existing.discardRequested;
+      }
       staged.set(key, {
         ownerId,
         date,
         url,
-        abandoned: false,
+        persisted: false,
         committed: false,
         uncertain: false,
         saves: 0,
-        cleaning: false,
+        discardRequested: false,
       });
       return true;
     },
 
-    /** Mark one superseded/cancelled upload for best-effort cleanup. */
+    /** Protect a staged object while a durable local snapshot references it. */
+    preserve(ownerId: string, date: string, url: string): boolean {
+      const item = staged.get(keyFor(ownerId, url));
+      if (!item || item.date !== date || item.committed) {
+        return false;
+      }
+      item.persisted = true;
+      item.discardRequested = false;
+      return true;
+    },
+
+    /** Drop local tracking for one superseded/cancelled upload. */
     discard(ownerId: string, date: string, url: string): Promise<void> {
       const item = staged.get(keyFor(ownerId, url));
       if (!item || item.date !== date || item.committed) {
         return Promise.resolve();
       }
-      item.abandoned = true;
-      return cleanupIfSafe(item);
+      item.discardRequested = true;
+      return forgetTrackingAfterDiscard(item);
     },
 
-    /** Hold an upload during POST so unmount cannot delete a committed photo. */
+    /** Hold tracking during POST so its result remains attributable. */
     beginSave(
       ownerId: string,
       date: string,
@@ -233,9 +181,8 @@ export function createPhotoEditLifecycle(
       if (
         !item ||
         item.date !== date ||
-        item.abandoned ||
-        item.committed ||
-        item.cleaning
+        item.discardRequested ||
+        item.committed
       ) {
         return null;
       }
@@ -247,12 +194,15 @@ export function createPhotoEditLifecycle(
           if (settled) return Promise.resolve();
           settled = true;
           item.saves -= 1;
-          if (outcome === "unknown") item.uncertain = true;
+          if (outcome === "unknown") {
+            item.uncertain = true;
+            item.discardRequested = false;
+          }
           if (outcome === true) {
             item.committed = true;
             staged.delete(key);
           }
-          return cleanupIfSafe(item);
+          return forgetTrackingAfterDiscard(item);
         },
       };
     },
@@ -261,9 +211,14 @@ export function createPhotoEditLifecycle(
     abandonDate(date: string): Promise<void> {
       const pending: Promise<void>[] = [];
       for (const item of staged.values()) {
-        if (item.date !== date || item.committed) continue;
-        item.abandoned = true;
-        pending.push(cleanupIfSafe(item));
+        if (
+          item.date !== date ||
+          item.committed ||
+          item.uncertain ||
+          (item.persisted && !item.discardRequested)
+        ) continue;
+        item.discardRequested = true;
+        pending.push(forgetTrackingAfterDiscard(item));
       }
       return Promise.all(pending).then(() => undefined);
     },
@@ -272,36 +227,57 @@ export function createPhotoEditLifecycle(
     abandonAll(): Promise<void> {
       const pending: Promise<void>[] = [];
       for (const item of staged.values()) {
-        if (item.committed) continue;
-        item.abandoned = true;
-        pending.push(cleanupIfSafe(item));
+        if (
+          item.committed ||
+          item.uncertain ||
+          (item.persisted && !item.discardRequested)
+        ) continue;
+        item.discardRequested = true;
+        pending.push(forgetTrackingAfterDiscard(item));
       }
       return Promise.all(pending).then(() => undefined);
     },
   };
 }
 
+export async function persistDraftBeforePhotoTrackingReset(options: {
+  persist: () => unknown | Promise<unknown>;
+  ownerId: string;
+  date: string;
+  photoUrl: string | null;
+  preserve: (ownerId: string, date: string, url: string) => unknown;
+  abandon: () => Promise<void>;
+}): Promise<void> {
+  if (options.photoUrl) {
+    try {
+      options.preserve(options.ownerId, options.date, options.photoUrl);
+    } catch {
+      // Local persistence can fail; remote cleanup is still unavailable.
+    }
+  }
+  try {
+    // Wait for the locked revision write before dropping local tracking.
+    await options.persist();
+  } catch {
+    // Even if storage fails, keep the staged object rather than lose its URL.
+  }
+  await options.abandon();
+}
+
 /**
  * Resolve an upload after the async request completes. If the picker has been
- * cancelled, its date changed, or its component unmounted, delete the returned
- * staged object instead of attaching it to form state.
+ * cancelled, its date changed, or its component unmounted, drop the local
+ * selection instead of attaching it. The remote upload is retained.
  */
 export async function finishPhotoUpload(options: {
-  date: string;
   upload: () => Promise<string>;
   isCurrent: () => boolean;
   onStage: (url: string) => void;
-  cleanup: StagedPhotoCleanup;
 }): Promise<"staged" | "discarded"> {
   const url = await options.upload();
   if (!isStoredPhotoUrl(url)) throw new Error("Photo upload returned an invalid URL");
 
   if (!options.isCurrent()) {
-    try {
-      await options.cleanup(url, options.date);
-    } catch {
-      // Cleanup is best-effort; cancellation must not surface as upload failure.
-    }
     return "discarded";
   }
 

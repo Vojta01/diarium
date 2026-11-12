@@ -1,10 +1,11 @@
 /**
  * OAuth redirect resolution.
  *
- * The callback is a static HTML page (`public/auth-callback.html`) that handles
- * the implicit-flow token hash. It must live on the same origin the user is
- * actually browsing: hardcoding the production host breaks local development,
- * preview deployments and the custom domain.
+ * The callback is a static HTML page (`public/auth-callback.html`) that forwards
+ * implicit-flow token hashes to the app callback for Supabase Auth verification.
+ * It must live on the same origin the user is actually browsing: hardcoding the
+ * production host breaks local development, preview deployments and the custom
+ * domain.
  */
 
 export const AUTH_CALLBACK_PATH = "/auth-callback.html";

@@ -1,10 +1,12 @@
 /**
  * Per-user local state cleanup on logout.
  *
- * Auth tokens alone are not enough: check-in drafts, locally stored goals and
- * the Google Photos access token would otherwise be visible to (or usable by)
- * the next account on a shared device.
+ * Remove auth and account-wide integrations on logout. Check-in drafts are
+ * retained for recovery and are scoped to their verified owner; ownerless
+ * legacy drafts must not be reassigned or deleted automatically.
  */
+
+import { VERIFIED_WORKSPACE_KEY } from "./auth/verified-session.ts";
 
 export interface RemovableStorage {
   readonly length: number;
@@ -22,7 +24,7 @@ export function clearUserLocalState(storage: RemovableStorage): void {
   for (const key of keys) {
     const isAuth = key.startsWith("sb-") || key.includes("supabase");
     const isUserData =
-      key.startsWith("diarium_draft_") ||
+      key === VERIFIED_WORKSPACE_KEY ||
       key === "diarium_goals" ||
       key === "diarium_google_token" ||
       key === "diarium_google_token_expires_at";

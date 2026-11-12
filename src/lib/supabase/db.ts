@@ -10,6 +10,8 @@ import { mergeActiveHabitCatalog } from "../analysis/habit-catalog.ts";
 import { pragueDateKey } from "../date.ts";
 import { buildEntryRow, type EntryRowInput } from "../entry-row.ts";
 import type { CheckInPayload } from "../types.ts";
+import type { EntrySaveBaseline, PendingSaveRequest } from "../checkin/save-v2.ts";
+import { validatePendingSaveRequest } from "../checkin/save-v2.ts";
 import {
   CheckInError,
   isCheckInError,
@@ -18,8 +20,7 @@ import {
   saveFailedError,
   saveNetworkError,
 } from "../checkin/errors.ts";
-import { isStoredPhotoUrl, PHOTO_BUCKET, photoUploadStoragePath, photoStoragePathFromUrl } from "../checkin/photo.ts";
-import { createStagedPhotoCleanup } from "../checkin/photo-edit.ts";
+import { isStoredPhotoUrl, PHOTO_BUCKET, photoUploadStoragePath } from "../checkin/photo.ts";
 
 export type { CheckInPayload } from "../types.ts";
 
@@ -34,6 +35,8 @@ export interface Profile {
 
 export interface Entry {
   id: string;
+  /** Server-owned CAS token. Check-in reads require it before enabling saves. */
+  revision?: number;
   user_id: string;
   date: string;
   mood: number;
@@ -126,18 +129,56 @@ export async function getProfile(): Promise<Profile | null> {
 
 // ── Entries ──
 
-/**
- * Save the form through the internal service-role route.
- *
- * Photos are uploaded before this call (`uploadCheckInPhoto`), so this function
- * never receives image bytes and cannot fall back to storing base64 in the row.
- */
-export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
+/** Token that was loaded from the server before editing this date. */
+export interface CheckInSaveSnapshot {
+  baseline: EntrySaveBaseline;
+  requestId: string;
+}
+
+export interface CheckInSaveResponse {
+  entry: Entry;
+  replayed: boolean;
+}
+
+/** Save a foreground check-in through the authenticated conditional-save route. */
+export function saveEntry(
+  request: PendingSaveRequest
+): Promise<CheckInSaveResponse>;
+export function saveEntry(
+  payload: CheckInPayload,
+  snapshot: CheckInSaveSnapshot
+): Promise<CheckInSaveResponse>;
+export async function saveEntry(
+  payloadOrRequest: CheckInPayload | PendingSaveRequest,
+  snapshot?: CheckInSaveSnapshot
+): Promise<CheckInSaveResponse> {
   const user = await getCurrentUser();
   if (!user) {
     throw new CheckInError("signed_out", "checkin.error_save_auth", 401);
   }
 
+  if ("version" in payloadOrRequest && payloadOrRequest.version === 1) {
+    try {
+      validatePendingSaveRequest(payloadOrRequest);
+    } catch (error) {
+      throw new CheckInError("save_failed", "checkin.error_save_validation", 400, {
+        cause: error,
+      });
+    }
+    if (payloadOrRequest.ownerId !== user.id) {
+      throw new CheckInError("save_failed", "checkin.error_save_forbidden", 403);
+    }
+    // The serialized request body is immutable. A retry never reconstructs it
+    // from a potentially newer form or stores/replays a bearer credential.
+    return postConditionalEntryBody(payloadOrRequest.body);
+  }
+
+  if (!snapshot) {
+    throw new CheckInError("save_failed", "checkin.error_save_validation", 400);
+  }
+  // The pending-save branch above is the only runtime shape with a `version`
+  // tag; the overload leaves the legacy payload branch as CheckInPayload.
+  const payload = payloadOrRequest as CheckInPayload;
   const entryDate = payload.date || pragueDateKey();
 
   let row: Record<string, unknown>;
@@ -155,13 +196,21 @@ export async function saveEntry(payload: CheckInPayload): Promise<Entry> {
         });
   }
 
-  // `clear_photo` is a directive for the route (delete the Storage object), not
-  // a column: `buildEntryRow` turns it into `photo_path: null` and drops the
-  // flag, so it must be re-attached to the body the route receives.
-  const body =
-    payload.clear_photo === true ? { ...row, clear_photo: true } : row;
+  const body: Record<string, unknown> = {
+    ...row,
+    expected_exists: snapshot.baseline.exists,
+    expected_id: snapshot.baseline.exists ? snapshot.baseline.id : null,
+    expected_revision: snapshot.baseline.exists
+      ? snapshot.baseline.revision
+      : null,
+    request_id: snapshot.requestId,
+  };
+  if (payload.clear_photo === true) body.clear_photo = true;
+  if (payload.clear_scale_ids !== undefined) {
+    body.clear_scale_ids = [...payload.clear_scale_ids];
+  }
 
-  return postEntryRow(body);
+  return postConditionalEntryBody(JSON.stringify(body));
 }
 
 /** Persist an AI reflection as a partial patch; no form fields are resent. */
@@ -180,6 +229,48 @@ export async function patchEntry(patch: {
     ai_reflection: patch.ai_reflection,
   });
   return postEntryRow(row);
+}
+
+async function postConditionalEntryBody(body: string): Promise<CheckInSaveResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new CheckInError("signed_out", "checkin.error_save_auth", 401);
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  let res: Response;
+  try {
+    res = await fetch("/api/save-entry", {
+      method: "POST",
+      headers,
+      body,
+    });
+  } catch (error) {
+    throw saveNetworkError(error);
+  }
+
+  const bodyJson = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw saveFailedError(res.status, bodyJson);
+  }
+  const replayHeader = res.headers.get("X-Diarium-Replayed");
+  if (
+    !bodyJson ||
+    typeof bodyJson !== "object" ||
+    typeof bodyJson.id !== "string" ||
+    typeof bodyJson.user_id !== "string" ||
+    typeof bodyJson.date !== "string" ||
+    typeof bodyJson.revision !== "number" ||
+    !Number.isSafeInteger(bodyJson.revision) ||
+    bodyJson.revision < 1 ||
+    (replayHeader !== "true" && replayHeader !== "false")
+  ) {
+    throw saveFailedError(503, new Error("Conditional save response omitted its row revision or replay status"));
+  }
+  return { entry: bodyJson as Entry, replayed: replayHeader === "true" };
 }
 
 async function postEntryRow(row: Record<string, unknown>): Promise<Entry> {
@@ -244,72 +335,12 @@ export async function uploadCheckInPhoto(
     });
     if (error) throw error;
   } catch (error) {
-    // A failed response can follow a server-side write. The generated URL is
-    // still checked against the row and the authenticated owner before removal.
-    await deleteStagedCheckInPhoto(publicUrl, date);
+    // A failed response can follow a server-side write. Keep the generated
+    // object: browser-local references cannot prove global non-ownership.
     throw photoError("checkin.photo_error_upload", error);
   }
 
   return publicUrl;
-}
-
-/**
- * Best-effort removal of a replaced/cleared object. Never throws: the row is
- * already the source of truth, and a failed cleanup is only an orphan.
- */
-export async function deleteCheckInPhoto(url: string | null): Promise<void> {
-  const path = photoStoragePathFromUrl(url);
-  if (!path) return;
-  try {
-    const sb = await getAuthenticatedClientReady();
-    const { error } = await sb.storage.from(PHOTO_BUCKET).remove([path]);
-    if (error) console.error("photo cleanup error:", error);
-  } catch (error) {
-    console.error("photo cleanup error:", error);
-  }
-}
-
-const cleanupStagedPhoto = createStagedPhotoCleanup({
-  getOwner: async () => (await getCurrentUser())?.id ?? null,
-  readCurrentPhoto: async (ownerId, date) => {
-    const user = await getCurrentUser();
-    if (!user || user.id !== ownerId) {
-      throw new Error("Photo cleanup owner changed before row verification");
-    }
-    const entry = await getEntryOrThrow(date);
-    if (entry && entry.user_id !== ownerId) {
-      throw new Error("Photo cleanup row is not owned by the current user");
-    }
-    return entry?.photo_path ?? null;
-  },
-  remove: async (ownerId, path) => {
-    const user = await getCurrentUser();
-    if (!user || user.id !== ownerId) {
-      throw new Error("Photo cleanup owner changed before object removal");
-    }
-    const sb = await getAuthenticatedClientReady();
-    const { error } = await sb.storage.from(PHOTO_BUCKET).remove([path]);
-    if (error) throw error;
-  },
-  expectedOrigin: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-});
-
-/**
- * Best-effort deletion of an uncommitted staged object. Cleanup is restricted
- * to the authenticated owner's unique date-scoped upload and first verifies
- * that the current row does not reference it. A failed read leaves the object
- * untouched rather than risking deletion of a committed photo.
- */
-export async function deleteStagedCheckInPhoto(
-  url: string | null,
-  date: string
-): Promise<void> {
-  if (!url) return;
-  try {
-    await cleanupStagedPhoto(url, date);
-  } catch (error) {
-    console.error("staged photo cleanup error:", error);
-  }
 }
 
 /** Načte entries pro dané období */
@@ -361,7 +392,23 @@ export async function getEntryOrThrow(date: string): Promise<Entry | null> {
   }
   if (!rows || rows.length === 0) return null;
 
-  return normalizeEntryRow(rows[0] as Record<string, unknown>);
+  const raw = rows[0] as Record<string, unknown>;
+  const revision =
+    typeof raw.revision === "number"
+      ? raw.revision
+      : typeof raw.revision === "string" && /^\d+$/.test(raw.revision)
+        ? Number(raw.revision)
+        : NaN;
+  if (
+    typeof raw.id !== "string" ||
+    !Number.isSafeInteger(revision) ||
+    revision < 1
+  ) {
+    // Absence of the v2 revision column is not an "empty day". Keep the local
+    // draft and block editing rather than permitting a blind legacy save.
+    throw loadFailedError(new Error("Loaded entry has no usable CAS revision"), 503);
+  }
+  return normalizeEntryRow({ ...raw, revision });
 }
 
 /**

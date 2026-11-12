@@ -101,15 +101,15 @@ test("ErrorBoundary never clears the stored session", () => {
   assert.match(source, /window\.location\.reload/);
 });
 
-test("deep links are parsed before the stored-session early return", () => {
+test("deep links are parsed before verified-session bootstrap", () => {
   const source = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   const parseIndex = source.indexOf("parseNavFromSearch(window.location.search)");
-  const storedIndex = source.indexOf("localStorage.getItem(getSupabaseAuthTokenKey())");
+  const verificationIndex = source.indexOf("void persistVerifiedSession");
 
   assert.ok(parseIndex > 0, "page must parse the navigation deep link");
-  assert.ok(storedIndex > 0, "page must still read the stored session");
+  assert.ok(verificationIndex > 0, "page must verify the stored session");
   assert.ok(
-    parseIndex < storedIndex,
-    "?edit= must be parsed before the stored session returns early"
+    parseIndex < verificationIndex,
+    "deep links must be available before the verified session returns early"
   );
 });

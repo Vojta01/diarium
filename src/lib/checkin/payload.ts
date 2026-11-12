@@ -37,6 +37,16 @@ export function buildCheckInPayload(
     scale_values: { ...data.scaleValues },
   };
 
+  const clearScaleIds = Object.entries(data.scaleValues)
+    .filter(([, value]) => value === 0)
+    .map(([scaleId]) => scaleId)
+    .sort();
+  if (clearScaleIds.length > 0) {
+    // SQL v2 does not infer deletion from a zero. It uses this explicit list to
+    // remove exactly these JSON keys and mirror rows in the same transaction.
+    payload.clear_scale_ids = clearScaleIds;
+  }
+
   if (photoPath) {
     payload.photo_path = photoPath;
   } else if (options.clearPhoto) {

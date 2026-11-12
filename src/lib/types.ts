@@ -32,6 +32,8 @@ export interface CheckInData {
   weather: string[];
   /** Public Storage URL only. A legacy `data:` value is never treated as a path. */
   photoPath: string | null;
+  /** Persisted explicit removal; absence of a photo alone means preserve. */
+  photoCleared: boolean;
   /** Includes 0 for a cleared visible scale so the route can delete its mirror row. */
   scaleValues: Record<string, number>;
   // ── Read-only: copied from the row, never written by the form ──
@@ -65,6 +67,8 @@ export interface CheckInPayload {
   photo_path?: string | null;
   /** Explicit removal; only valid when no new `photo_path` is supplied. */
   clear_photo?: boolean;
+  /** V2 removes these scale keys and mirrors atomically; zero alone is not clear. */
+  clear_scale_ids?: string[];
   scale_values?: Record<string, number>;
   phone_screen_time?: number | null;
   phone_unlocks?: number | null;

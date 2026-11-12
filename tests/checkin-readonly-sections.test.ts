@@ -276,8 +276,10 @@ test("the screen's reflection flow sends the builder body and a partial patch", 
   assert.match(screen, /buildReflectionRequest\(/);
   assert.match(screen, /body: JSON\.stringify\(requestBody\)/);
   assert.match(screen, /reflectionPatch\(/);
-  assert.equal(screen.includes("...entryData"), false);
-  assert.equal(screen.includes("...data"), false);
+  const requestStart = screen.indexOf("const requestBody = buildReflectionRequest");
+  const requestEnd = screen.indexOf("fetch(\"/api/ai/reflect\"", requestStart);
+  assert.ok(requestStart >= 0 && requestEnd > requestStart);
+  assert.doesNotMatch(screen.slice(requestStart, requestEnd), /\.\.\.(?:entryData|data)/);
   // The auto-request is skipped when the saved row already has a reflection.
   assert.match(screen, /if \(!savedData\.aiReflection\)/);
 });

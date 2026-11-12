@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -9,19 +9,51 @@ import test from "node:test";
 const CHROME = process.env.CHROME_BIN || "/usr/bin/google-chrome";
 const workerSource = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 
+type FixtureRequest = { path: string; cookie: string };
+type Fixture = {
+  server: ReturnType<typeof createServer>;
+  requests: FixtureRequest[];
+  state: { online: boolean };
+  origin: string;
+};
+type CdpMessage = {
+  id?: number;
+  method?: string;
+  sessionId?: string;
+  params?: Record<string, unknown>;
+  result?: unknown;
+  error?: { message?: string };
+};
+type RuntimeEvaluation = {
+  exceptionDetails?: { text: string };
+  result: { value: unknown };
+};
+type CdpClient = {
+  onMessage(listener: (message: CdpMessage) => void): void;
+  call<T = unknown>(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<T>;
+  close(): void;
+};
+type ChromeVersion = { webSocketDebuggerUrl: string };
+type BrowserSession = {
+  chrome: ChildProcess;
+  version: ChromeVersion;
+  stderr: () => string;
+};
+
 async function unusedPort() {
   const server = createNetServer();
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
+    server.listen({ port: 0, host: "127.0.0.1" }, () => resolve(undefined));
   });
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Could not read the ephemeral port");
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return address.port;
 }
 
-async function createFixtureServer() {
-  const requests = [];
+async function createFixtureServer(): Promise<Fixture> {
+  const requests: FixtureRequest[] = [];
   const state = { online: true };
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Diarium browser fixture</title></head>
 <body><main id="app-shell">Diarium public shell fixture</main><script>
@@ -42,7 +74,7 @@ sessionStorage.setItem("fixture-load-count", String(window.__fixtureLoadId));
 </script></body></html>`;
 
   const server = createServer((request, response) => {
-    const url = new URL(request.url || "/", `http://${request.headers.host}`);
+    const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
     requests.push({ path: `${url.pathname}${url.search}`, cookie: request.headers.cookie || "" });
     if (!state.online) {
       request.socket.destroy();
@@ -73,7 +105,7 @@ sessionStorage.setItem("fixture-load-count", String(window.__fixtureLoadId));
       return;
     }
     if (url.pathname === "/account/export.csv" || url.pathname === "/api/export/csv") {
-      const account = request.headers.cookie.includes("account=B") ? "B" : "A";
+      const account = (request.headers.cookie || "").includes("account=B") ? "B" : "A";
       response.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
       response.end(`synthetic account ${account} export`);
       return;
@@ -88,40 +120,47 @@ sessionStorage.setItem("fixture-load-count", String(window.__fixtureLoadId));
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
+    server.listen({ port: 0, host: "127.0.0.1" }, () => resolve(undefined));
   });
-  const { port } = server.address();
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Could not read the fixture port");
+  const { port } = address;
   return { server, requests, state, origin: `http://127.0.0.1:${port}` };
 }
 
-async function connectCdp(url) {
+async function connectCdp(url: string): Promise<CdpClient> {
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => {
     socket.addEventListener("open", resolve, { once: true });
     socket.addEventListener("error", reject, { once: true });
   });
   let sequence = 0;
-  const pending = new Map();
-  const listeners = new Set();
+  const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+  const listeners = new Set<(message: CdpMessage) => void>();
   socket.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id && pending.has(message.id)) {
-      const { resolve, reject } = pending.get(message.id);
+    const message = JSON.parse(String(event.data)) as CdpMessage;
+    if (typeof message.id === "number") {
+      const pendingCall = pending.get(message.id);
+      if (!pendingCall) return;
       pending.delete(message.id);
-      if (message.error) reject(new Error(message.error.message));
-      else resolve(message.result);
+      if (message.error) pendingCall.reject(new Error(message.error.message || "Chrome DevTools command failed"));
+      else pendingCall.resolve(message.result);
       return;
     }
     for (const listener of listeners) listener(message);
   });
   return {
-    onMessage(listener) { listeners.add(listener); },
-    call(method, params = {}, sessionId) {
+    onMessage(listener: (message: CdpMessage) => void) { listeners.add(listener); },
+    call<T = unknown>(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<T> {
       const id = ++sequence;
-      const message = { id, method, params };
+      const message: { id: number; method: string; params: Record<string, unknown>; sessionId?: string } = {
+        id,
+        method,
+        params,
+      };
       if (sessionId) message.sessionId = sessionId;
-      return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
+      return new Promise<T>((resolve, reject) => {
+        pending.set(id, { resolve: (value) => resolve(value as T), reject });
         socket.send(JSON.stringify(message));
       });
     },
@@ -129,38 +168,38 @@ async function connectCdp(url) {
   };
 }
 
-async function waitForPage(cdp, sessionId, expression, timeoutMs = 15000) {
+async function waitForPage<T = unknown>(cdp: CdpClient, sessionId: string, expression: string, timeoutMs = 15000): Promise<T> {
   const expires = Date.now() + timeoutMs;
-  let lastError;
+  let lastError: unknown;
   while (Date.now() < expires) {
     try {
-      const response = await cdp.call("Runtime.evaluate", {
+      const response = await cdp.call<RuntimeEvaluation>("Runtime.evaluate", {
         expression,
         awaitPromise: true,
         returnByValue: true,
       }, sessionId);
       if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
-      if (response.result.value) return response.result.value;
+      if (response.result.value) return response.result.value as T;
     } catch (error) {
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Timed out waiting for browser expression: ${expression}${lastError ? ` (${lastError})` : ""}`);
+  throw new Error(`Timed out waiting for browser expression: ${expression}${lastError ? ` (${String(lastError)})` : ""}`);
 }
 
-async function evaluate(cdp, sessionId, expression) {
-  const response = await cdp.call("Runtime.evaluate", {
+async function evaluate<T = unknown>(cdp: CdpClient, sessionId: string, expression: string): Promise<T> {
+  const response = await cdp.call<RuntimeEvaluation>("Runtime.evaluate", {
     expression,
     awaitPromise: true,
     returnByValue: true,
     userGesture: true,
   }, sessionId);
   if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
-  return response.result.value;
+  return response.result.value as T;
 }
 
-async function navigate(cdp, sessionId, url) {
+async function navigate(cdp: CdpClient, sessionId: string, url: string): Promise<unknown> {
   let previousLoad = 0;
   try {
     previousLoad = await evaluate(cdp, sessionId, "window.__fixtureLoadId || 0");
@@ -170,7 +209,7 @@ async function navigate(cdp, sessionId, url) {
     `document.readyState === "complete" && document.documentElement.dataset.workerReady === "yes" && Number(window.__fixtureLoadId) > ${previousLoad}`);
 }
 
-async function startChrome(profileDir) {
+async function startChrome(profileDir: string): Promise<BrowserSession> {
   const port = await unusedPort();
   const chrome = spawn(CHROME, [
     "--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
@@ -179,15 +218,15 @@ async function startChrome(profileDir) {
     `--user-data-dir=${profileDir}`, "about:blank",
   ], { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
-  chrome.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  chrome.stderr?.on("data", (chunk) => { stderr += chunk.toString(); });
   const expires = Date.now() + 15000;
-  let version;
+  let version: ChromeVersion | undefined;
   while (Date.now() < expires) {
     if (chrome.exitCode !== null) throw new Error(`Chrome exited early: ${stderr}`);
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json/version`);
       if (response.ok) {
-        version = await response.json();
+        version = await response.json() as ChromeVersion;
         break;
       }
     } catch {}
@@ -205,40 +244,47 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
   assert.ok(scratch, "TMPDIR must point at the profile scratch directory");
   const profileDir = mkdtempSync(join(scratch, "diarium-sw-chrome-"));
   const fixture = await createFixtureServer();
-  let browser;
-  let cdp;
-  const consoleErrors = [];
+  let browser: BrowserSession | undefined;
+  let cdp: CdpClient | undefined;
+  const consoleErrors: string[] = [];
   try {
-    browser = await startChrome(profileDir);
-    cdp = await connectCdp(browser.version.webSocketDebuggerUrl);
-    const { targetId } = await cdp.call("Target.createTarget", { url: "about:blank" });
-    const { sessionId } = await cdp.call("Target.attachToTarget", { targetId, flatten: true });
-    cdp.onMessage((message) => {
+    const browserSession = await startChrome(profileDir);
+    browser = browserSession;
+    const connection = await connectCdp(browserSession.version.webSocketDebuggerUrl);
+    cdp = connection;
+    const { targetId } = await connection.call<{ targetId: string }>("Target.createTarget", { url: "about:blank" });
+    const { sessionId } = await connection.call<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true });
+    connection.onMessage((message) => {
       if (message.sessionId === sessionId && message.method === "Runtime.exceptionThrown") {
-        consoleErrors.push(message.params.exceptionDetails.text);
+        const details = message.params?.exceptionDetails as { text?: string } | undefined;
+        consoleErrors.push(details?.text || "Runtime exception");
       }
-      if (message.method === "Target.attachedToTarget" && message.params.targetInfo.type === "service_worker") {
-        cdp.call("Runtime.enable", {}, message.params.sessionId).catch(() => {});
+      const params = message.params || {};
+      const targetInfo = params.targetInfo as { type?: string } | undefined;
+      const attachedSessionId = params.sessionId;
+      if (message.method === "Target.attachedToTarget" && targetInfo?.type === "service_worker" && typeof attachedSessionId === "string") {
+        connection.call("Runtime.enable", {}, attachedSessionId).catch(() => {});
       }
-      if (message.method === "Runtime.consoleAPICalled" && message.params.type === "error") {
-        const text = message.params.args.map((arg) => arg.value || arg.description || "").join(" ");
+      if (message.method === "Runtime.consoleAPICalled" && params.type === "error") {
+        const args = params.args as Array<{ value?: unknown; description?: string }> | undefined;
+        const text = (args || []).map((arg) => String(arg.value ?? arg.description ?? "")).join(" ");
         if (text) consoleErrors.push(text);
       }
     });
-    await cdp.call("Page.enable", {}, sessionId);
-    await cdp.call("Runtime.enable", {}, sessionId);
-    await cdp.call("Network.enable", {}, sessionId);
-    await cdp.call("Target.setAutoAttach", {
+    await connection.call("Page.enable", {}, sessionId);
+    await connection.call("Runtime.enable", {}, sessionId);
+    await connection.call("Network.enable", {}, sessionId);
+    await connection.call("Target.setAutoAttach", {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true,
     }, sessionId);
 
-    await navigate(cdp, sessionId, fixture.origin);
-    await waitForPage(cdp, sessionId,
+    await navigate(connection, sessionId, fixture.origin);
+    await waitForPage(connection, sessionId,
       `navigator.serviceWorker.controller !== null && document.documentElement.dataset.workerReady === "yes"`);
 
-    const activationState = await evaluate(cdp, sessionId, `(async () => ({
+    const activationState = await evaluate<{ oldDiariumCacheExists: boolean; unrelatedCacheExists: boolean }>(connection, sessionId, `(async () => ({
       cacheNames: await caches.keys(),
       oldDiariumCacheExists: (await caches.keys()).includes("diarium-v7"),
       unrelatedCacheExists: (await caches.keys()).includes("other-app-cache")
@@ -246,16 +292,16 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     assert.equal(activationState.oldDiariumCacheExists, false, "activation must delete old Diarium cache");
     assert.equal(activationState.unrelatedCacheExists, true, "activation must preserve unrelated caches");
 
-    await evaluate(cdp, sessionId, `document.cookie = "account=A; path=/; SameSite=Lax"`);
-    await navigate(cdp, sessionId, fixture.origin);
-    const shellState = await waitForPage(cdp, sessionId, `(async () => {
+    await evaluate(connection, sessionId, `document.cookie = "account=A; path=/; SameSite=Lax"`);
+    await navigate(connection, sessionId, fixture.origin);
+    const shellState = await waitForPage<string>(connection, sessionId, `(async () => {
       const cache = await caches.open("diarium-v8");
       const shell = await cache.match(new Request(location.origin + "/"));
       return shell ? await shell.text() : "";
     })()`);
     assert.match(shellState, /Diarium public shell fixture/, "the shell navigation response must be cached before body consumption");
 
-    const assetResult = await evaluate(cdp, sessionId, `(async () => {
+    const assetResult = await evaluate<{ text: string; cached: boolean }>(connection, sessionId, `(async () => {
       const response = await fetch("/icon-192.png");
       const text = await response.text();
       const cache = await caches.open("diarium-v8");
@@ -264,7 +310,7 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     assert.equal(assetResult.text, "synthetic-icon");
     assert.equal(assetResult.cached, false, "Vary: Cookie assets must not be cached");
 
-    const privateAssetResult = await evaluate(cdp, sessionId, `(async () => {
+    const privateAssetResult = await evaluate<{ text: string; cached: boolean }>(connection, sessionId, `(async () => {
       const response = await fetch("/manifest.json");
       const text = await response.text();
       const cache = await caches.open("diarium-v8");
@@ -273,7 +319,7 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     assert.match(privateAssetResult.text, /synthetic manifest/);
     assert.equal(privateAssetResult.cached, false, "private/no-store assets must not be cached");
 
-    const accountAResult = await evaluate(cdp, sessionId, `(async () => {
+    const accountAResult = await evaluate<{ text: string; cached: boolean }>(connection, sessionId, `(async () => {
       const response = await fetch("/account/export.csv?synthetic=1");
       const text = await response.text();
       const cache = await caches.open("diarium-v8");
@@ -283,7 +329,7 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     assert.equal(accountAResult.text, "synthetic account A export");
     assert.equal(accountAResult.cached, false, "default same-origin credentials do not permit arbitrary caching");
 
-    await evaluate(cdp, sessionId, `(async () => {
+    await evaluate(connection, sessionId, `(async () => {
       const cache = await caches.open("diarium-v8");
       for (const path of ["/account/export.csv?synthetic=1", "/api/export/csv?synthetic=1", "/auth/callback?code=synthetic"]) {
         await cache.put(new Request(location.origin + path), new Response("synthetic account A export"));
@@ -292,7 +338,7 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
       return true;
     })()`);
     fixture.state.online = false;
-    const isolationResults = await evaluate(cdp, sessionId, `(async () => {
+    const isolationResults = await evaluate<Record<string, { body?: string; status?: number; error?: string }>>(connection, sessionId, `(async () => {
       const paths = ["/account/export.csv?synthetic=1", "/api/export/csv?synthetic=1", "/auth/callback?code=synthetic"];
       const results = {};
       for (const path of paths) {
@@ -307,15 +353,18 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     })()`);
     for (const result of Object.values(isolationResults)) {
       assert.doesNotMatch(result.body || "", /synthetic account A export|old cache/, "account A data must not be disclosed offline");
-      assert.ok(result.error || result.status >= 500, `sensitive routes must fail closed while offline: ${JSON.stringify(isolationResults)}`);
+      assert.ok(
+        result.error || (result.status !== undefined && result.status >= 500),
+        `sensitive routes must fail closed while offline: ${JSON.stringify(isolationResults)}`
+      );
     }
 
-    await navigate(cdp, sessionId, fixture.origin);
-    const offlineShell = await evaluate(cdp, sessionId,
+    await navigate(connection, sessionId, fixture.origin);
+    const offlineShell = await evaluate<string>(connection, sessionId,
       `document.querySelector("#app-shell")?.textContent || "missing shell"`);
     assert.equal(offlineShell, "Diarium public shell fixture", "the public app shell must still render offline");
 
-    const finalCacheNames = await evaluate(cdp, sessionId, `caches.keys()`);
+    const finalCacheNames = await evaluate<string[]>(connection, sessionId, `caches.keys()`);
     assert.ok(finalCacheNames.includes("diarium-v8"));
     assert.ok(finalCacheNames.includes("other-app-cache"));
     const rootRequests = fixture.requests.filter((request) => request.path === "/");
@@ -324,20 +373,22 @@ test("real Chromium preserves the public shell and blocks cross-account cache di
     assert.ok(!consoleErrors.length, `browser/service-worker console errors: ${consoleErrors.join(" | ")}`);
     assert.ok(fixture.requests.some((request) => request.path === "/account/export.csv?synthetic=1" && request.cookie.includes("account=A")));
   } catch (error) {
-    error.message += `\nBrowser console errors: ${consoleErrors.join(" | ")}`;
-    if (browser) error.message += `\nChrome stderr: ${browser.stderr()}`;
-    throw error;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    failure.message += `\nBrowser console errors: ${consoleErrors.join(" | ")}`;
+    if (browser) failure.message += `\nChrome stderr: ${browser.stderr()}`;
+    throw failure;
   } finally {
     if (cdp) cdp.close();
-    if (browser?.chrome && browser.chrome.exitCode === null) {
-      browser.chrome.kill("SIGTERM");
+    const chrome = browser?.chrome;
+    if (chrome && chrome.exitCode === null) {
+      chrome.kill("SIGTERM");
       await Promise.race([
-        new Promise((resolve) => browser.chrome.once("exit", resolve)),
+        new Promise<void>((resolve) => chrome.once("exit", () => resolve())),
         new Promise((resolve) => setTimeout(resolve, 3000)),
       ]);
-      if (browser.chrome.exitCode === null) browser.chrome.kill("SIGKILL");
+      if (chrome.exitCode === null) chrome.kill("SIGKILL");
     }
-    await new Promise((resolve) => fixture.server.close(resolve));
+    await new Promise<void>((resolve) => fixture.server.close(() => resolve()));
     rmSync(profileDir, { recursive: true, force: true });
   }
 });

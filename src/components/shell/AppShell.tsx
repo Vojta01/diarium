@@ -88,6 +88,19 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   // that resolves after a tab switch) never act on a stale render closure.
   const navRef = useRef(nav);
   const checkinRef = useRef(checkin);
+  const checkinDraftNavigationGuard = useRef<(() => Promise<boolean>) | null>(null);
+
+  const registerCheckinDraftNavigationGuard = useCallback(
+    (guard: () => Promise<boolean>) => {
+      checkinDraftNavigationGuard.current = guard;
+      return () => {
+        if (checkinDraftNavigationGuard.current === guard) {
+          checkinDraftNavigationGuard.current = null;
+        }
+      };
+    },
+    []
+  );
 
   // Focus return: remember the control that opened a sub-screen and restore it
   // after Back/browser popstate, but never steal focus after a tab switch.
@@ -166,26 +179,42 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   // Browser back/forward: restore the destination stored in the history entry.
   // An open sub-screen must close instead of leaving the app.
   useEffect(() => {
-    const onPopState = (event: PopStateEvent) => {
+    const onPopState = async (event: PopStateEvent) => {
+      const current = navRef.current;
       const stored = (event.state as { diariumNav?: NavState } | null)?.diariumNav;
-
-      if (
+      const hasStoredNav = Boolean(
         stored &&
-        isMainTab(stored.tab) &&
-        (stored.sub === null || isSubScreen(stored.sub))
-      ) {
-        const next = normalizeNav(stored, IMPLEMENTED_SUBS);
+          isMainTab(stored.tab) &&
+          (stored.sub === null || isSubScreen(stored.sub))
+      );
+      const next = hasStoredNav
+        ? normalizeNav(stored as NavState, IMPLEMENTED_SUBS)
+        : current.sub
+          ? closeSub(current)
+          : normalizeNav(parseNavFromSearch(window.location.search), IMPLEMENTED_SUBS);
+      const leavesToday = current.tab === "today" && next.tab !== "today";
+      const changesTodaySession =
+        next.tab === "today" && next.checkinDate !== checkinRef.current.date;
+      const opensTodaySub =
+        current.tab === "today" && next.tab === "today" && current.sub !== next.sub && next.sub !== null;
+      if (leavesToday || changesTodaySession || opensTodaySub) {
+        const guard = checkinDraftNavigationGuard.current;
+        if (guard && !(await guard())) {
+          writeHistory(current, "replace");
+          return;
+        }
+        if (navRef.current !== current) return;
+      }
+
+      if (hasStoredNav) {
         // Returning from a sub-screen to its parent tab: hand focus back to
         // the control that opened it. Navigating elsewhere keeps the browser's
         // own focus target.
-        if (nav.sub !== null && next.sub === null && next.tab === nav.tab) {
+        if (current.sub !== null && next.sub === null && next.tab === current.tab) {
           scheduleFocusRestore();
         }
         subPushedRef.current = false;
         markVisited(next.tab);
-        // A history entry can pin Today to a past day (?edit=). Reopen that
-        // day; when the entry means plain Today, start a fresh session so the
-        // screen cannot keep showing a day from the previous entry.
         if (next.tab === "today" && next.checkinDate !== checkinRef.current.date) {
           startCheckinSession(next.checkinDate);
         }
@@ -193,15 +222,12 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
         return;
       }
 
-      const next = nav.sub
-        ? closeSub(nav)
-        : normalizeNav(parseNavFromSearch(window.location.search), IMPLEMENTED_SUBS);
       // Drop stale/unimplemented query state (e.g. ?sub=goals) so the URL and
       // the rendered destination cannot disagree after Back/Forward.
-      if (!nav.sub && navToSearch(next) !== window.location.search) {
+      if (current.sub === null && navToSearch(next) !== window.location.search) {
         writeHistory(next, "replace");
       }
-      if (nav.sub !== null && next.sub === null) scheduleFocusRestore();
+      if (current.sub !== null && next.sub === null) scheduleFocusRestore();
       if (next.tab === "today" && next.checkinDate !== checkinRef.current.date) {
         startCheckinSession(next.checkinDate);
       }
@@ -279,9 +305,17 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   }, [activeKey]);
 
   const handleSelectTab = useCallback(
-    (tab: MainTab) => {
+    async (tab: MainTab) => {
       const next = selectTab(nav, tab);
       if (next === nav) return;
+
+      const replacesCheckinSession = tab === "today" && checkinRef.current.date !== null;
+      const leavesActiveCheckin = nav.tab === "today" && tab !== "today";
+      if (replacesCheckinSession || leavesActiveCheckin) {
+        const guard = checkinDraftNavigationGuard.current;
+        if (guard && !(await guard())) return;
+        if (navRef.current !== nav) return;
+      }
 
       subPushedRef.current = false;
       forgetFocusOpener();
@@ -333,8 +367,13 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
   }, [writeHistory]);
 
   const handleOpenSub = useCallback(
-    (sub: SubScreen) => {
+    async (sub: SubScreen) => {
       const next = openSub(nav, sub);
+      if (nav.tab === "today") {
+        const guard = checkinDraftNavigationGuard.current;
+        if (guard && !(await guard())) return;
+        if (navRef.current !== nav) return;
+      }
       rememberFocusOpener();
       subPushedRef.current = true;
       markVisited(next.tab);
@@ -439,10 +478,17 @@ export function AppShell({ user, initialNav = DEFAULT_NAV, onLogout }: AppShellP
             "today",
             <CheckInScreen
               key={`checkin-${checkin.nonce}`}
+              userId={user.id}
+              userName={
+                typeof user.user_metadata?.full_name === "string"
+                  ? user.user_metadata.full_name
+                  : user.email ?? ""
+              }
               initialDate={checkin.date}
               onSaveDone={handleCheckinSaved}
               onOpenGoals={() => handleOpenSub("goals")}
               onOpenOverview={() => handleSelectTab("overview")}
+              onRegisterDraftNavigationGuard={registerCheckinDraftNavigationGuard}
             />
           )}
           {panel("history", <HistoryView onNavigateToDate={handleNavigateToCheckIn} />)}

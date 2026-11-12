@@ -6,42 +6,67 @@ import { runInNewContext } from "node:vm";
 const source = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://diarium.digitalni-vedomi.cz";
 
-function createWorker({ fetchImpl, cacheEntries = {} } = {}) {
-  const listeners = new Map();
-  const cacheStore = new Map();
-  const cacheWrites = [];
-  const cacheMatches = [];
-  const deletedCaches = [];
-  const fetchCalls = [];
-  const lifecycleCalls = [];
+type WorkerRequest = Pick<Request, "url" | "method" | "headers" | "credentials" | "mode">;
+type CacheEntry = readonly [url: string, response: Response];
+type WorkerOptions = {
+  fetchImpl?: (request: WorkerRequest, init?: RequestInit) => Promise<Response>;
+  cacheEntries?: Record<string, CacheEntry[]>;
+};
+type WorkerEvent = {
+  request?: WorkerRequest;
+  data?: { type?: string };
+  respondWith?: (value: Response | Promise<Response>) => void;
+  waitUntil?: (value: Promise<unknown>) => void;
+};
+type WorkerHarness = {
+  listeners: Map<string, (event?: WorkerEvent) => void>;
+  cacheStore: Map<string, Map<string, Response>>;
+  cacheWrites: Array<{ name: string; url: string }>;
+  cacheMatches: Array<{ name: string; url: string }>;
+  deletedCaches: string[];
+  fetchCalls: Array<{ request: WorkerRequest; init?: RequestInit }>;
+  lifecycleCalls: string[];
+};
+
+function createWorker({
+  fetchImpl = async () => new Response("unused"),
+  cacheEntries = {},
+}: WorkerOptions = {}): WorkerHarness {
+  const listeners = new Map<string, (event?: WorkerEvent) => void>();
+  const cacheStore = new Map<string, Map<string, Response>>();
+  const cacheWrites: Array<{ name: string; url: string }> = [];
+  const cacheMatches: Array<{ name: string; url: string }> = [];
+  const deletedCaches: string[] = [];
+  const fetchCalls: Array<{ request: WorkerRequest; init?: RequestInit }> = [];
+  const lifecycleCalls: string[] = [];
 
   for (const [name, entries] of Object.entries(cacheEntries)) {
-    cacheStore.set(name, new Map(entries.map(([url, response]) => [url, response])));
+    cacheStore.set(name, new Map(entries.map(([url, response]) => [url, response] as const)));
   }
 
   const cacheStorage = {
     async keys() {
       return [...cacheStore.keys()];
     },
-    async delete(name) {
+    async delete(name: string) {
       deletedCaches.push(name);
       return cacheStore.delete(name);
     },
-    async open(name) {
+    async open(name: string) {
       if (!cacheStore.has(name)) cacheStore.set(name, new Map());
-      const entries = cacheStore.get(name);
+      const entries = cacheStore.get(name)!;
       return {
-        async put(request, response) {
+        async put(request: WorkerRequest, response: Response) {
           cacheWrites.push({ name, url: request.url });
           entries.set(request.url, response);
         },
-        async match(request) {
+        async match(request: WorkerRequest) {
           cacheMatches.push({ name, url: request.url });
           return entries.get(request.url)?.clone();
         },
       };
     },
-    async match(request) {
+    async match(request: WorkerRequest) {
       cacheMatches.push({ name: "*", url: request.url });
       for (const entries of cacheStore.values()) {
         const response = entries.get(request.url);
@@ -64,7 +89,7 @@ function createWorker({ fetchImpl, cacheEntries = {} } = {}) {
         lifecycleCalls.push("registration.unregister");
       },
     },
-    addEventListener(type, listener) {
+    addEventListener(type: string, listener: (event?: WorkerEvent) => void) {
       listeners.set(type, listener);
     },
     skipWaiting() {
@@ -84,9 +109,9 @@ function createWorker({ fetchImpl, cacheEntries = {} } = {}) {
     Promise,
     setTimeout,
     clearTimeout,
-    fetch: (...args) => {
-      fetchCalls.push(args);
-      return fetchImpl(...args);
+    fetch: (request: WorkerRequest, init?: RequestInit) => {
+      fetchCalls.push({ request, init });
+      return fetchImpl(request, init);
     },
   });
 
@@ -101,18 +126,21 @@ function createWorker({ fetchImpl, cacheEntries = {} } = {}) {
   };
 }
 
-function dispatchFetch(worker, request) {
-  let responsePromise;
-  const lifetimePromises = [];
-  worker.listeners.get("fetch")({
+function dispatchFetch(worker: WorkerHarness, request: WorkerRequest) {
+  let responsePromise: Promise<Response> | undefined;
+  const lifetimePromises: Promise<unknown>[] = [];
+  const fetchListener = worker.listeners.get("fetch");
+  assert.ok(fetchListener, "service worker must register a fetch listener");
+  fetchListener({
     request,
-    respondWith(value) {
+    respondWith(value: Response | Promise<Response>) {
       responsePromise = Promise.resolve(value);
     },
-    waitUntil(value) {
+    waitUntil(value: Promise<unknown>) {
       lifetimePromises.push(Promise.resolve(value));
     },
   });
+  assert.ok(responsePromise, "service worker must respond to this request");
   return {
     responsePromise,
     lifetimePromise: Promise.all(lifetimePromises),
@@ -237,7 +265,7 @@ test("default same-origin credentials do not make an arbitrary GET cacheable", a
 });
 
 test("public whitelist responses with private or sensitive Vary headers are not cached", async () => {
-  const unsafeHeaders = [
+  const unsafeHeaders: HeadersInit[] = [
     { "Cache-Control": "private" },
     { "Cache-Control": "no-store" },
     { "Cache-Control": "no-cache" },
@@ -395,7 +423,7 @@ test("public same-origin static assets retain cache and offline fallback behavio
       throw new Error("network unavailable");
     },
   });
-  const navigationRequest = {
+  const navigationRequest: WorkerRequest = {
     url: `${ORIGIN}/`,
     method: "GET",
     headers: new Headers(),
@@ -411,7 +439,7 @@ test("public same-origin static assets retain cache and offline fallback behavio
 
 test("public shell is cached and served offline while an unlisted URL is not", async () => {
   const rootUrl = `${ORIGIN}/`;
-  const navigationRequest = {
+  const navigationRequest: WorkerRequest = {
     url: rootUrl,
     method: "GET",
     headers: new Headers(),
@@ -478,9 +506,14 @@ test("activation removes only known prior Diarium caches and activates the worke
     },
   });
 
-  worker.listeners.get("install")();
+  const installListener = worker.listeners.get("install");
+  assert.ok(installListener, "service worker must register an install listener");
+  installListener();
   let activationLifetime;
-  worker.listeners.get("activate")({ waitUntil(promise) { activationLifetime = promise; } });
+  const activateListener = worker.listeners.get("activate");
+  assert.ok(activateListener, "service worker must register an activate listener");
+  activateListener({ waitUntil(promise) { activationLifetime = promise; } });
+  assert.ok(activationLifetime, "activation must register its lifetime promise");
   await activationLifetime;
 
   assert.deepEqual(worker.deletedCaches, [
@@ -511,10 +544,13 @@ test("self-unregister removes only this app's known caches", async () => {
     },
   });
   let messageLifetime;
-  worker.listeners.get("message")({
+  const messageListener = worker.listeners.get("message");
+  assert.ok(messageListener, "service worker must register a message listener");
+  messageListener({
     data: { type: "UNREGISTER_SELF" },
     waitUntil(promise) { messageLifetime = promise; },
   });
+  assert.ok(messageLifetime, "self-unregister must register its lifetime promise");
   await messageLifetime;
 
   assert.deepEqual(worker.deletedCaches, [

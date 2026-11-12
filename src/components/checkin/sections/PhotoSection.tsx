@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslation } from "@/lib/i18n";
-import {
-  deleteStagedCheckInPhoto,
-  uploadCheckInPhoto,
-} from "@/lib/supabase/db";
+import { uploadCheckInPhoto } from "@/lib/supabase/db";
 import { isCheckInError } from "@/lib/checkin/errors";
 import { compressPhoto, validatePhotoFile } from "@/lib/checkin/photo";
 import { finishPhotoUpload } from "@/lib/checkin/photo-edit";
@@ -106,11 +103,9 @@ export function PhotoSection({
         setPreview(localUrl);
 
         await finishPhotoUpload({
-          date: uploadDate,
           upload: () => uploadCheckInPhoto(blob, uploadDate),
           isCurrent,
           onStage: (url) => onPhotoSelected(url, uploadDate),
-          cleanup: deleteStagedCheckInPhoto,
         });
         releasePreview();
       } catch (uploadError) {
@@ -183,18 +178,27 @@ export function PhotoSection({
         ) : null}
       </div>
 
+      <p role="note" className="mt-2 text-[12px] leading-5 text-[color:var(--text-3)]">
+        {t("checkin.photo_storage_notice")}
+      </p>
+
       {uploading ? (
-        <div className="mt-2 flex items-center gap-3">
-          <p role="status" className="text-[12px] text-[color:var(--text-2)]">
-            {t("checkin.photo_uploading")}
+        <div className="mt-2 space-y-1">
+          <div className="flex items-center gap-3">
+            <p role="status" className="text-[12px] text-[color:var(--text-2)]">
+              {t("checkin.photo_uploading")}
+            </p>
+            <button
+              type="button"
+              onClick={cancelUpload}
+              className="min-h-11 text-[12px] text-[color:var(--text-2)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80"
+            >
+              {t("checkin.photo_cancel_upload")}
+            </button>
+          </div>
+          <p role="note" className="text-[12px] leading-5 text-[color:var(--text-3)]">
+            {t("checkin.photo_cancel_upload_notice")}
           </p>
-          <button
-            type="button"
-            onClick={cancelUpload}
-            className="min-h-11 text-[12px] text-[color:var(--text-2)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80"
-          >
-            {t("checkin.photo_cancel_upload")}
-          </button>
         </div>
       ) : null}
 

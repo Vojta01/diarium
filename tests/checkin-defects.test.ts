@@ -75,16 +75,15 @@ test("gratitude has exactly three editable slots and keeps legacy extras", () =>
 
 test("abandoning a picked photo leaves the stored row and object intact", () => {
   const initial = beginPhotoEdit(STORED);
-  assert.deepEqual(photoSaveIntent(initial), { cleanup: null });
+  assert.deepEqual(photoSaveIntent(initial), {});
 
   const picked = stagePhoto(initial, STAGED);
   assert.deepEqual(photoSaveIntent(picked), {
     photo_path: STAGED,
-    cleanup: STORED,
   });
   assert.deepEqual(photoAbandonIntent(picked), {
-    cleanupStaged: STAGED,
-    cleanupStored: null,
+    retainedStaged: STAGED,
+    retainedStored: STORED,
   });
 
   // The stored state is immutable: abandoning does not clear or replace it.
@@ -92,26 +91,23 @@ test("abandoning a picked photo leaves the stored row and object intact", () => 
   assert.equal(initial.staged, null);
 });
 
-test("picking then saving replaces the photo and only then cleans the old one", () => {
+test("picking then saving replaces the entry reference without a blob-cleanup intent", () => {
   const picked = stagePhoto(beginPhotoEdit(STORED), STAGED);
   const intent = photoSaveIntent(picked);
 
   assert.equal(intent.photo_path, STAGED);
   assert.equal(intent.clear_photo, undefined);
-  assert.equal(intent.cleanup, STORED);
+  assert.equal("cleanup" in intent, false);
 });
 
-test("removing a photo saves a clear directive and cleans the stored object", () => {
+test("removing a photo saves a clear directive but retains the stored object", () => {
   const cleared = clearPhoto(beginPhotoEdit(STORED));
   assert.deepEqual(photoSaveIntent(cleared), {
     clear_photo: true,
-    cleanup: STORED,
   });
 
-  // Clearing an already-empty day sends nothing and cleans nothing.
-  assert.deepEqual(photoSaveIntent(clearPhoto(beginPhotoEdit(null))), {
-    cleanup: null,
-  });
+  // Clearing an already-empty day sends no update.
+  assert.deepEqual(photoSaveIntent(clearPhoto(beginPhotoEdit(null))), {});
 });
 
 test("a staged photo wins over a pending clear", () => {
@@ -241,12 +237,43 @@ test("screen time reads as hours and minutes, not a chart label", () => {
   assert.equal(formatScreenTimeDuration(undefined), "—");
 });
 
-test("the form locks every field, not just the save button, during save", () => {
+test("the form locks every field during save or guarded navigation", () => {
   const form = source("src/components/checkin/CheckInForm.tsx");
-  assert.match(form, /disabled=\{props\.saving\}/);
-  assert.match(form, /inert=\{props\.saving\}/);
+  assert.match(form, /disabled=\{props\.saving \|\| props\.navigationPending\}/);
+  assert.match(form, /inert=\{props\.saving \|\| props\.navigationPending\}/);
   assert.match(form, /visibleCheckInSections\(getFeatureFlags\(\)\)/);
   assert.match(form, /shouldRenderGoalsSection\(props\.goalsError\)/);
+});
+
+test("draft persistence gates shell tab and popstate navigation", () => {
+  const shell = source("src/components/shell/AppShell.tsx");
+  const selectStart = shell.indexOf("const handleSelectTab = useCallback");
+  const selectEnd = shell.indexOf("const handleNavigateToCheckIn", selectStart);
+  const selectTabHandler = shell.slice(selectStart, selectEnd);
+  assert.match(selectTabHandler, /replacesCheckinSession/);
+  assert.match(selectTabHandler, /leavesActiveCheckin/);
+  assert.match(selectTabHandler, /if \(guard && !\(await guard\(\)\)\) return;/);
+
+  const popStateStart = shell.indexOf("const onPopState = async");
+  const popStateEnd = shell.indexOf("window.addEventListener(\"popstate\"", popStateStart);
+  const popStateHandler = shell.slice(popStateStart, popStateEnd);
+  assert.match(popStateHandler, /changesTodaySession/);
+  assert.match(popStateHandler, /await guard\(\)/);
+  assert.match(popStateHandler, /writeHistory\(current, "replace"\)/);
+});
+
+test("photo uploads block shell navigation and draft-storage retry", () => {
+  const screen = source("src/components/checkin/CheckInScreen.tsx");
+  assert.match(screen, /const photoUploadingRef = useRef\(false\)/);
+  assert.match(screen, /if \(navigationInFlight\.current \|\| photoUploadingRef\.current\) return false;/);
+  assert.match(screen, /if \(navigationInFlight\.current \|\| photoUploadingRef\.current\) return;/);
+  assert.match(screen, /photoUploadingRef\.current = uploading;/);
+
+  const form = source("src/components/checkin/CheckInForm.tsx");
+  assert.match(
+    form,
+    /onClick=\{props\.onRetryDraftStorage\}\s+disabled=\{props\.photoUploading \|\| props\.navigationPending\}/
+  );
 });
 
 test("habit add never writes a false answer and uses a server-first mutation", () => {
