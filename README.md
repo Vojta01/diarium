@@ -6,6 +6,7 @@
 - [Web source](https://github.com/Vojta01/diarium)
 - [Android source](https://github.com/Vojta01/diarium-android)
 - [Download the Android APK](https://raw.githubusercontent.com/Vojta01/diarium-android/apk/diarium.apk)
+- [Changelog](CHANGELOG.md)
 
 ## Features
 
